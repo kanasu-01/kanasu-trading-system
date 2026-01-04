@@ -1,8 +1,8 @@
 from typing import Optional, Dict
 
 from core.broker.base_broker import BaseBroker
-from core.broker.order import Order, OrderSide, OrderType
-from core.broker.order_response import OrderStatus
+from core.execution.order import Order, OrderSide, OrderType
+from core.execution.order_response import OrderStatus
 from core.entities.candle import Candle
 from core.risk.risk_manager import RiskManager
 from core.risk.stop_loss_manager import StopLossManager
