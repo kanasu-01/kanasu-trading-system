@@ -13,8 +13,7 @@ class HistoricalFeed(BaseFeed):
     Broker-agnostic historical market data feed.
 
     Responsibilities:
-    - Ask broker for historical raw data
-    - Convert raw data into Candle objects
+    - Ask broker for historical candles
     - Return List[Candle] for backtesting / replay
     """
 
@@ -32,29 +31,12 @@ class HistoricalFeed(BaseFeed):
         Load historical candles via broker.
 
         Broker must implement:
-        get_historical_data(symbol, timeframe, start, end)
+        get_historical_candles(symbol, timeframe, start, end)
         """
 
-        raw_data = self.broker.get_historical_data(
+        return self.broker.get_historical_candles(
             symbol=symbol,
             timeframe=timeframe,
             start=start,
             end=end,
         )
-
-        candles: List[Candle] = []
-
-        for row in raw_data:
-            candles.append(
-                Candle(
-                    timestamp=row["timestamp"],
-                    open=row["open"],
-                    high=row["high"],
-                    low=row["low"],
-                    close=row["close"],
-                    volume=row["volume"],
-                    symbol=symbol,
-                )
-            )
-
-        return candles
