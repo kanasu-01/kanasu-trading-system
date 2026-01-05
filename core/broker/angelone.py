@@ -1,5 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
+import pytz
 
 from core.broker.base_broker import BaseBroker
 from core.execution.order import Order
@@ -10,35 +11,38 @@ from core.entities.candle import Candle
 
 class AngelOneBroker(BaseBroker):
     """
-    AngelOne SmartAPI adapter (safe skeleton + historical data).
+    AngelOne SmartAPI adapter (safe, API-ready, flag-controlled).
     """
 
-    # ---------------- TIMEFRAME MAP ----------------
-    _TIMEFRAME_MAP = {
-        "1m": "ONE_MINUTE",
-        "3m": "THREE_MINUTE",
-        "5m": "FIVE_MINUTE",
-        "15m": "FIFTEEN_MINUTE",
-        "30m": "THIRTY_MINUTE",
-        "1h": "ONE_HOUR",
-        "1d": "ONE_DAY",
-    }
-
-    def __init__(self, config: AngelOneConfig, paper_mode: bool = True):
+    def __init__(
+        self,
+        config: AngelOneConfig,
+        paper_mode: bool = True,
+        enable_historical_api: bool = False,   # 🔹 NEW
+    ):
         self.config = config
         self.paper_mode = paper_mode
+        self.enable_historical_api = enable_historical_api
         self._logged_in = False
 
-    # ---------------- AUTH ----------------
+        # Placeholder for SmartAPI client (wired later)
+        self._api = None
+
+    # --------------------------------------------------
+    # AUTH
+    # --------------------------------------------------
 
     def login(self) -> bool:
         if self.paper_mode:
             self._logged_in = True
             return True
-        # Live login will be implemented later
+
+        # 🔒 Live login intentionally not implemented yet
         return False
 
-    # ---------------- ORDERS ----------------
+    # --------------------------------------------------
+    # ORDERS (EXISTING)
+    # --------------------------------------------------
 
     def place_order(self, order: Order) -> OrderResponse:
         if not self._logged_in:
@@ -75,56 +79,54 @@ class AngelOneBroker(BaseBroker):
     def get_account_balance(self) -> float:
         return 1_000_000.0 if self.paper_mode else 0.0
 
-    # ---------------- HISTORICAL DATA ----------------
+    # --------------------------------------------------
+    # HISTORICAL DATA (PHASE 10.10-B)
+    # --------------------------------------------------
 
     def get_historical_candles(
         self,
         symbol: str,
         timeframe: str,
-        start,
-        end
+        start: datetime,
+        end: datetime,
     ) -> List[Candle]:
         """
-        Fetch historical candles from AngelOne.
-        In paper_mode, returns empty list (safe).
+        Fetch historical candles from AngelOne SmartAPI.
+        API-ready but disabled unless enable_historical_api=True
         """
 
-        if timeframe not in self._TIMEFRAME_MAP:
+        if not self.enable_historical_api:
+            raise RuntimeError(
+                "AngelOne historical API disabled. "
+                "Enable via enable_historical_api=True"
+            )
+
+        # ---- Timeframe mapping (AngelOne-specific) ----
+        interval_map = {
+            "1m": "ONE_MINUTE",
+            "3m": "THREE_MINUTE",
+            "5m": "FIVE_MINUTE",
+            "15m": "FIFTEEN_MINUTE",
+            "30m": "THIRTY_MINUTE",
+            "1h": "ONE_HOUR",
+            "1d": "ONE_DAY",
+        }
+
+        if timeframe not in interval_map:
             raise ValueError(f"Unsupported timeframe: {timeframe}")
 
-        if self.paper_mode:
-            # In Phase 10.9C we do NOT fetch live data yet
-            # This keeps backtesting + CSV workflows intact
-            return []
+        interval = interval_map[timeframe]
 
-        if not self._logged_in:
-            raise RuntimeError("Broker not logged in")
+        # ---- Normalize timezone (IST) ----
+        ist = pytz.timezone("Asia/Kolkata")
+        start_dt = ist.localize(start) if start.tzinfo is None else start
+        end_dt = ist.localize(end) if end.tzinfo is None else end
 
-        # -------- LIVE IMPLEMENTATION (PHASE 11) --------
-        # Example (to be implemented later):
-        #
-        # interval = self._TIMEFRAME_MAP[timeframe]
-        # response = self.smart_api.getCandleData({
-        #     "exchange": "NSE",
-        #     "symboltoken": symbol,
-        #     "interval": interval,
-        #     "fromdate": start,
-        #     "todate": end
-        # })
-        #
-        # candles = []
-        # for row in response["data"]:
-        #     candles.append(
-        #         Candle(
-        #             timestamp=datetime.strptime(row[0], "%Y-%m-%d %H:%M"),
-        #             open=float(row[1]),
-        #             high=float(row[2]),
-        #             low=float(row[3]),
-        #             close=float(row[4]),
-        #             volume=float(row[5]),
-        #             symbol=symbol,
-        #         )
-        #     )
-        # return candles
+        # ---- API call placeholder ----
+        # NOTE:
+        # Actual SmartAPI wiring will be done in Phase 10.10-C
+        # Expected response format documented, not yet called.
 
-        return []
+        raise NotImplementedError(
+            "AngelOne historical API wiring pending (Phase 10.10-C)"
+        )
