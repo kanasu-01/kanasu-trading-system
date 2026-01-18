@@ -5,3 +5,25 @@ __pycache__/
 *.log
 .vscode/
 data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Outputs
+outputs/
+*.csv
+*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
