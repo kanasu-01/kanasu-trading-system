@@ -13,7 +13,7 @@ class StrategyRunner:
 
     def __init__(self, strategy: BaseStrategy):
         self.strategy = strategy
-        self.series: Optional[CandleSeries] = None
+        self.series: CandleSeries
 
     def start(self, series: CandleSeries) -> None:
         """
@@ -36,4 +36,4 @@ class StrategyRunner:
         """
         Stops the strategy.
         """
-        self.series = None
+        self.strategy.reset()

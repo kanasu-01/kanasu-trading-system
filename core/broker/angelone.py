@@ -1,14 +1,16 @@
 from typing import Optional, List
 from datetime import datetime
 import pytz
+import pyotp
 
-from smartapi import SmartConnect
+from SmartApi import SmartConnect
 
 from core.broker.base_broker import BaseBroker
 from core.execution.order import Order
 from core.execution.order_response import OrderResponse, OrderStatus
 from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
+
 
 
 class AngelOneBroker(BaseBroker):
@@ -37,25 +39,43 @@ class AngelOneBroker(BaseBroker):
     # --------------------------------------------------
 
     def login(self) -> bool:
+        
         """
         Login to AngelOne SmartAPI.
-        Paper mode logs in locally.
+
+        NOTE:
+            - Required for historical data
+            - Required for live data
+            - paper_mode affects ONLY order execution
         """
 
-        if self.paper_mode:
-            self._logged_in = True
-            return True
-
         self._api = SmartConnect(api_key=self.config.api_key)
+        
+        if not self.config.totp_secret:
+            raise RuntimeError("TOTP secret not configured for AngelOne login")
+
+        totp = pyotp.TOTP(self.config.totp_secret).now()
+
 
         session = self._api.generateSession(
-            self.config.client_code,
-            self.config.password,
-            self.config.totp,
+            self.config.client_id,
+            self.config.client_pin,
+            totp,
         )
+        
+        if not isinstance(session, dict):
+            raise RuntimeError("AngelOne login failed: invalid session response")
+        print("AngelOne session keys:", session.keys())
 
-        if not session or "jwtToken" not in session:
-            raise RuntimeError("AngelOne login failed")
+        ##print(self.config.client_id, self.config.client_pin, totp, self.config.api_key,self._api,session.jwtToken)
+        if not isinstance(session, dict):
+            raise RuntimeError("AngelOne login failed: invalid session response")
+
+        if "data" not in session or not isinstance(session["data"], dict):
+            raise RuntimeError("AngelOne login failed: data block missing")
+
+        if "jwtToken" not in session["data"]:
+            raise RuntimeError("AngelOne login failed: jwtToken missing")
 
         self._logged_in = True
         return True
@@ -98,6 +118,15 @@ class AngelOneBroker(BaseBroker):
 
     def get_account_balance(self) -> float:
         return 1_000_000.0 if self.paper_mode else 0.0
+    
+        # --------------------------------------------------
+    # LIVE DATA (NOT SUPPORTED YET)
+    # --------------------------------------------------
+
+    def subscribe_live(self):
+        raise NotImplementedError(
+            "Live data subscription not implemented for AngelOneBroker"
+        )
 
     # --------------------------------------------------
     # HISTORICAL DATA (PHASE 10.10-C)
@@ -145,22 +174,32 @@ class AngelOneBroker(BaseBroker):
         end_dt = ist.localize(end) if end.tzinfo is None else end
 
         # ---- Fetch data from AngelOne ----
+        symbol_token_map = self.config.symbol_token_map
+        if symbol_token_map is None:
+            raise RuntimeError("Angelone symbol toke map is not configured")
+        if symbol not in symbol_token_map:
+            raise RuntimeError("error")
+        symbol_token = symbol_token_map[symbol]
+        
         response = self._api.getCandleData({
             "exchange": self.config.exchange,
-            "symboltoken": self.config.symbol_token_map[symbol],
+            "symboltoken": symbol_token,
             "interval": interval,
             "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),
             "todate": end_dt.strftime("%Y-%m-%d %H:%M"),
         })
 
-        if not response or "data" not in response:
+        if not isinstance(response, dict):
             raise RuntimeError("Invalid historical data response from AngelOne")
+        
+        if "data" not in response:
+            raise RuntimeError("Missing data in AngelOne historical response")
 
         candles: List[Candle] = []
 
         for row in response["data"]:
-            ts = datetime.strptime(row[0], "%Y-%m-%d %H:%M")
-            ts = ist.localize(ts)
+            ts = datetime.fromisoformat(row[0])
+    
 
             candles.append(
                 Candle(
@@ -170,7 +209,6 @@ class AngelOneBroker(BaseBroker):
                     low=float(row[3]),
                     close=float(row[4]),
                     volume=float(row[5]),
-                    symbol=symbol,
                 )
             )
 

@@ -41,3 +41,17 @@ class BaseStrategy(ABC):
         Resets internal state of the strategy.
         """
         pass
+    
+    def warmup_bars(self) -> int:
+        """
+        Number of bars required for warm-up before the strategy can make decisions.
+        Default is 0.
+        """
+        return 0
+    
+    def get_debug_state(self) -> dict:
+        """
+        Optional diagnostic data for backtest analysis.
+        Override in strategies if needed.
+        """
+        return {}

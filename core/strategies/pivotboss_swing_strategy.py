@@ -85,6 +85,10 @@ class PivotBossSwingStrategy(BaseStrategy):
 
         self.confidence_score: Optional[float] = None
 
+    def warmup_bars(self) -> int:
+        return super().warmup_bars() + 30  # for volatility and structure calculations
+    
+    
     def reset(self) -> None:
         self.state = PivotBossState.NO_TRADE
         self.rejection_midpoint = None
@@ -268,6 +272,7 @@ class PivotBossSwingStrategy(BaseStrategy):
         # -----------------------------------------
         # WARM-UP PHASE (DO NOT REMOVE)
         # -----------------------------------------
+        self._series = series  # for debug state
         MIN_WARMUP_BARS = 30  # safe minimum for volatility + structure
 
         if len(series) < MIN_WARMUP_BARS:
@@ -346,3 +351,29 @@ class PivotBossSwingStrategy(BaseStrategy):
                     return "SELL"
 
         return None
+    
+    def get_debug_state(self) -> dict:
+        
+        if not hasattr(self, "_series"):
+            return {}
+        
+        if len (self._series) < self.warmup_bars():
+            return {
+                "acc_score": None,
+                "dist_score": None,
+                "confidence": None,
+                "absorption_active": None,
+                "markup_confirmed": None,
+                "volatility_contracting": None,
+            }
+        return {
+            "state": self.state.value,
+            "acc_score": self.acc_scorer.score(self._series) if hasattr(self, "_series") else None,
+            "dist_score": self.dist_scorer.score(self._series) if hasattr(self, "_series") else None,
+            "confidence": self.confidence_score,
+            "absorption_active": self.state == PivotBossState.ABSORPTION_ACTIVE,
+            "markup_confirmed": self.state == PivotBossState.MARKUP_CONFIRMED,
+            "volatility_contracting": VolatilityMetrics.is_volatility_contracting(
+                self._series, short_window=3, long_window=10
+            ) if hasattr(self, "_series") else None,
+        }

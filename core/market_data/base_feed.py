@@ -1,10 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import List
+from datetime import datetime
 
 from core.entities.candle import Candle
 
 
-class MarketDataFeed(ABC):
+class BaseFeed(ABC):
     @abstractmethod
-    def subscribe(self, on_candle: Callable[[Candle], None]) -> None:
+    def load(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+    ) -> List[Candle]:
         pass
