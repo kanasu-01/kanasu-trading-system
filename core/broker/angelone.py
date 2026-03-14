@@ -127,6 +127,26 @@ class AngelOneBroker(BaseBroker):
         raise NotImplementedError(
             "Live data subscription not implemented for AngelOneBroker"
         )
+        
+    # -------------------------------------------------
+    # HISTORICAL DATA LIMITS
+    # -------------------------------------------------
+    def get_historical_limits(self) -> dict:
+        
+        """
+        Return historical data limits per timeframe for AngelOne SmartAPI.
+        """
+        return {
+            "1m": 30,
+            "3m": 60,
+            "5m": 100,
+            "10": 100,
+            "15m": 200,
+            "30m": 200,
+            "1h": 400,
+            "1d": 2000,
+        }
+
 
     # --------------------------------------------------
     # HISTORICAL DATA (PHASE 10.10-C)

@@ -28,3 +28,18 @@ class BaseBroker(ABC):
     @abstractmethod
     def cancel_order(self, order_id: str) -> bool:
         pass
+
+    @abstractmethod
+    def get_historical_limits(self) -> dict:
+        """
+            Return historical data limits for the broker
+            
+            Format:
+            {
+                "1m": max_days,
+                "5m": max_days,
+                "15m": max_days,
+                "1d": max_days
+            }
+        """
+        pass

@@ -2,16 +2,20 @@
 
 from enum import Enum
 from datetime import datetime
+from dataclasses import asdict
 
 from core.broker.angelone import AngelOneBroker
 from core.broker.angelone_config import AngelOneConfig
 from core.market_data.historical_feed import HistoricalFeed
 from core.strategies.pivotboss_swing_strategy import PivotBossSwingStrategy
+from core.strategies.sma_crossover_strategy import SMACrossOverStrategy
 from core.backtest.backtest_engine import BacktestEngine
 from core.backtest.bar_replay import BarByBarReplay
 from core.backtest.simple_visualization import SimpleChartVisualizer
 from core.backtest.exporters.csv_exporter import CSVExporter
+from core.backtest.exporters.json_exporter import JSONExporter
 from core.backtest.exporters.bar_record_adapter import bar_records_to_dicts
+from core.entities.candle import Candle
 
 
 
@@ -42,7 +46,14 @@ def main():
     broker.login()
 
     # -------- STRATEGY --------
-    strategy = PivotBossSwingStrategy()
+    #strategy = PivotBossSwingStrategy()
+    strategy = SMACrossOverStrategy(
+        params={
+            "fast_period": 20,
+            "slow_period": 50,
+        }
+        
+    )
 
     # -------- BACKTEST FLOW --------
     if MODE == RunMode.BACKTEST:
@@ -52,28 +63,47 @@ def main():
 def run_backtest(broker, strategy):
     feed = HistoricalFeed(broker)
 
-    candles = feed.load(
-        symbol="RELIANCE",
-        timeframe="1d",
-        start=datetime(2024, 10, 2),
-        end=datetime(2026, 1, 1),
+    candle_stream = feed.stream(
+        symbol="RELIANCE",  # RELIANCE
+        timeframe="15m",
+        start=datetime(2020, 4, 1),
+        end=datetime(2020, 12, 1),
     )
 
     engine = BacktestEngine(strategy)
-    trades = engine.run(candles)
+    trades = engine.run_stream(candle_stream)
 
     print("\n=== TRADES ===")
     for t in trades:
         print(t)
 
     replay = BarByBarReplay(strategy)
-    replay.run(candles)
+    replay.run_from_records(engine.bar_recorder.records)
 
     CSVExporter.export(
         records=bar_records_to_dicts(engine.bar_recorder.records),
         filepath="outputs/backtests/RELIANCE_15m_bars.csv",
     )
+    
+    JSONExporter.export(
+        records=[asdict(r) for r in engine.bar_recorder.records],
+        filepath="frontend/public/replay/RELIANCE_15m_bars.json",
+    )
     # Visualization
+    
+    # Reconstruct candles from recorded bars (single source of truth)
+    candles = [
+        Candle(
+            timestamp=r.timestamp,
+            open=r.open,
+            high=r.high,
+            low=r.low,
+            close=r.close,
+            volume=r.volume,
+        )
+        for r in engine.bar_recorder.records
+    ]
+
     if trades:
         print("\n=== NO TRADES, PLOTTING PRICE ONLY CHARTS ===")
     SimpleChartVisualizer.plot_price_with_signals(

@@ -1,10 +1,17 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-from core.entities.candle import Candle
 from datetime import datetime
+
+from core.entities.candle import Candle
+
+
+# ==========================================================
+# BAR RECORD (STRATEGY-AGNOSTIC)
+# ==========================================================
 
 @dataclass
 class BarRecord:
+    # -------- Market data --------
     timestamp: datetime
     open: float
     high: float
@@ -12,22 +19,23 @@ class BarRecord:
     close: float
     volume: float
 
-    state: str
-    acc_score: Optional[float]
-    dist_score: Optional[float]
-    confidence: Optional[float]
-    
-    absorption_active: Optional[bool]
-    markup_confirmed: Optional[bool]
-    volatility_contracting: Optional[bool]
-
+    # -------- Strategy outputs --------
+    strategy: str
+    state: Optional[str]
     signal: Optional[str]
-    
-    strategy:str
+
+    # -------- Generic decision snapshot --------
+    decision_snapshot: Dict[str, Any]
+
+
+# ==========================================================
+# BAR RECORDER
+# ==========================================================
 
 class BarRecorder:
     """
     Records bar-by-bar strategy evaluation.
+    Works with ALL strategies (SMA, PivotBoss, future).
     """
 
     def __init__(self):
@@ -37,14 +45,32 @@ class BarRecorder:
         self,
         candle: Candle,
         strategy,
-        acc_score,
-        dist_score,
-        confidence,
-        absorption_active,
-        markup_confirmed,
-        volatility_contracting,
-        signal,
-    ):
+        signal: Optional[str],
+    ) -> None:
+        """
+        Record a single bar evaluation.
+        """
+
+        # Fetch strategy debug / decision snapshot (if available)
+        snapshot: Dict[str, Any] = {}
+        if hasattr(strategy, "get_debug_state"):
+            try:
+                snapshot = strategy.get_debug_state() or {}
+            except Exception:
+                snapshot = {}
+
+        # Extract state safely (PivotBoss has state enum, SMA may not)
+        state_value: Optional[str] = None
+        if hasattr(strategy, "state"):
+            try:
+                state_value = (
+                    strategy.state.value
+                    if hasattr(strategy.state, "value")
+                    else str(strategy.state)
+                )
+            except Exception:
+                state_value = None
+
         self.records.append(
             BarRecord(
                 timestamp=candle.timestamp,
@@ -53,16 +79,11 @@ class BarRecorder:
                 low=candle.low,
                 close=candle.close,
                 volume=candle.volume,
-                
-                state=strategy.state.value,
-                acc_score=acc_score,
-                dist_score=dist_score,
-                confidence=confidence,
-                absorption_active=absorption_active,
-                markup_confirmed=markup_confirmed,
-                volatility_contracting=volatility_contracting,
-                
+
+                strategy=strategy.name,
+                state=state_value,
                 signal=signal,
-                strategy=strategy.__class__.__name__,
+
+                decision_snapshot=snapshot,
             )
         )

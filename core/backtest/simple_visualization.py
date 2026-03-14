@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from typing import List, Dict
 
 from core.entities.candle import Candle
+from core.backtest.bar_record import BarRecord
 
 
 class SimpleChartVisualizer:
@@ -52,3 +53,51 @@ class SimpleChartVisualizer:
 
         plt.grid(True)
         plt.show()
+        
+        # ---------------- NEW METHOD (REPLAY MODE) ----------------
+    @staticmethod
+    def plot_replay_step(
+        records: List[BarRecord],
+        upto_index: int,
+    ) -> None:
+        """
+        Plot chart state up to a given replay index.
+        """
+
+        # Clear previous frame
+        plt.clf()
+
+        visible = records[: upto_index + 1]
+
+        times = [r.timestamp for r in visible]
+        closes = [r.close for r in visible]
+
+        plt.plot(times, closes, label="Close Price", linewidth=1.5)
+
+        # Plot signals from BarRecords
+        for r in visible:
+            if r.signal == "BUY":
+                plt.scatter(
+                    r.timestamp,
+                    r.close,
+                    color="green",
+                    marker="^",
+                    s=80,
+                )
+            elif r.signal == "SELL":
+                plt.scatter(
+                    r.timestamp,
+                    r.close,
+                    color="red",
+                    marker="v",
+                    s=80,
+                )
+
+        plt.title(
+            f"Replay Mode | Bars: {upto_index + 1} / {len(records)}"
+        )
+        plt.xlabel("Time")
+        plt.ylabel("Price")
+        plt.grid(True)
+
+        plt.pause(0.001)  # REQUIRED for live replay
