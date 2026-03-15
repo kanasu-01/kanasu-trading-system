@@ -28,8 +28,9 @@ export function CandleChart({ records, cursor }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const
-
+  const fastSMARef = useRef<ISeriesApi<"Line"> | null>(null);
+  const slowSMARef = useRef<ISeriesApi<"Line"> | null>(null);
+  
   // -----------------------------------------
   // Create chart ONCE
   // -----------------------------------------
@@ -61,8 +62,20 @@ export function CandleChart({ records, cursor }: Props) {
       wickDownColor: "#ef4444",
     });
 
+    const fastSMA = chart.addSeries(LineSeries, {
+      color: "#5dfa15",
+      lineWidth: 2,
+    });
+
+    const slowSMA = chart.addSeries(LineSeries, {
+      color: "#7a4ae0",
+      lineWidth: 2,
+    });
+
     chartRef.current = chart;
     seriesRef.current = candleSeries;
+    fastSMARef.current = fastSMA;
+    slowSMARef.current = slowSMA;
 
     return () => {
       chart.remove();
@@ -86,6 +99,33 @@ export function CandleChart({ records, cursor }: Props) {
       }));
 
     seriesRef.current.setData(visibleBars);
+
+    //------------------------------------------
+    // Update SMAs as replay advances
+    //------------------------------------------
+
+    if (fastSMARef.current && slowSMARef.current) {
+      const fastSMAData = records
+        .slice(0, cursor + 1)
+        .map((r) => ({
+          time: toUnixSeconds(r.timestamp),
+          value: r.decision_snapshot?.fast_sma ?? null,
+        }))
+        .filter((p) => p.value !== null);
+
+      const slowSMAData = records
+        .slice(0, cursor + 1)
+        .map((r) => ({
+          time: toUnixSeconds(r.timestamp),
+          value: r.decision_snapshot?.slow_sma ?? null,
+        }))
+        .filter((p) => p.value !== null);
+
+      fastSMARef.current.setData(fastSMAData);
+      slowSMARef.current.setData(slowSMAData);
+    }
+
+
     
     const markers = records
       .slice(0, cursor + 1)
