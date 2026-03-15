@@ -26,6 +26,12 @@ class BarRecord:
 
     # -------- Generic decision snapshot --------
     decision_snapshot: Dict[str, Any]
+    
+    # -------- Portfolio state (optional, can be added later) --------
+    equity: float
+    cash: float
+    position_size: float
+    drawdown: float
 
 
 # ==========================================================
@@ -46,6 +52,10 @@ class BarRecorder:
         candle: Candle,
         strategy,
         signal: Optional[str],
+        equity: float,
+        cash: float,
+        position_size: float,
+        drawdown: float,
     ) -> None:
         """
         Record a single bar evaluation.
@@ -85,5 +95,11 @@ class BarRecorder:
                 signal=signal,
 
                 decision_snapshot=snapshot,
+                
+                equity=equity,
+                cash=cash,
+                position_size=position_size,
+                drawdown=drawdown,
+
             )
         )

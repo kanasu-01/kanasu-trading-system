@@ -49,8 +49,8 @@ def main():
     #strategy = PivotBossSwingStrategy()
     strategy = SMACrossOverStrategy(
         params={
-            "fast_period": 20,
-            "slow_period": 50,
+            "fast_period": 100,
+            "slow_period": 200,
         }
         
     )

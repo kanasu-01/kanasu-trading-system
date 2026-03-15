@@ -1,5 +1,15 @@
 {
+  "name": "kanasu-trading-system",
+  "private": true,
   "dependencies": {
     "lightweight-charts": "^5.1.0"
+  },
+  "scripts": {
+    "backend": "python main.py",
+    "frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
   }
 }

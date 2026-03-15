@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { BarRecord } from "./types/BarRecord";
 import { DecisionBox } from "./components/DecisionBox";
 import { CandleChart } from "./components/CandleChart";
+import { PerformancePanel } from "./PerformancePanel";
 
 export default function App() {
   const [records, setRecords] = useState<BarRecord[]>([]);
@@ -72,6 +73,14 @@ export default function App() {
     setCursor(0);
   };
 
+  const runFullBacktest = () => {
+    // This function can be used to run the entire backtest in one go,
+    // which is useful for validating that the replay data matches the
+    // original backtest results. You can compare the final equity curve,
+    // trade list, or any other metrics against your original backtest
+    pause(); // stop replay if running
+    setCursor(records.length - 1);
+  };
   // --------------------------------------------------
   // UI
   // --------------------------------------------------
@@ -111,6 +120,7 @@ export default function App() {
           ⏸
         </button>{" "}
         <button onClick={reset}>↺</button>
+        <button onClick={runFullBacktest}>⚡ Run Full</button>
       </div>
 
       {error && (
@@ -134,6 +144,9 @@ export default function App() {
           <div style={{ flex: 1, minHeight: 0 }}>
             <CandleChart records={records} cursor={cursor} />
           </div>
+
+          {/* PERFORMANCE PANEL */}
+            <PerformancePanel records={records} cursor={cursor} />
 
           {/* DECISION PANEL — FULLY STRATEGY AGNOSTIC */}
           <div
