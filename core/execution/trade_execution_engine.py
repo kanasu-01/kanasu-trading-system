@@ -39,8 +39,7 @@ class TradeExecutionEngine:
 
     # -------------------------------------------------
 
-    def on_new_candle(self, candle: Candle, series) -> None:
-        signal = self.strategy.on_new_candle(series)
+    def on_signal(self, signal, candle: Candle, series) -> None:
 
         # ---------------- NO POSITION ----------------
         if self.open_position is None:

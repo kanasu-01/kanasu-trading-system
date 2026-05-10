@@ -12,7 +12,6 @@ from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
 
 
-
 class AngelOneBroker(BaseBroker):
     """
     AngelOne SmartAPI adapter.
@@ -39,7 +38,6 @@ class AngelOneBroker(BaseBroker):
     # --------------------------------------------------
 
     def login(self) -> bool:
-        
         """
         Login to AngelOne SmartAPI.
 
@@ -50,19 +48,18 @@ class AngelOneBroker(BaseBroker):
         """
 
         self._api = SmartConnect(api_key=self.config.api_key)
-        
+
         if not self.config.totp_secret:
             raise RuntimeError("TOTP secret not configured for AngelOne login")
 
         totp = pyotp.TOTP(self.config.totp_secret).now()
-
 
         session = self._api.generateSession(
             self.config.client_id,
             self.config.client_pin,
             totp,
         )
-        
+
         if not isinstance(session, dict):
             raise RuntimeError("AngelOne login failed: invalid session response")
         print("AngelOne session keys:", session.keys())
@@ -118,8 +115,9 @@ class AngelOneBroker(BaseBroker):
 
     def get_account_balance(self) -> float:
         return 1_000_000.0 if self.paper_mode else 0.0
-    
+
         # --------------------------------------------------
+
     # LIVE DATA (NOT SUPPORTED YET)
     # --------------------------------------------------
 
@@ -127,12 +125,11 @@ class AngelOneBroker(BaseBroker):
         raise NotImplementedError(
             "Live data subscription not implemented for AngelOneBroker"
         )
-        
+
     # -------------------------------------------------
     # HISTORICAL DATA LIMITS
     # -------------------------------------------------
     def get_historical_limits(self) -> dict:
-        
         """
         Return historical data limits per timeframe for AngelOne SmartAPI.
         """
@@ -140,13 +137,12 @@ class AngelOneBroker(BaseBroker):
             "1m": 30,
             "3m": 60,
             "5m": 100,
-            "10": 100,
+            "10m": 100,
             "15m": 200,
             "30m": 200,
             "1h": 400,
             "1d": 2000,
         }
-
 
     # --------------------------------------------------
     # HISTORICAL DATA (PHASE 10.10-C)
@@ -177,6 +173,7 @@ class AngelOneBroker(BaseBroker):
             "1m": "ONE_MINUTE",
             "3m": "THREE_MINUTE",
             "5m": "FIVE_MINUTE",
+            "10m": "TEN_MINUTE",
             "15m": "FIFTEEN_MINUTE",
             "30m": "THIRTY_MINUTE",
             "1h": "ONE_HOUR",
@@ -200,18 +197,20 @@ class AngelOneBroker(BaseBroker):
         if symbol not in symbol_token_map:
             raise RuntimeError("error")
         symbol_token = symbol_token_map[symbol]
-        
-        response = self._api.getCandleData({
-            "exchange": self.config.exchange,
-            "symboltoken": symbol_token,
-            "interval": interval,
-            "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),
-            "todate": end_dt.strftime("%Y-%m-%d %H:%M"),
-        })
+
+        response = self._api.getCandleData(
+            {
+                "exchange": self.config.exchange,
+                "symboltoken": symbol_token,
+                "interval": interval,
+                "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),
+                "todate": end_dt.strftime("%Y-%m-%d %H:%M"),
+            }
+        )
 
         if not isinstance(response, dict):
             raise RuntimeError("Invalid historical data response from AngelOne")
-        
+
         if "data" not in response:
             raise RuntimeError("Missing data in AngelOne historical response")
 
@@ -219,7 +218,6 @@ class AngelOneBroker(BaseBroker):
 
         for row in response["data"]:
             ts = datetime.fromisoformat(row[0])
-    
 
             candles.append(
                 Candle(
