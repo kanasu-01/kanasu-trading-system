@@ -2,6 +2,6 @@ from enum import Enum
 
 
 class RuntimeMode(Enum):
-    DEV = "DEV"
+    BACKTEST = "BACKTEST"
     PAPER = "PAPER"
     LIVE = "LIVE"

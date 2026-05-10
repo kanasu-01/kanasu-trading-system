@@ -1,11 +1,14 @@
-from typing import List
+from typing import List, Dict
 
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
-from core.strategies.pivotboss_swing_strategy import PivotBossSwingStrategy
-from core.risk.risk_metrics import RiskMetrics
 
+from core.strategies.base_strategy import BaseStrategy
+from core.entities.trade import Trade
+from core.strategies.strategy_runner import (
+    StrategyRunner,
+)
 
 class PaperTradingRunner:
     """
@@ -15,28 +18,32 @@ class PaperTradingRunner:
     def __init__(
         self,
         candles: List[Candle],
+        strategy: BaseStrategy,
         initial_capital: float = 1_000_000,
     ):
         self.series = CandleSeries()
         self.candles = candles
 
-        self.strategy = PivotBossSwingStrategy()
+        self.strategy = strategy
+        self.runner = StrategyRunner(self.strategy)
         self.execution_engine = TradeExecutionEngine(
             strategy=self.strategy,
             account_capital=initial_capital,
         )
 
-    def run(self) -> None:
+    def run(self) -> List[Trade]:
+        self.runner.start(self.series)
+
         for candle in self.candles:
-            self.series.add(candle)
-            self.execution_engine.on_new_candle(candle, self.series)
 
-        self._print_summary()
+            signal = self.runner.on_new_candle(
+            candle
+            )
 
-    def _print_summary(self) -> None:
-        trades = self.execution_engine.completed_trades
-        stats = RiskMetrics.summarize(trades)
+            self.execution_engine.on_signal(
+                signal=signal,
+                candle=candle,
+                series=self.series,
+            )
 
-        print("\nPAPER TRADING SUMMARY")
-        for k, v in stats.items():
-            print(f"{k}: {v}")
+        return self.execution_engine.completed_trades

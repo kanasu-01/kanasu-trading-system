@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
-from typing import List, Dict
+from typing import List
 
 from core.entities.candle import Candle
 from core.backtest.bar_record import BarRecord
+from core.entities.trade import Trade
+import matplotlib.dates as mdates
 
 
 class SimpleChartVisualizer:
@@ -13,7 +15,8 @@ class SimpleChartVisualizer:
     @staticmethod
     def plot_price_with_signals(
         candles: List[Candle],
-        trades: List[Dict]
+        trades: List[Trade],
+        strategy_name: str,
     ) -> None:
 
         times = [c.timestamp for c in candles]
@@ -25,8 +28,8 @@ class SimpleChartVisualizer:
         # Plot BUY and SELL signals
         for trade in trades:
             plt.scatter(
-                trade["entry_time"],
-                trade["entry_price"],
+                trade.entry_time,
+                trade.entry_price,
                 color="green",
                 marker="^",
                 s=100,
@@ -34,15 +37,15 @@ class SimpleChartVisualizer:
             )
 
             plt.scatter(
-                trade["exit_time"],
-                trade["exit_price"],
+                trade.exit_time,
+                trade.exit_price,
                 color="red",
                 marker="v",
                 s=100,
                 label="SELL"
             )
 
-        plt.title("PivotBoss Strategy — Simple Backtest Visualization")
+        plt.title(f"{strategy_name} — Simple Backtest Visualization")
         plt.xlabel("Time")
         plt.ylabel("Price")
 

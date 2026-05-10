@@ -8,7 +8,7 @@ class AppConfig:
     Central application configuration.
     """
 
-    runtime_mode: RuntimeMode = RuntimeMode.DEV
+    runtime_mode: RuntimeMode = RuntimeMode.BACKTEST
 
     # Capital & risk
     initial_capital: float = 1_000_000

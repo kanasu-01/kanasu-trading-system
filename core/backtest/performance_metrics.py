@@ -1,4 +1,5 @@
 from typing import List, Dict
+from core.entities.trade import Trade
 
 
 class PerformanceMetrics:
@@ -7,14 +8,14 @@ class PerformanceMetrics:
     """
 
     @staticmethod
-    def summarize(trades: List[Dict]) -> Dict:
+    def summarize(trades: List[Trade]) -> Dict:
         if not trades:
             return {}
 
         total_trades = len(trades)
 
-        wins = [t for t in trades if t["pnl"] > 0]
-        losses = [t for t in trades if t["pnl"] <= 0]
+        wins = [t for t in trades if t.pnl > 0]
+        losses = [t for t in trades if t.pnl <= 0]
 
         win_count = len(wins)
         loss_count = len(losses)
@@ -22,12 +23,12 @@ class PerformanceMetrics:
         win_rate = win_count / total_trades
 
         avg_win = (
-            sum(t["pnl_pct"] for t in wins) / win_count
+            sum(t.pnl_pct for t in wins) / win_count
             if win_count > 0 else 0.0
         )
 
         avg_loss = (
-            sum(t["pnl_pct"] for t in losses) / loss_count
+            sum(t.pnl_pct for t in losses) / loss_count
             if loss_count > 0 else 0.0
         )
 
@@ -49,7 +50,7 @@ class PerformanceMetrics:
         }
 
     @staticmethod
-    def _max_drawdown(trades: List[Dict]) -> float:
+    def _max_drawdown(trades: List[Trade]) -> float:
         """
         Simple equity curve drawdown using % returns.
         """
@@ -58,7 +59,7 @@ class PerformanceMetrics:
         max_dd = 0.0
 
         for trade in trades:
-            equity += trade["pnl_pct"]
+            equity += trade.pnl_pct
 
             if equity > peak:
                 peak = equity

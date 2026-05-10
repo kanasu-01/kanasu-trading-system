@@ -13,7 +13,7 @@ class StrategyRunner:
 
     def __init__(self, strategy: BaseStrategy):
         self.strategy = strategy
-        self.series: CandleSeries
+        self.series: CandleSeries | None = None
 
     def start(self, series: CandleSeries) -> None:
         """
@@ -22,14 +22,24 @@ class StrategyRunner:
         self.series = series
         self.strategy.reset()
 
-    def on_new_candle(self, candle: Candle) -> Optional[str]:
+    def on_new_candle(self,
+        candle: Candle
+    ) -> Optional[str]:
         """
         Called whenever a new candle arrives.
         """
         if self.series is None:
             raise RuntimeError("StrategyRunner not started")
 
-        self.series._candles.append(candle)
+        self.series.append(candle)
+        
+        warmup_required = (
+            self.strategy.warmup_bars()
+            )
+        
+        if len(self.series) < warmup_required:
+            return None  # Not enough data to generate signals yet
+        
         return self.strategy.on_new_candle(self.series)
 
     def stop(self) -> None:

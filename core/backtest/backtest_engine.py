@@ -7,6 +7,7 @@ from core.strategies.base_strategy import BaseStrategy
 from core.backtest.bar_record import BarRecorder
 from core.portfolio.portfolio_manager import PortfolioManager
 from core.execution.trade_execution_engine import TradeExecutionEngine
+from core.entities.trade import Trade
 
 
 class BacktestEngine:
@@ -15,30 +16,30 @@ class BacktestEngine:
     Strategy-agnostic by design.
     """
 
-    def __init__(self, strategy: BaseStrategy):
+    def __init__(self, strategy: BaseStrategy, initial_capital: float,):
         self.strategy = strategy
+        self.initial_capital = initial_capital
         self.runner = StrategyRunner(strategy)
 
-        self.trades: List[Dict] = []
         self.bar_recorder = BarRecorder()
 
         self.execution_engine = TradeExecutionEngine(
             strategy=strategy,
-            account_capital=100000,
+            account_capital=initial_capital,
         )
 
     # -------------------------------------------------
     # Internal engine (used by both batch & stream)
     # -------------------------------------------------
 
-    def _run_internal(self, candles) -> List[Dict]:
+    def _run_internal(self, candles) -> List[Trade]:
         series = CandleSeries([])
         self.runner.start(series)
 
-        current_trade: Optional[Dict] = None
+        #current_trade: Optional[Dict] = None
 
         # Portfolio manager
-        portfolio = PortfolioManager(initial_capital=100000)
+        portfolio = PortfolioManager(initial_capital=self.initial_capital)
 
         for candle in candles:
 
@@ -49,54 +50,6 @@ class BacktestEngine:
                 candle=candle,
                 series=series,
             )
-
-            print(self.execution_engine.completed_trades)
-
-            # -----------------------------------------
-            # TRADE ENTRY
-            # -----------------------------------------
-
-            if signal == "BUY" and current_trade is None:
-
-                current_trade = {
-                    "entry_time": candle.timestamp,
-                    "entry_price": candle.close,
-                }
-
-                portfolio.buy(candle.close)
-
-            # -----------------------------------------
-            # TRADE EXIT
-            # -----------------------------------------
-
-            elif signal == "SELL" and current_trade is not None:
-
-                portfolio.sell(candle.close)
-
-                exit_price = candle.close
-                entry_price = current_trade["entry_price"]
-
-                pnl = exit_price - entry_price
-                pnl_pct = (pnl / entry_price) * 100
-
-                current_trade.update(
-                    {
-                        "exit_time": candle.timestamp,
-                        "exit_price": exit_price,
-                        "pnl": pnl,
-                        "pnl_pct": pnl_pct,
-                        "holding_period": (
-                            candle.timestamp - current_trade["entry_time"]
-                        ),
-                    }
-                )
-
-                self.trades.append(current_trade)
-                current_trade = None
-
-            # -----------------------------------------
-            # PORTFOLIO UPDATE
-            # -----------------------------------------
 
             portfolio.update_equity(candle.close)
 
@@ -116,19 +69,19 @@ class BacktestEngine:
                 drawdown=state.drawdown,
             )
 
-        return self.trades
+        return self.execution_engine.completed_trades
 
     # -------------------------------------------------
     # Public APIs
     # -------------------------------------------------
 
-    def run(self, candles: List[Candle]) -> List[Dict]:
+    def run(self, candles: List[Candle]) -> List[Trade]:
         """
         Backward-compatible bulk backtest method.
         """
         return self._run_internal(candles)
 
-    def run_stream(self, candle_stream) -> List[Dict]:
+    def run_stream(self, candle_stream) -> List[Trade]:
         """
         Stream-based backtest method.
         """

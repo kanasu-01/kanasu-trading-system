@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
+from dataclasses import asdict
+from core.entities.trade import Trade
 
 
 class TradeJournal:
@@ -24,8 +26,8 @@ class TradeJournal:
 
         self._ensure_csv_header()
 
-    def log_trade(self, trade: Dict) -> None:
-        record = trade.copy()
+    def log_trade(self, trade: Trade) -> None:
+        record = asdict(trade)
         record["timestamp"] = datetime.utcnow().isoformat()
 
         self._append_csv(record)
@@ -65,4 +67,4 @@ class TradeJournal:
         data.append(trade)
 
         with open(self.json_path, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2,default=str)

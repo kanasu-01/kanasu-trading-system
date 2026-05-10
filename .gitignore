@@ -24,6 +24,12 @@ outputs/
 *.csv
 *.xlsx
 
+# Journals
+journals/
+
+# Replay exports
+frontend/public/replay/*.json
+
 # OS
 .DS_Store
 Thumbs.db

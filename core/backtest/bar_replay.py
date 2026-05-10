@@ -56,7 +56,7 @@ class BarByBarReplay:
         """
         print("\n--- BAR BY BAR REPLAY START ---\n")
 
-        for idx, r in enumerate(records, start=1):
+        """ for idx, r in enumerate(records, start=1):
 
             print(
                 f"{idx:04d} | "
@@ -72,4 +72,4 @@ class BarByBarReplay:
             
         print("\n--- BAR BY BAR REPLAY END ---\n")
 
-        
+        """
