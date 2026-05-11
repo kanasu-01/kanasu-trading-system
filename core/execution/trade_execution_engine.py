@@ -10,6 +10,8 @@ from core.entities.trade import Trade
 
 from core.journal.trade_journal import TradeJournal
 
+from core.entities.position import Position
+
 from core.execution.execution_cost_model import (
     ExecutionCostModel,
 )
@@ -53,7 +55,7 @@ class TradeExecutionEngine:
 
         self.journal = TradeJournal()
 
-        self.open_position: Optional[Dict] = None
+        self.open_position: Optional[position] = None
 
         self.completed_trades: List[Trade] = []
 
@@ -125,22 +127,22 @@ class TradeExecutionEngine:
                 return
 
             self.open_position = {
-                "entry_price": entry_price,
-                "entry_time": candle.timestamp,
-                "entry_index": len(series) - 1,
-                "quantity": qty,
-                "stop_price": stop_price,
-                "direction": "LONG",
+                entry_price: entry_price,
+                entry_time: candle.timestamp,
+                entry_index: len(series) - 1,
+                quantity: qty,
+                stop_price: stop_price,
+                direction: "LONG",
             }
 
         # ---------------- POSITION OPEN ----------------
         else:
 
-            if candle.low <= self.open_position["stop_price"]:
+            if candle.low <= self.open_position.stop_price:
 
                 exit_price = (
                     self.cost_model.apply_sell_costs(
-                        self.open_position["stop_price"]
+                        self.open_position.stop_price
                     )
                 )
 
@@ -179,11 +181,11 @@ class TradeExecutionEngine:
             return
 
         entry_price = (
-            self.open_position["entry_price"]
+            self.open_position.entry_price
         )
 
         quantity = (
-            self.open_position["quantity"]
+            self.open_position.quantity
         )
 
         pnl = (
@@ -197,17 +199,17 @@ class TradeExecutionEngine:
 
         trade = Trade(
             entry_time=(
-                self.open_position["entry_time"]
+                self.open_position.entry_time
             ),
             entry_price=entry_price,
             exit_time=candle.timestamp,
             exit_price=exit_price,
             stop_price=(
-                self.open_position["stop_price"]
+                self.open_position.stop_price
             ),
             quantity=quantity,
             direction=(
-                self.open_position["direction"]
+                self.open_position.direction
             ),
             exit_reason=exit_reason,
             pnl=pnl,
