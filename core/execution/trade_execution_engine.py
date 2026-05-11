@@ -126,14 +126,14 @@ class TradeExecutionEngine:
             ):
                 return
 
-            self.open_position = {
-                entry_price: entry_price,
-                entry_time: candle.timestamp,
-                entry_index: len(series) - 1,
-                quantity: qty,
-                stop_price: stop_price,
-                direction: "LONG",
-            }
+            self.open_position = Position(
+                entry_price = entry_price,
+                entry_time = candle.timestamp,
+                entry_index = len(series) - 1,
+                quantity = qty,
+                stop_price = stop_price,
+                direction = "LONG",
+            )
 
         # ---------------- POSITION OPEN ----------------
         else:
