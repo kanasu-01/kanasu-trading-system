@@ -1,4 +1,5 @@
-from typing import List, Dict, Optional
+from typing import List
+import uuid
 
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
@@ -8,6 +9,7 @@ from core.backtest.bar_record import BarRecorder
 from core.portfolio.portfolio_manager import PortfolioManager
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.entities.trade import Trade
+from core.logging.logger import get_logger
 
 
 class BacktestEngine:
@@ -16,9 +18,15 @@ class BacktestEngine:
     Strategy-agnostic by design.
     """
 
-    def __init__(self, strategy: BaseStrategy, initial_capital: float,):
+    def __init__(
+        self,
+        strategy: BaseStrategy,
+        initial_capital: float,
+    ):
         self.strategy = strategy
+        self.logger = get_logger(__name__)
         self.initial_capital = initial_capital
+        self.session_id = str(uuid.uuid4())[:8]
         self.runner = StrategyRunner(strategy)
 
         self.bar_recorder = BarRecorder()
@@ -26,6 +34,7 @@ class BacktestEngine:
         self.execution_engine = TradeExecutionEngine(
             strategy=strategy,
             account_capital=initial_capital,
+            session_id=self.session_id,
         )
 
     # -------------------------------------------------
@@ -33,43 +42,76 @@ class BacktestEngine:
     # -------------------------------------------------
 
     def _run_internal(self, candles) -> List[Trade]:
+        self.logger.info(
+            f"BACKTEST STARTED | "
+            f"Session={self.session_id} | "
+            f"Strategy={self.strategy.name}"
+        )
         series = CandleSeries([])
         self.runner.start(series)
 
-        #current_trade: Optional[Dict] = None
+        # current_trade: Optional[Dict] = None
 
         # Portfolio manager
         portfolio = PortfolioManager(initial_capital=self.initial_capital)
 
         for candle in candles:
 
-            signal = self.runner.on_new_candle(candle)
+            try:
 
-            self.execution_engine.on_signal(
-                signal=signal,
-                candle=candle,
-                series=series,
-            )
+                signal = self.runner.on_new_candle(candle)
 
-            portfolio.update_equity(candle.close)
+                self.execution_engine.on_signal(
+                    signal=signal,
+                    candle=candle,
+                    series=series,
+                )
 
-            state = portfolio.snapshot()
+                runtime_position = self.execution_engine.get_runtime_position()
 
-            # -----------------------------------------
-            # BAR RECORDING
-            # -----------------------------------------
+                position_size = (
+                    runtime_position.quantity if runtime_position is not None else 0
+                )
 
-            self.bar_recorder.record(
-                candle=candle,
-                strategy=self.strategy,
-                signal=signal,
-                equity=state.equity,
-                cash=state.cash,
-                position_size=state.position_size,
-                drawdown=state.drawdown,
-            )
+                portfolio.update_equity(
+                    cash=portfolio.cash,
+                    position_size=position_size,
+                    current_price=candle.close,
+                )
 
-        return self.execution_engine.completed_trades
+                state = portfolio.snapshot()
+
+                self.bar_recorder.record(
+                    candle=candle,
+                    strategy=self.strategy,
+                    signal=(signal.value if signal is not None else None),
+                    execution_event=self.execution_engine.last_execution_event,
+                    execution_price=self.execution_engine.last_execution_price,
+                    execution_quantity=self.execution_engine.last_execution_quantity,
+                    equity=state.equity,
+                    cash=state.cash,
+                    position_size=state.position_size,
+                    drawdown=state.drawdown,
+                )
+
+            except Exception as e:
+
+                self.logger.exception(
+                    f"Backtest runtime failure " f"at candle: " f"{candle.timestamp}"
+                )
+
+                raise
+
+        trades = self.execution_engine.completed_trades
+
+        self.logger.info(
+            f"BACKTEST COMPLETED | "
+            f"Session={self.session_id} | "
+            f"Strategy={self.strategy.name} | "
+            f"Trades={len(trades)}"
+        )
+
+        return trades
 
     # -------------------------------------------------
     # Public APIs

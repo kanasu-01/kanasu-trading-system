@@ -23,3 +23,11 @@ class AppConfig:
 
     # Journaling
     journal_dir: str = "journals"
+
+    # Runtime operations
+
+    broker_retry_attempts: int = 2
+
+    broker_retry_delay_sec: float = 2.0
+
+    historical_request_delay_sec: float = 0.5

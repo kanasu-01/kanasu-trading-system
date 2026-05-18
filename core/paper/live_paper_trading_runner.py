@@ -3,6 +3,20 @@ from core.entities.candle_series import CandleSeries
 from core.market_data.base_feed import MarketDataFeed
 from core.strategies.pivotboss_swing_strategy import PivotBossSwingStrategy
 
+"""
+Live paper trading runner.
+
+STATUS:
+    Runtime modernization pending.
+
+Current limitations:
+    - Uses outdated execution flow
+    - Not integrated with StrategyRunner
+    - Missing reconciliation support
+    - Missing session-aware runtime logging
+    - Not production-ready
+"""
+
 
 class LivePaperTradingRunner:
     """

@@ -2,6 +2,7 @@ from typing import Optional
 
 from core.entities.candle_series import CandleSeries
 from core.strategies.base_strategy import BaseStrategy
+from core.strategies.signal import SignalType
 
 
 class SMACrossOverStrategy(BaseStrategy):
@@ -22,7 +23,7 @@ class SMACrossOverStrategy(BaseStrategy):
 
         # Internal state
         self.position_open = False
-        self.last_signal: Optional[str] = None
+        self.last_signal: Optional[SignalType] = None
 
         # Cached values for debug
         self.fast_sma: Optional[float] = None
@@ -48,26 +49,26 @@ class SMACrossOverStrategy(BaseStrategy):
     # Core logic
     # -------------------------------------------------
 
-    def on_new_candle(self, series: CandleSeries) -> Optional[str]:
+    def on_new_candle(self, series: CandleSeries) -> Optional[SignalType]:
         if len(series) < self.warmup_bars():
             return None
 
         closes = [c.close for c in series]
 
-        self.fast_sma = sum(closes[-self.fast_period:]) / self.fast_period
-        self.slow_sma = sum(closes[-self.slow_period:]) / self.slow_period
+        self.fast_sma = sum(closes[-self.fast_period :]) / self.fast_period
+        self.slow_sma = sum(closes[-self.slow_period :]) / self.slow_period
 
-        signal = None
+        signal: Optional[SignalType] = None
 
         # Entry condition
         if not self.position_open and self.fast_sma > self.slow_sma:
             self.position_open = True
-            signal = "BUY"
+            signal = SignalType.BUY
 
         # Exit condition
         elif self.position_open and self.fast_sma < self.slow_sma:
             self.position_open = False
-            signal = "SELL"
+            signal = SignalType.SELL
 
         self.last_signal = signal
         return signal
@@ -85,7 +86,8 @@ class SMACrossOverStrategy(BaseStrategy):
             "fast_sma": self.fast_sma,
             "slow_sma": self.slow_sma,
             "fast_gt_slow": (
-                None if self.fast_sma is None or self.slow_sma is None
+                None
+                if self.fast_sma is None or self.slow_sma is None
                 else self.fast_sma > self.slow_sma
             ),
             "position_open": self.position_open,

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass
@@ -9,7 +10,7 @@ class Trade:
 
     entry_price: float
 
-    exit_time: datetime
+    exit_time: Optional[datetime]
 
     exit_price: float
 

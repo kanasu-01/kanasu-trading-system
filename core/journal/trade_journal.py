@@ -14,6 +14,7 @@ class TradeJournal:
 
     def __init__(
         self,
+        session_id: str,
         journal_dir: str = "journals",
         csv_filename: str = "trades.csv",
         json_filename: str = "trades.json",
@@ -23,11 +24,27 @@ class TradeJournal:
 
         self.csv_path = self.journal_path / csv_filename
         self.json_path = self.journal_path / json_filename
+        self.fieldnames = [
+            "timestamp",
+            "session_id",
+            "entry_time",
+            "entry_price",
+            "exit_time",
+            "exit_price",
+            "stop_price",
+            "quantity",
+            "direction",
+            "exit_reason",
+            "pnl",
+            "pnl_pct",
+        ]
+        self.session_id = session_id
 
         self._ensure_csv_header()
 
     def log_trade(self, trade: Trade) -> None:
         record = asdict(trade)
+        record["session_id"] = self.session_id
         record["timestamp"] = datetime.utcnow().isoformat()
 
         self._append_csv(record)
@@ -38,23 +55,15 @@ class TradeJournal:
             return
 
         with open(self.csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=[
-                    "timestamp",
-                    "entry_price",
-                    "exit_price",
-                    "stop_price",
-                    "quantity",
-                    "direction",
-                    "exit_reason",
-                ],
-            )
+            writer = csv.DictWriter(f, fieldnames=self.fieldnames)
             writer.writeheader()
 
     def _append_csv(self, trade: Dict) -> None:
         with open(self.csv_path, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=trade.keys())
+            writer = csv.DictWriter(
+                f,
+                fieldnames=self.fieldnames,
+            )
             writer.writerow(trade)
 
     def _append_json(self, trade: Dict) -> None:
@@ -67,4 +76,4 @@ class TradeJournal:
         data.append(trade)
 
         with open(self.json_path, "w") as f:
-            json.dump(data, f, indent=2,default=str)
+            json.dump(data, f, indent=2, default=str)

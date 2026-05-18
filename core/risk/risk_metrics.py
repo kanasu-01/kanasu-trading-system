@@ -1,4 +1,5 @@
-from typing import List, Dict
+from typing import List
+from core.entities.trade import Trade
 
 
 class RiskMetrics:
@@ -29,7 +30,7 @@ class RiskMetrics:
         return reward / initial_risk
 
     @staticmethod
-    def summarize(trades: List[Dict]) -> Dict:
+    def summarize(trades: List[Trade]) -> dict:
         """
         Summarize R-multiple statistics.
         Expects each trade to have:
@@ -42,11 +43,10 @@ class RiskMetrics:
 
         for trade in trades:
             r = RiskMetrics.compute_r_multiple(
-                entry_price=trade["entry_price"],
-                exit_price=trade["exit_price"],
-                stop_price=trade["stop_price"],
+                entry_price=trade.entry_price,
+                exit_price=trade.exit_price,
+                stop_price=trade.stop_price,
             )
-            trade["r_multiple"] = round(r, 2)
             r_values.append(r)
 
         if not r_values:
@@ -60,7 +60,8 @@ class RiskMetrics:
         expectancy_r = (
             (len(wins) / len(r_values)) * (sum(wins) / len(wins))
             + (len(losses) / len(r_values)) * (sum(losses) / len(losses))
-            if losses else avg_r
+            if losses
+            else avg_r
         )
 
         max_r_drawdown = RiskMetrics._max_r_drawdown(r_values)

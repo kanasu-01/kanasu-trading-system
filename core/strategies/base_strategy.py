@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
-
+from core.strategies.signal import SignalType
 from core.entities.candle_series import CandleSeries
 
 
@@ -21,16 +21,13 @@ class BaseStrategy(ABC):
         return self.params.get(key, default)
 
     @abstractmethod
-    def on_new_candle(
-        self,
-        series: CandleSeries
-    ) -> Optional[str]:
+    def on_new_candle(self, series: CandleSeries) -> Optional[SignalType]:
         """
         Called whenever a new candle is available.
 
         Returns:
-            - "BUY"
-            - "SELL"
+            - SignalType.BUY
+            - SignalType.SELL
             - None
         """
         pass
@@ -41,14 +38,14 @@ class BaseStrategy(ABC):
         Resets internal state of the strategy.
         """
         pass
-    
+
     def warmup_bars(self) -> int:
         """
         Number of bars required for warm-up before the strategy can make decisions.
         Default is 0.
         """
         return 0
-    
+
     def get_debug_state(self) -> dict:
         """
         Optional diagnostic data for backtest analysis.

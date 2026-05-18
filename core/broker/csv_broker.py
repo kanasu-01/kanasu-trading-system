@@ -1,7 +1,7 @@
 # core/broker/csv_broker.py
 
 import csv
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 
 from core.broker.base_broker import BaseBroker
@@ -22,11 +22,7 @@ class CSVBroker(BaseBroker):
     # ---------- MARKET DATA ----------
 
     def get_historical_candles(
-        self,
-        symbol: str,
-        timeframe: str,
-        start,
-        end
+        self, symbol: str, timeframe: str, start, end
     ) -> List[Candle]:
         candles: List[Candle] = []
 
@@ -54,6 +50,9 @@ class CSVBroker(BaseBroker):
 
         return candles
 
+    def subscribe_live(self, symbol: str):
+        raise NotImplementedError("CSVBroker does not support live subscriptions")
+
     # ---------- ORDER INTERFACE (NOT USED) ----------
 
     def login(self) -> bool:
@@ -69,8 +68,25 @@ class CSVBroker(BaseBroker):
     def cancel_order(self, order_id: str) -> bool:
         return False
 
-    def get_order_status(self, order_id: str) -> Optional[OrderResponse]:
-        return None
+    def get_historical_limits(self) -> dict:
+
+        return {
+            "1m": 3650,
+            "5m": 3650,
+            "15m": 3650,
+            "1d": 3650,
+        }
+
+    def get_order_status(
+        self,
+        order_id: str,
+    ) -> OrderResponse:
+
+        return OrderResponse(
+            order_id=order_id,
+            status=OrderStatus.REJECTED,
+            message="CSV broker does not track order status",
+        )
 
     def get_account_balance(self) -> float:
         return 0.0

@@ -33,7 +33,7 @@ class SimpleChartVisualizer:
                 color="green",
                 marker="^",
                 s=100,
-                label="BUY"
+                label="BUY",
             )
 
             plt.scatter(
@@ -42,7 +42,7 @@ class SimpleChartVisualizer:
                 color="red",
                 marker="v",
                 s=100,
-                label="SELL"
+                label="SELL",
             )
 
         plt.title(f"{strategy_name} — Simple Backtest Visualization")
@@ -56,8 +56,9 @@ class SimpleChartVisualizer:
 
         plt.grid(True)
         plt.show()
-        
+
         # ---------------- NEW METHOD (REPLAY MODE) ----------------
+
     @staticmethod
     def plot_replay_step(
         records: List[BarRecord],
@@ -75,32 +76,39 @@ class SimpleChartVisualizer:
         times = [r.timestamp for r in visible]
         closes = [r.close for r in visible]
 
-        plt.plot(times, closes, label="Close Price", linewidth=1.5)
+        plt.plot_date(
+            mdates.date2num(times),
+            closes,
+            line_style="-",
+            marker=None,
+            label="Close Price",
+        )
 
         # Plot signals from BarRecords
         for r in visible:
-            if r.signal == "BUY":
+            if r.execution_event == "BUY":
                 plt.scatter(
-                    r.timestamp,
+                    mdates.date2num(r.timestamp),
                     r.close,
                     color="green",
                     marker="^",
                     s=80,
                 )
-            elif r.signal == "SELL":
+            elif r.execution_event in ["SELL", "STOP_EXIT"]:
                 plt.scatter(
-                    r.timestamp,
+                    mdates.date2num(r.timestamp),
                     r.close,
                     color="red",
                     marker="v",
                     s=80,
                 )
 
-        plt.title(
-            f"Replay Mode | Bars: {upto_index + 1} / {len(records)}"
-        )
+        plt.title(f"Replay Mode | Bars: {upto_index + 1} / {len(records)}")
         plt.xlabel("Time")
         plt.ylabel("Price")
         plt.grid(True)
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+
+        plt.gcf().autofmt_xdate()
 
         plt.pause(0.001)  # REQUIRED for live replay

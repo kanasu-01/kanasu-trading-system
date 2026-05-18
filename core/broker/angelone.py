@@ -1,5 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
+import time
 import pytz
 import pyotp
 
@@ -10,6 +11,7 @@ from core.execution.order import Order
 from core.execution.order_response import OrderResponse, OrderStatus
 from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
+from core.logging.logger import get_logger
 
 
 class AngelOneBroker(BaseBroker):
@@ -32,6 +34,7 @@ class AngelOneBroker(BaseBroker):
 
         self._logged_in = False
         self._api: Optional[SmartConnect] = None
+        self.logger = get_logger(__name__)
 
     # --------------------------------------------------
     # AUTH
@@ -54,19 +57,39 @@ class AngelOneBroker(BaseBroker):
 
         totp = pyotp.TOTP(self.config.totp_secret).now()
 
-        session = self._api.generateSession(
-            self.config.client_id,
-            self.config.client_pin,
-            totp,
+        session = None
+
+        for attempt in range(2):
+
+            try:
+
+                session = self._api.generateSession(
+                    self.config.client_id,
+                    self.config.client_pin,
+                    totp,
+                )
+
+                break
+
+            except Exception as e:
+
+                self.logger.exception(
+                    f"AngelOne login attempt failed | " f"Attempt={attempt + 1}"
+                )
+
+                if attempt == 1:
+
+                    raise RuntimeError("AngelOne login request failed") from e
+
+                time.sleep(2)
+
+        if not isinstance(session, dict):
+            raise RuntimeError("AngelOne login failed: invalid session response")
+        self.logger.info(
+            f"AngelOne login successful | " f"Session keys={list(session.keys())}"
         )
 
-        if not isinstance(session, dict):
-            raise RuntimeError("AngelOne login failed: invalid session response")
-        print("AngelOne session keys:", session.keys())
-
         ##print(self.config.client_id, self.config.client_pin, totp, self.config.api_key,self._api,session.jwtToken)
-        if not isinstance(session, dict):
-            raise RuntimeError("AngelOne login failed: invalid session response")
 
         if "data" not in session or not isinstance(session["data"], dict):
             raise RuntimeError("AngelOne login failed: data block missing")
@@ -106,7 +129,7 @@ class AngelOneBroker(BaseBroker):
     def cancel_order(self, order_id: str) -> bool:
         return True if self.paper_mode else False
 
-    def get_order_status(self, order_id: str) -> Optional[OrderResponse]:
+    def get_order_status(self, order_id: str) -> OrderResponse:
         return OrderResponse(
             order_id=order_id,
             status=OrderStatus.FILLED,
@@ -116,12 +139,16 @@ class AngelOneBroker(BaseBroker):
     def get_account_balance(self) -> float:
         return 1_000_000.0 if self.paper_mode else 0.0
 
+    def get_open_positions(self):
+
+        return []
+
         # --------------------------------------------------
 
     # LIVE DATA (NOT SUPPORTED YET)
     # --------------------------------------------------
 
-    def subscribe_live(self):
+    def subscribe_live(self, Symbol: str):
         raise NotImplementedError(
             "Live data subscription not implemented for AngelOneBroker"
         )
@@ -198,15 +225,27 @@ class AngelOneBroker(BaseBroker):
             raise RuntimeError("error")
         symbol_token = symbol_token_map[symbol]
 
-        response = self._api.getCandleData(
-            {
-                "exchange": self.config.exchange,
-                "symboltoken": symbol_token,
-                "interval": interval,
-                "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),
-                "todate": end_dt.strftime("%Y-%m-%d %H:%M"),
-            }
-        )
+        try:
+
+            response = self._api.getCandleData(
+                {
+                    "exchange": self.config.exchange,
+                    "symboltoken": symbol_token,
+                    "interval": interval,
+                    "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),
+                    "todate": end_dt.strftime("%Y-%m-%d %H:%M"),
+                }
+            )
+
+        except Exception as e:
+
+            self.logger.exception(
+                f"AngelOne historical fetch failed | "
+                f"Symbol={symbol} | "
+                f"Timeframe={timeframe}"
+            )
+
+            raise RuntimeError("AngelOne historical data request failed") from e
 
         if not isinstance(response, dict):
             raise RuntimeError("Invalid historical data response from AngelOne")

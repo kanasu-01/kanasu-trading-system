@@ -1,4 +1,5 @@
-from typing import List, Dict
+from typing import List
+from core.entities.trade import Trade
 from core.entities.trade import Trade
 
 
@@ -8,7 +9,7 @@ class PerformanceMetrics:
     """
 
     @staticmethod
-    def summarize(trades: List[Trade]) -> Dict:
+    def summarize(trades: List[Trade]) -> dict:
         if not trades:
             return {}
 
@@ -22,21 +23,14 @@ class PerformanceMetrics:
 
         win_rate = win_count / total_trades
 
-        avg_win = (
-            sum(t.pnl_pct for t in wins) / win_count
-            if win_count > 0 else 0.0
-        )
+        avg_win = sum(t.pnl_pct for t in wins) / win_count if win_count > 0 else 0.0
 
         avg_loss = (
-            sum(t.pnl_pct for t in losses) / loss_count
-            if loss_count > 0 else 0.0
+            sum(t.pnl_pct for t in losses) / loss_count if loss_count > 0 else 0.0
         )
 
         # Expectancy = (Win% × AvgWin) + (Loss% × AvgLoss)
-        expectancy = (
-            win_rate * avg_win
-            + (1 - win_rate) * avg_loss
-        )
+        expectancy = win_rate * avg_win + (1 - win_rate) * avg_loss
 
         max_drawdown = PerformanceMetrics._max_drawdown(trades)
 

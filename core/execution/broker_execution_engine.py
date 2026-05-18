@@ -4,14 +4,18 @@ from core.broker.base_broker import BaseBroker
 from core.execution.order import Order, OrderSide, OrderType
 from core.execution.order_response import OrderStatus
 from core.entities.candle import Candle
+from core.entities.position import Position
+from core.entities.trade import Trade
 from core.risk.risk_manager import RiskManager
 from core.risk.stop_loss_manager import StopLossManager
 from core.risk.portfolio_risk_manager import PortfolioRiskManager
 from core.risk.drawdown_risk_manager import DrawdownRiskManager
 from core.execution.execution_cost_model import ExecutionCostModel
+from core.execution.trade_builder import TradeBuilder
 from core.journal.trade_journal import TradeJournal
 from core.risk.live_risk_guard import LiveRiskGuard
 from core.risk.kill_switch import KillSwitch
+from core.strategies.signal import SignalType
 
 
 class BrokerExecutionEngine:
@@ -42,12 +46,10 @@ class BrokerExecutionEngine:
         self.cost_model = ExecutionCostModel()
         self.journal = TradeJournal()
 
-        self.live_guard = LiveRiskGuard(
-            min_required_balance=account_capital * 0.9
-        )
+        self.live_guard = LiveRiskGuard(min_required_balance=account_capital * 0.9)
         self.kill_switch = KillSwitch()
 
-        self.open_position: Optional[Dict] = None
+        self.open_position: Optional[Position] = None
 
     def on_new_candle(self, candle: Candle, series) -> None:
         if self.kill_switch.is_active():
@@ -56,9 +58,10 @@ class BrokerExecutionEngine:
             return
 
         signal = self.strategy.on_new_candle(series)
+        signal: Optional[SignalType]
 
         if self.open_position is None:
-            if signal != "BUY":
+            if signal != SignalType.BUY:
                 return
             if not self.enable_live_trading:
                 return
@@ -93,16 +96,19 @@ class BrokerExecutionEngine:
             if response.status != OrderStatus.FILLED:
                 return
 
-            self.open_position = {
-                "entry_price": response.filled_price or entry_price,
-                "quantity": qty,
-                "stop_price": stop_price,
-            }
+            self.open_position = Position(
+                entry_time=candle.timestamp,
+                entry_price=(response.filled_price or entry_price),
+                entry_index=len(series) - 1,
+                quantity=qty,
+                stop_price=stop_price,
+                direction="LONG",
+            )
 
         else:
-            if candle.low <= self.open_position["stop_price"]:
+            if candle.low <= self.open_position.stop_price:
                 self._exit_position(candle, "STOP_LOSS")
-            elif signal == "SELL":
+            elif signal == SignalType.SELL:
                 self._exit_position(candle, "STRATEGY_EXIT")
 
     def _exit_position(self, candle: Candle, reason: str) -> None:
@@ -111,7 +117,7 @@ class BrokerExecutionEngine:
         order = Order(
             symbol=candle.symbol,
             side=OrderSide.SELL,
-            quantity=self.open_position["quantity"],
+            quantity=self.open_position.quantity,
             order_type=OrderType.MARKET,
         )
 
@@ -129,19 +135,16 @@ class BrokerExecutionEngine:
             pass
 
     def _record_trade(self, exit_price: float, reason: str) -> None:
-        trade = {
-            "entry_price": self.open_position["entry_price"],
-            "exit_price": exit_price,
-            "stop_price": self.open_position["stop_price"],
-            "quantity": self.open_position["quantity"],
-            "direction": "LONG",
-            "exit_reason": reason,
-        }
+        if self.open_position is None:
+            return
 
-        pnl_pct = (
-            (exit_price - trade["entry_price"])
-            / trade["entry_price"]
-        ) * 100
+        trade = TradeBuilder.build_long_trade(
+            position=self.open_position,
+            exit_price=exit_price,
+            exit_reason=reason,
+            exit_time=None,
+        )
 
-        self.drawdown_manager.record_trade_pnl(pnl_pct)
+        self.drawdown_manager.record_trade_pnl(trade.pnl_pct)
+
         self.journal.log_trade(trade)
