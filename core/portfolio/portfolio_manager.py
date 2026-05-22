@@ -16,6 +16,7 @@ class PortfolioManager:
         self.initial_capital = initial_capital
 
         self.cash = initial_capital
+        self.position_size = 0
 
         self.equity = initial_capital
         self.peak_equity = initial_capital
@@ -34,6 +35,7 @@ class PortfolioManager:
         position_value = position_size * current_price
 
         self.cash = cash
+        self.position_size = position_size
         self.equity = cash + position_value
 
         self.peak_equity = max(self.peak_equity, self.equity)
@@ -49,7 +51,7 @@ class PortfolioManager:
 
         return PortfolioState(
             cash=self.cash,
-            position_size=0,
+            position_size=self.position_size,
             equity=self.equity,
             peak_equity=self.peak_equity,
             drawdown=self.drawdown,

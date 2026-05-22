@@ -2,19 +2,35 @@ from dataclasses import dataclass
 from typing import List, Dict, Any, Literal
 
 from core.walk_forward.metrics import WalkForwardMetrics
-
+from core.backtest.backtest_result import BacktestResult
+from core.walk_forward.equity_stitcher import EquityStitcher
+from core.walk_forward.optimization_result import OptimizationResult
 
 # ==========================================================
 # PER-WINDOW RESULT
 # ==========================================================
+
 
 @dataclass(frozen=True)
 class WalkWindowResult:
     """
     Result of a single walk-forward window.
     """
+
     window_index: int
+
+    optimization_stability_score: float
+
+    # Canonical optimization lineage
+    optimization_result: OptimizationResult
+
+    # Selected parameter set from IS optimization
     best_params: Dict[str, Any]
+
+    # Canonical OOS execution result
+    backtest_result: BacktestResult
+
+    # Legacy summary fields (temporary migration layer)
     test_metrics: Dict[str, Any]
     trade_count: int
 
@@ -23,13 +39,24 @@ class WalkWindowResult:
 # WALK-FORWARD FINAL RESULT
 # ==========================================================
 
+
 @dataclass(frozen=True)
 class WalkForwardResult:
     """
     Immutable result of full walk-forward analysis.
     """
+
     windows: List[WalkWindowResult]
+
+    # Legacy summary metrics
     aggregated_metrics: Dict[str, Any]
+
+    # Canonical stitched OOS equity
+    stitched_equity_curve: List
+
+    # Metrics derived from stitched equity
+    stitched_equity_metrics: Dict[str, Any]
+
     verdict: Literal["PASS", "FAIL"]
 
     # ------------------------------------------------------
@@ -49,12 +76,25 @@ class WalkForwardResult:
         if not windows:
             raise ValueError("WalkForwardResult requires window results")
 
-        metrics = WalkForwardMetrics.aggregate(
-            [w.test_metrics for w in windows]
+        metrics = WalkForwardMetrics.aggregate([w.test_metrics for w in windows])
+
+        stitched_equity_curve = EquityStitcher.stitch(windows)
+        stitched_equity_metrics = WalkForwardMetrics.compute_stitched_equity_metrics(
+            stitched_equity_curve
+        )
+
+        optimization_stability_scores = [
+            w.optimization_stability_score for w in windows
+        ]
+
+        avg_optimization_stability = round(
+            sum(optimization_stability_scores) / len(optimization_stability_scores),
+            4,
         )
 
         verdict = cls._evaluate_verdict(
             metrics=metrics,
+            stitched_metrics=stitched_equity_metrics,
             min_consistency=min_consistency,
             max_drawdown_pct=max_drawdown_pct,
             min_stability_score=min_stability_score,
@@ -62,8 +102,13 @@ class WalkForwardResult:
 
         return cls(
             windows=windows,
-            aggregated_metrics=metrics,
+            aggregated_metrics={
+                **metrics,
+                "avg_optimization_stability": avg_optimization_stability,
+            },
             verdict=verdict,
+            stitched_equity_curve=stitched_equity_curve,
+            stitched_equity_metrics=stitched_equity_metrics,
         )
 
     # ------------------------------------------------------
@@ -73,6 +118,7 @@ class WalkForwardResult:
     @staticmethod
     def _evaluate_verdict(
         metrics: Dict[str, Any],
+        stitched_metrics: Dict[str, Any],
         *,
         min_consistency: float,
         max_drawdown_pct: float,
@@ -86,6 +132,9 @@ class WalkForwardResult:
             return "FAIL"
 
         if metrics["worst_drawdown_pct"] > max_drawdown_pct:
+            return "FAIL"
+
+        if stitched_metrics["stitched_max_drawdown_pct"] > max_drawdown_pct:
             return "FAIL"
 
         if metrics["stability_score"] < min_stability_score:

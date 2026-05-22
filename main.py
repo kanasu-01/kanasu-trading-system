@@ -1,17 +1,14 @@
 # main.py (root)
 import sys
-from core.market_data.historical_feed import HistoricalFeed
-from core.backtest.backtest_engine import BacktestEngine
+from core.runtime.walk_forward_runtime import (
+    run_walk_forward,
+)
 from core.broker.base_broker import BaseBroker
-from core.strategies.base_strategy import BaseStrategy
 from core.config.app_config import AppConfig
 from core.config.runtime_mode import RuntimeMode
 import logging
-from core.backtest.backtest_runner import (
-    print_performance_summary,
-    run_replay,
-    export_backtest_records,
-    visualize_backtest,
+from core.runtime.backtest_runtime import (
+    run_backtest,
 )
 from core.config.backtest_config import (
     BacktestConfig,
@@ -45,15 +42,21 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
         ),
     )
 
-    # -------- STRATEGY --------
-    # strategy = PivotBossSwingStrategy()
-    strategy = create_strategy(backtest_config)
-
     # -------- BACKTEST FLOW --------
     if app_config.runtime_mode == RuntimeMode.BACKTEST:
+
+        strategy = create_strategy(backtest_config)
         run_backtest(
             broker=broker,
             strategy=strategy,
+            config=backtest_config,
+            app_config=app_config,
+        )
+
+    elif app_config.runtime_mode == RuntimeMode.WALK_FORWARD:
+
+        run_walk_forward(
+            broker=broker,
             config=backtest_config,
             app_config=app_config,
         )
@@ -71,49 +74,6 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
     else:
 
         raise ValueError(f"Unsupported runtime mode: " f"{app_config.runtime_mode}")
-
-
-def run_backtest(
-    broker: BaseBroker,
-    strategy: BaseStrategy,
-    config: BacktestConfig,
-    app_config: AppConfig,
-) -> None:
-    feed = HistoricalFeed(
-        broker,
-        request_delay_sec=app_config.historical_request_delay_sec,
-    )
-
-    candle_stream = feed.stream(
-        symbol=config.symbol,
-        timeframe=config.timeframe,
-        start=config.start,
-        end=config.end,
-    )
-
-    engine = BacktestEngine(strategy=strategy, initial_capital=config.initial_capital)
-    trades = engine.run_stream(candle_stream)
-
-    ## Performance metrics OR Backtest summary report
-    print_performance_summary(trades)
-
-    if config.enable_replay:
-        run_replay(
-            strategy=strategy,
-            records=engine.bar_recorder.records,
-        )
-
-    # EXPORTS (CSV/JSON for replay)
-    if config.enable_exports:
-        export_backtest_records(records=engine.bar_recorder.records, config=config)
-
-    # Visualization
-    if config.enable_visualization:
-        visualize_backtest(
-            strategy=strategy,
-            records=engine.bar_recorder.records,
-            trades=trades,
-        )
 
 
 def run_live_trading():

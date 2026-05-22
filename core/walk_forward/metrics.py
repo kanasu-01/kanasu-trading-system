@@ -1,11 +1,12 @@
 from typing import List, Dict, Any
 
 from core.backtest.performance_metrics import PerformanceMetrics
-
+from core.entities.trade import Trade
 
 # ==========================================================
 # WALK-FORWARD METRICS
 # ==========================================================
+
 
 class WalkForwardMetrics:
     """
@@ -16,7 +17,7 @@ class WalkForwardMetrics:
     # Per-window metrics
     # ------------------------------------------------------
 
-    def compute(self, trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def compute(self, trades: List[Trade]) -> Dict[str, Any]:
         """
         Compute metrics for a single out-of-sample window.
         """
@@ -54,30 +55,21 @@ class WalkForwardMetrics:
 
         total_windows = len(window_metrics)
 
-        profitable_windows = [
-            m for m in window_metrics if m.get("profitable")
-        ]
+        profitable_windows = [m for m in window_metrics if m.get("profitable")]
 
-        expectancy_values = [
-            m.get("expectancy_pct", 0.0) for m in window_metrics
-        ]
+        expectancy_values = [m.get("expectancy_pct", 0.0) for m in window_metrics]
 
-        drawdowns = [
-            m.get("max_drawdown_pct", 0.0) for m in window_metrics
-        ]
+        drawdowns = [m.get("max_drawdown_pct", 0.0) for m in window_metrics]
 
         consistency_ratio = len(profitable_windows) / total_windows
 
         avg_expectancy = (
-            sum(expectancy_values) / total_windows
-            if total_windows > 0 else 0.0
+            sum(expectancy_values) / total_windows if total_windows > 0 else 0.0
         )
 
         worst_drawdown = max(drawdowns) if drawdowns else 0.0
 
-        stability_score = WalkForwardMetrics._stability_score(
-            expectancy_values
-        )
+        stability_score = WalkForwardMetrics._stability_score(expectancy_values)
 
         return {
             "total_windows": total_windows,
@@ -86,6 +78,61 @@ class WalkForwardMetrics:
             "avg_expectancy_pct": round(avg_expectancy, 2),
             "worst_drawdown_pct": round(worst_drawdown, 2),
             "stability_score": round(stability_score, 2),
+        }
+
+    @staticmethod
+    def compute_stitched_equity_metrics(
+        stitched_equity_curve,
+    ) -> Dict[str, Any]:
+        """
+        Compute metrics from continuous stitched OOS equity.
+        """
+
+        if not stitched_equity_curve:
+            return {
+                "stitched_total_return_pct": 0.0,
+                "stitched_max_drawdown_pct": 0.0,
+            }
+
+        equity_values = [equity for _, equity in stitched_equity_curve]
+
+        start_equity = equity_values[0]
+        end_equity = equity_values[-1]
+
+        # -----------------------------------------
+        # Total return
+        # -----------------------------------------
+        total_return_pct = (
+            ((end_equity - start_equity) / start_equity) * 100
+            if start_equity != 0
+            else 0.0
+        )
+
+        # -----------------------------------------
+        # Max drawdown
+        # -----------------------------------------
+        peak = equity_values[0]
+        max_drawdown = 0.0
+
+        for equity in equity_values:
+
+            if equity > peak:
+                peak = equity
+
+            drawdown = ((peak - equity) / peak) * 100 if peak != 0 else 0.0
+
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+
+        return {
+            "stitched_total_return_pct": round(
+                total_return_pct,
+                2,
+            ),
+            "stitched_max_drawdown_pct": round(
+                max_drawdown,
+                2,
+            ),
         }
 
     # ------------------------------------------------------
@@ -108,3 +155,17 @@ class WalkForwardMetrics:
         stability = 1 / (1 + variance)
 
         return stability
+
+    @staticmethod
+    def optimization_stability_score(
+        evaluation_scores: List[float],
+    ) -> float:
+        """
+        Measures optimization stability from
+        parameter evaluation scores.
+        """
+
+        return round(
+            WalkForwardMetrics._stability_score(evaluation_scores),
+            4,
+        )

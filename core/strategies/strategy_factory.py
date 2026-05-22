@@ -17,15 +17,25 @@ def create_strategy(
 
     if config.strategy_name == "sma_crossover":
 
-        return SMACrossOverStrategy(
-            params=config.strategy_params
-        )
+        return SMACrossOverStrategy(params=config.strategy_params)
 
     elif config.strategy_name == "pivotboss":
 
         return PivotBossSwingStrategy()
 
-    raise ValueError(
-        f"Unsupported strategy: "
-        f"{config.strategy_name}"
-    )
+    raise ValueError(f"Unsupported strategy: " f"{config.strategy_name}")
+
+
+def get_strategy_class(
+    config: BacktestConfig,
+):
+
+    if config.strategy_name == "sma_crossover":
+
+        return SMACrossOverStrategy
+
+    elif config.strategy_name == "pivotboss":
+
+        return PivotBossSwingStrategy
+
+    raise ValueError(f"Unsupported strategy: " f"{config.strategy_name}")

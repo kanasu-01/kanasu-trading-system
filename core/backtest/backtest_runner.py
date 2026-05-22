@@ -2,6 +2,7 @@ from dataclasses import asdict
 
 from core.entities.candle import Candle
 from core.backtest.bar_replay import BarByBarReplay
+from core.backtest.backtest_result import BacktestResult
 from core.backtest.simple_visualization import (
     SimpleChartVisualizer,
 )
@@ -19,9 +20,9 @@ from core.backtest.performance_metrics import (
 )
 
 
-def print_performance_summary(trades):
+def print_performance_summary(result: BacktestResult):
 
-    metrics = PerformanceMetrics.summarize(trades)
+    metrics = PerformanceMetrics.summarize(result.trades)
 
     print("\n=== PERFORMANCE METRICS ===")
 
@@ -40,21 +41,19 @@ def run_replay(
 
 
 def export_backtest_records(
-    records,
+    result: BacktestResult,
     config,
 ):
 
     CSVExporter.export(
-        records=bar_records_to_dicts(records),
+        records=bar_records_to_dicts(result.bar_records),
         filepath=(
-            f"outputs/backtests/"
-            f"{config.symbol}_"
-            f"{config.timeframe}_bars.csv"
+            f"outputs/backtests/" f"{config.symbol}_" f"{config.timeframe}_bars.csv"
         ),
     )
 
     JSONExporter.export(
-        records=[asdict(r) for r in records],
+        records=[asdict(r) for r in result.bar_records],
         filepath=(
             f"frontend/public/replay/"
             f"{config.symbol}_"
@@ -65,8 +64,7 @@ def export_backtest_records(
 
 def visualize_backtest(
     strategy,
-    records,
-    trades,
+    result: BacktestResult,
 ):
 
     candles = [
@@ -78,14 +76,14 @@ def visualize_backtest(
             close=r.close,
             volume=r.volume,
         )
-        for r in records
+        for r in result.bar_records
     ]
 
-    if not trades:
+    if not result.trades:
         print("\n=== NO TRADES FOUND ===")
 
     SimpleChartVisualizer.plot_price_with_signals(
         candles=candles,
-        trades=trades,
+        trades=result.trades,
         strategy_name=strategy.name,
     )

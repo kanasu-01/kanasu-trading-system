@@ -5,10 +5,15 @@ from core.backtest.performance_metrics import PerformanceMetrics
 from core.strategies.base_strategy import BaseStrategy
 from core.entities.candle import Candle
 
+from core.walk_forward.optimization_result import (
+    OptimizationResult,
+    OptimizationEvaluation,
+)
 
 # ==========================================================
 # GRID SEARCH OPTIMIZER
 # ==========================================================
+
 
 class GridSearchOptimizer:
     """
@@ -20,10 +25,10 @@ class GridSearchOptimizer:
 
     def optimize(
         self,
-        strategy_cls: Type[BaseStrategy],
+        strategy_cls: Type,
         param_space: List[Dict[str, Any]],
         train_bars: List[Candle],
-    ) -> Dict[str, Any]:
+    ) -> OptimizationResult:
         """
         Returns the best parameter set based on in-sample performance.
         """
@@ -33,22 +38,33 @@ class GridSearchOptimizer:
 
         best_params: Dict[str, Any] | None = None
         best_score: float = float("-inf")
+        evaluations: List[OptimizationEvaluation] = []
 
         for params in param_space:
             # --------------------------------------------------
             # Instantiate fresh strategy & engine (MANDATORY)
             # --------------------------------------------------
             strategy = strategy_cls(params=params)
-            engine = BacktestEngine(strategy)
+            engine = BacktestEngine(
+                strategy=strategy,
+                initial_capital=100000,
+            )
 
-            trades = engine.run(train_bars)
+            backtest_result = engine.run(train_bars)
 
-            metrics = PerformanceMetrics.summarize(trades)
+            metrics = PerformanceMetrics.summarize(backtest_result.trades)
 
             if not metrics:
                 continue
 
             score = self._score(metrics)
+            evaluations.append(
+                OptimizationEvaluation(
+                    params=params,
+                    score=score,
+                    metrics=metrics,
+                )
+            )
 
             if score > best_score:
                 best_score = score
@@ -57,7 +73,11 @@ class GridSearchOptimizer:
         if best_params is None:
             raise RuntimeError("Optimizer failed to find valid parameters")
 
-        return best_params
+        return OptimizationResult(
+            best_params=best_params,
+            best_score=best_score,
+            evaluations=evaluations,
+        )
 
     # ------------------------------------------------------
     # Scoring logic (simple & transparent)

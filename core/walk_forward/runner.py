@@ -15,10 +15,10 @@ from core.walk_forward.result import (
     WalkForwardResult,
 )
 
-
 # ==========================================================
 # WALK-FORWARD RUNNER
 # ==========================================================
+
 
 class WalkForwardRunner:
     """
@@ -69,7 +69,7 @@ class WalkForwardRunner:
 
     def _run_single_window(
         self,
-        strategy_cls: Type[BaseStrategy],
+        strategy_cls: Type,
         param_space: List[Dict[str, Any]],
         window: WalkForwardWindow,
     ) -> WalkWindowResult:
@@ -77,7 +77,7 @@ class WalkForwardRunner:
         # -----------------------------
         # 1. IN-SAMPLE OPTIMIZATION
         # -----------------------------
-        best_params = self.optimizer.optimize(
+        optimization_result = self.optimizer.optimize(
             strategy_cls=strategy_cls,
             param_space=param_space,
             train_bars=window.train_bars,
@@ -86,16 +86,30 @@ class WalkForwardRunner:
         # -----------------------------
         # 2. OUT-SAMPLE EVALUATION
         # -----------------------------
-        strategy = strategy_cls(params=best_params)
-        engine = BacktestEngine(strategy)
+        strategy = strategy_cls(params=optimization_result.best_params)
+        engine = BacktestEngine(
+            strategy=strategy,
+            initial_capital=100000,
+        )
 
-        trades = engine.run(window.test_bars)
+        backtest_result = engine.run(window.test_bars)
 
-        test_metrics = self.metrics.compute(trades)
+        test_metrics = self.metrics.compute(backtest_result.trades)
+
+        evaluation_scores = [
+            evaluation.score for evaluation in optimization_result.evaluations
+        ]
+
+        optimization_stability_score = WalkForwardMetrics.optimization_stability_score(
+            evaluation_scores
+        )
 
         return WalkWindowResult(
             window_index=window.window_index,
-            best_params=best_params,
+            best_params=optimization_result.best_params,
+            backtest_result=backtest_result,
             test_metrics=test_metrics,
-            trade_count=len(trades),
+            trade_count=len(backtest_result.trades),
+            optimization_result=optimization_result,
+            optimization_stability_score=(optimization_stability_score),
         )

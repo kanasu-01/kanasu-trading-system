@@ -10,6 +10,7 @@ from core.portfolio.portfolio_manager import PortfolioManager
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.entities.trade import Trade
 from core.logging.logger import get_logger
+from core.backtest.backtest_result import BacktestResult
 
 
 class BacktestEngine:
@@ -41,7 +42,7 @@ class BacktestEngine:
     # Internal engine (used by both batch & stream)
     # -------------------------------------------------
 
-    def _run_internal(self, candles) -> List[Trade]:
+    def _run_internal(self, candles) -> BacktestResult:
         self.logger.info(
             f"BACKTEST STARTED | "
             f"Session={self.session_id} | "
@@ -111,19 +112,23 @@ class BacktestEngine:
             f"Trades={len(trades)}"
         )
 
-        return trades
+        return BacktestResult(
+            trades=trades,
+            bar_records=self.bar_recorder.records,
+            session_id=self.session_id,
+        )
 
     # -------------------------------------------------
     # Public APIs
     # -------------------------------------------------
 
-    def run(self, candles: List[Candle]) -> List[Trade]:
+    def run(self, candles: List[Candle]) -> BacktestResult:
         """
         Backward-compatible bulk backtest method.
         """
         return self._run_internal(candles)
 
-    def run_stream(self, candle_stream) -> List[Trade]:
+    def run_stream(self, candle_stream) -> BacktestResult:
         """
         Stream-based backtest method.
         """
