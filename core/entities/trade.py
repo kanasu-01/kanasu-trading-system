@@ -5,6 +5,7 @@ from typing import Optional
 
 @dataclass
 class Trade:
+    symbol: str
 
     entry_time: datetime
 
@@ -23,5 +24,9 @@ class Trade:
     exit_reason: str
 
     pnl: float
+
+    gross_pnl: float
+
+    transaction_cost: float
 
     pnl_pct: float

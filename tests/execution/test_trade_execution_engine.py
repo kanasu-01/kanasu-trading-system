@@ -3,6 +3,9 @@ from datetime import datetime
 from core.execution.trade_execution_engine import (
     TradeExecutionEngine,
 )
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
 
 from core.strategies.sma_crossover_strategy import (
     SMACrossOverStrategy,
@@ -37,6 +40,7 @@ def test_execution_engine_creates_trade():
         strategy=strategy,
         account_capital=100000,
         session_id="test",
+        runtime_context=RuntimeContext(),
     )
 
     candle = build_candle(100)
@@ -47,9 +51,12 @@ def test_execution_engine_creates_trade():
         signal=SignalType.BUY,
         candle=candle,
         series=series,
+        symbol="TEST",
     )
 
-    runtime_position = engine.get_runtime_position()
+    runtime_position = engine.get_runtime_position(
+        symbol="TEST",
+    )
 
     assert runtime_position is not None
 

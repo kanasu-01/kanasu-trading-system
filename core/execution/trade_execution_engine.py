@@ -24,6 +24,23 @@ from core.strategies.base_strategy import (
     BaseStrategy,
 )
 
+from core.execution.brokerage_model import (
+    BrokerageModel,
+)
+
+from core.execution.slippage_model import (
+    SlippageModel,
+)
+from core.config.execution_config import (
+    EXECUTION_CONFIG,
+)
+from core.portfolio.portfolio_manager import (
+    PortfolioManager,
+)
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
+
 
 class TradeExecutionEngine:
     """
@@ -36,11 +53,17 @@ class TradeExecutionEngine:
         strategy: BaseStrategy,
         account_capital: float,
         session_id: str,
+        runtime_context: RuntimeContext,
         risk_per_trade_pct: float = 1.0,
     ):
 
         self.strategy = strategy
         self.session_id = session_id
+        self.runtime_context = runtime_context
+        self.brokerage_model = BrokerageModel()
+        self.slippage_model = SlippageModel(
+            slippage_pct=(self.runtime_context.execution_config.slippage_pct)
+        )
 
         self.logger = get_logger(__name__)
 
@@ -49,6 +72,7 @@ class TradeExecutionEngine:
         self.last_execution_price = None
 
         self.last_execution_quantity = None
+        self.last_transaction_cost = 0.0
 
         self.risk_manager = RiskManager(
             account_capital=account_capital,
@@ -65,17 +89,23 @@ class TradeExecutionEngine:
 
         self.journal = TradeJournal(session_id=session_id)
 
-        self.open_position: Optional[Position] = None
-
         self.completed_trades: List[Trade] = []
+        self.portfolio_manager = PortfolioManager(initial_capital=account_capital)
 
     # -------------------------------------------------
+    def _get_open_position(
+        self,
+        symbol: str,
+    ) -> Optional[Position]:
+
+        return self.portfolio_manager.position_book.get_position(symbol)
 
     def on_signal(
         self,
         signal: Optional[SignalType],
         candle: Candle,
         series,
+        symbol: str,
     ) -> None:
 
         self.last_execution_event = None
@@ -85,12 +115,15 @@ class TradeExecutionEngine:
         self.last_execution_quantity = None
 
         # ---------------- NO POSITION ----------------
-        if self.open_position is None:
+
+        open_position = self._get_open_position(symbol)
+        if open_position is None:
 
             if signal != SignalType.BUY:
                 return
 
             if not self.drawdown_manager.can_trade():
+                self.logger.info("TRADE REJECTED | Drawdown limit reached")
                 return
 
             rejection_midpoint = getattr(
@@ -112,7 +145,17 @@ class TradeExecutionEngine:
 
             raw_entry_price = candle.close
 
-            entry_price = self.cost_model.apply_buy_costs(raw_entry_price)
+            if self.runtime_context.execution_config.slippage_enabled:
+
+                slipped_entry_price = self.slippage_model.apply_buy_slippage(
+                    raw_entry_price
+                )
+
+            else:
+
+                slipped_entry_price = raw_entry_price
+
+            entry_price = self.cost_model.apply_buy_costs(slipped_entry_price)
 
             qty = self.risk_manager.calculate_position_size(
                 entry_price=entry_price,
@@ -120,7 +163,20 @@ class TradeExecutionEngine:
             )
 
             if qty is None:
+
+                self.logger.info("TRADE REJECTED | Invalid quantity")
+
                 return
+
+            turnover = entry_price * qty
+
+            costs = self.brokerage_model.calculate(
+                turnover=turnover,
+            )
+
+            self.last_transaction_cost = costs.total_cost
+
+            entry_transaction_cost = costs.total_cost
 
             if not self.portfolio_risk_manager.can_open_new_trade(
                 open_trade_risks_pct=[],
@@ -128,13 +184,20 @@ class TradeExecutionEngine:
             ):
                 return
 
-            self.open_position = Position(
+            position = Position(
+                symbol=symbol,
                 entry_price=entry_price,
+                entry_transaction_cost=entry_transaction_cost,
                 entry_time=candle.timestamp,
                 entry_index=len(series) - 1,
                 quantity=qty,
                 stop_price=stop_price,
                 direction="LONG",
+            )
+
+            self.portfolio_manager.add_position(
+                symbol=symbol,
+                position=position,
             )
 
             self.last_execution_event = "BUY"
@@ -151,17 +214,28 @@ class TradeExecutionEngine:
             )
 
         # ---------------- POSITION OPEN ----------------
-        else:
+        open_position = self._get_open_position(symbol)
 
-            if candle.low <= self.open_position.stop_price:
+        if open_position is not None:
 
-                exit_price = self.cost_model.apply_sell_costs(
-                    self.open_position.stop_price
-                )
+            if candle.low <= open_position.stop_price:
 
-                exit_quantity = self.open_position.quantity
+                if self.runtime_context.execution_config.slippage_enabled:
+
+                    slipped_stop_price = self.slippage_model.apply_sell_slippage(
+                        open_position.stop_price
+                    )
+
+                else:
+
+                    slipped_stop_price = open_position.stop_price
+
+                exit_price = self.cost_model.apply_sell_costs(slipped_stop_price)
+
+                exit_quantity = open_position.quantity
 
                 self._close_position(
+                    symbol=symbol,
                     exit_price=exit_price,
                     exit_reason="STOP_LOSS",
                     candle=candle,
@@ -176,10 +250,21 @@ class TradeExecutionEngine:
 
             if signal == SignalType.SELL:
 
-                exit_price = self.cost_model.apply_sell_costs(candle.close)
-                exit_quantity = self.open_position.quantity
+                if self.runtime_context.execution_config.slippage_enabled:
+
+                    slipped_exit_price = self.slippage_model.apply_sell_slippage(
+                        candle.close
+                    )
+
+                else:
+
+                    slipped_exit_price = candle.close
+
+                exit_price = self.cost_model.apply_sell_costs(slipped_exit_price)
+                exit_quantity = open_position.quantity
 
                 self._close_position(
+                    symbol=symbol,
                     exit_price=exit_price,
                     exit_reason="STRATEGY_EXIT",
                     candle=candle,
@@ -193,24 +278,40 @@ class TradeExecutionEngine:
 
     def _close_position(
         self,
+        symbol: str,
         exit_price: float,
         exit_reason: str,
         candle: Candle,
     ) -> None:
 
-        if self.open_position is None:
+        open_position = self._get_open_position(symbol)
+
+        if open_position is None:
             return
 
+        turnover = exit_price * open_position.quantity
+
+        exit_costs = self.brokerage_model.calculate(
+            turnover=turnover,
+        )
+
+        total_transaction_cost = (
+            open_position.entry_transaction_cost + exit_costs.total_cost
+        )
+
         trade = TradeBuilder.build_long_trade(
-            position=self.open_position,
+            position=open_position,
             exit_price=exit_price,
             exit_reason=exit_reason,
+            transaction_cost=total_transaction_cost,
             exit_time=candle.timestamp,
         )
 
         self.drawdown_manager.record_trade_pnl(trade.pnl_pct)
 
         self.completed_trades.append(trade)
+        self.portfolio_manager.remove_position(symbol)
+        self.portfolio_manager.record_realized_pnl(trade.pnl)
 
         self.journal.log_trade(trade)
 
@@ -222,12 +323,13 @@ class TradeExecutionEngine:
             f"PnL%={trade.pnl_pct:.2f}"
         )
 
-        self.open_position = None
-
-    def get_runtime_position(self) -> Optional[Position]:
+    def get_runtime_position(
+        self,
+        symbol: str,
+    ) -> Optional[Position]:
         """
         Return current runtime-managed position.
         Used for reconciliation and monitoring.
         """
 
-        return self.open_position
+        return self._get_open_position(symbol)

@@ -8,6 +8,12 @@ from core.strategies.base_strategy import BaseStrategy
 from core.backtest.bar_record import BarRecorder
 from core.portfolio.portfolio_manager import PortfolioManager
 from core.execution.trade_execution_engine import TradeExecutionEngine
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
+from core.runtime.dataset_context import (
+    DatasetContext,
+)
 from core.entities.trade import Trade
 from core.logging.logger import get_logger
 from core.backtest.backtest_result import BacktestResult
@@ -23,8 +29,12 @@ class BacktestEngine:
         self,
         strategy: BaseStrategy,
         initial_capital: float,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
     ):
         self.strategy = strategy
+        self.runtime_context = runtime_context
+        self.dataset_context = dataset_context
         self.logger = get_logger(__name__)
         self.initial_capital = initial_capital
         self.session_id = str(uuid.uuid4())[:8]
@@ -36,6 +46,7 @@ class BacktestEngine:
             strategy=strategy,
             account_capital=initial_capital,
             session_id=self.session_id,
+            runtime_context=self.runtime_context,
         )
 
     # -------------------------------------------------
@@ -66,9 +77,12 @@ class BacktestEngine:
                     signal=signal,
                     candle=candle,
                     series=series,
+                    symbol=self.dataset_context.symbol,
                 )
 
-                runtime_position = self.execution_engine.get_runtime_position()
+                runtime_position = self.execution_engine.get_runtime_position(
+                    symbol=self.dataset_context.symbol,
+                )
 
                 position_size = (
                     runtime_position.quantity if runtime_position is not None else 0

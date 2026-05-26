@@ -1,6 +1,12 @@
 from typing import Dict, List, Type, Any
 
 from core.backtest.backtest_engine import BacktestEngine
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
+from core.runtime.dataset_context import (
+    DatasetContext,
+)
 from core.backtest.performance_metrics import PerformanceMetrics
 from core.strategies.base_strategy import BaseStrategy
 from core.entities.candle import Candle
@@ -48,6 +54,10 @@ class GridSearchOptimizer:
             engine = BacktestEngine(
                 strategy=strategy,
                 initial_capital=100000,
+                runtime_context=RuntimeContext(),
+                dataset_context=DatasetContext(
+                    symbol="Test",
+                ),
             )
 
             backtest_result = engine.run(train_bars)

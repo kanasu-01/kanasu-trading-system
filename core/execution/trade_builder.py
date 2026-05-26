@@ -13,13 +13,17 @@ class TradeBuilder:
         exit_price: float,
         exit_reason: str,
         exit_time: Optional[datetime],
+        transaction_cost: float = 0.0,
     ) -> Trade:
 
-        pnl = (exit_price - position.entry_price) * position.quantity
+        gross_pnl = (exit_price - position.entry_price) * position.quantity
+
+        pnl = gross_pnl - transaction_cost
 
         pnl_pct = ((exit_price - position.entry_price) / position.entry_price) * 100
 
         return Trade(
+            symbol=position.symbol,
             entry_time=position.entry_time,
             entry_price=position.entry_price,
             exit_time=exit_time,
@@ -29,5 +33,7 @@ class TradeBuilder:
             direction=position.direction,
             exit_reason=exit_reason,
             pnl=pnl,
+            gross_pnl=gross_pnl,
+            transaction_cost=transaction_cost,
             pnl_pct=pnl_pct,
         )

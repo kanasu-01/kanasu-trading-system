@@ -3,7 +3,12 @@ from typing import Type, List, Dict, Any
 from core.entities.candle import Candle
 from core.strategies.base_strategy import BaseStrategy
 from core.backtest.backtest_engine import BacktestEngine
-
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
+from core.runtime.dataset_context import (
+    DatasetContext,
+)
 from core.walk_forward.window_generator import (
     WalkForwardWindowGenerator,
     WalkForwardWindow,
@@ -90,6 +95,10 @@ class WalkForwardRunner:
         engine = BacktestEngine(
             strategy=strategy,
             initial_capital=100000,
+            runtime_context=RuntimeContext(),
+            dataset_context=DatasetContext(
+                symbol="TEST",
+            ),
         )
 
         backtest_result = engine.run(window.test_bars)

@@ -24,18 +24,13 @@ class BacktestConfig:
 BACKTEST_CONFIG = BacktestConfig(
     symbol="RELIANCE",
     timeframe="15m",
-
     strategy_name="sma_crossover",
-
-    start=datetime(2020, 4, 1),
-    end=datetime(2020, 12, 1),
-
+    start=datetime(2024, 1, 2),
+    end=datetime(2025, 5, 25),
     initial_capital=100000,
-
     enable_replay=False,
     enable_visualization=True,
     enable_exports=True,
-
     strategy_params={
         "fast_period": 100,
         "slow_period": 200,

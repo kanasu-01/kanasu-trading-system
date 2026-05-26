@@ -21,7 +21,29 @@ from core.broker.broker_factory import (
     create_angelone_broker,
 )
 
+from core.runtime.runtime_context import RuntimeContext
+
+from core.runtime.dataset_context import DatasetContext
 from dotenv import load_dotenv
+from core.runtime.paper_runtime import (
+    run_paper_trading,
+)
+
+from core.market_data.historical_feed import (
+    HistoricalFeed,
+)
+from core.market_data.base_feed import BaseFeed
+
+from core.market_data.mock_live_feed import (
+    MockLiveFeed,
+)
+
+from core.entities.candle import (
+    Candle,
+)
+from core.market_data.csv_candle_loader import (
+    load_candles_from_csv,
+)
 
 load_dotenv()
 
@@ -38,7 +60,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
     broker = create_angelone_broker(
         paper_mode=(app_config.runtime_mode != RuntimeMode.LIVE),
         enable_historical_api=(
-            app_config.runtime_mode in [RuntimeMode.BACKTEST, RuntimeMode.PAPER]
+            app_config.runtime_mode in [RuntimeMode.BACKTEST, RuntimeMode.WALK_FORWARD]
         ),
     )
 
@@ -51,6 +73,8 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             strategy=strategy,
             config=backtest_config,
             app_config=app_config,
+            runtime_context=RuntimeContext(),
+            dataset_context=DatasetContext(symbol=backtest_config.symbol),
         )
 
     elif app_config.runtime_mode == RuntimeMode.WALK_FORWARD:
@@ -63,8 +87,29 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
 
     elif app_config.runtime_mode == RuntimeMode.PAPER:
 
-        raise NotImplementedError(
-            "Live paper trading runtime " "is not implemented yet"
+        candles = load_candles_from_csv(
+            filepath=(
+                "data/mock_live/"
+                f"{backtest_config.symbol}_"
+                f"{backtest_config.timeframe}.csv"
+            )
+        )
+
+        mock_feed = MockLiveFeed(
+            candles=candles,
+            interval_seconds=0.0,
+        )
+
+        strategy = create_strategy(backtest_config)
+
+        run_paper_trading(
+            feed=mock_feed,
+            strategy=strategy,
+            runtime_context=RuntimeContext(),
+            dataset_context=DatasetContext(
+                symbol=backtest_config.symbol,
+            ),
+            initial_capital=(backtest_config.initial_capital),
         )
 
     elif app_config.runtime_mode == RuntimeMode.LIVE:

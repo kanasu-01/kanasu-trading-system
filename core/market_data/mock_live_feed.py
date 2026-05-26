@@ -2,10 +2,10 @@ import time
 from typing import List, Callable
 
 from core.entities.candle import Candle
-from core.market_data.base_feed import MarketDataFeed
+from core.market_data.base_feed import BaseFeed
 
 
-class MockLiveFeed(MarketDataFeed):
+class MockLiveFeed(BaseFeed):
     """
     Simulated live feed using historical candles.
     """
@@ -13,7 +13,7 @@ class MockLiveFeed(MarketDataFeed):
     def __init__(
         self,
         candles: List[Candle],
-        interval_seconds: float = 1.0,
+        interval_seconds: float = 0.0,
     ):
         self.candles = candles
         self.interval_seconds = interval_seconds
@@ -22,3 +22,12 @@ class MockLiveFeed(MarketDataFeed):
         for candle in self.candles:
             on_candle(candle)
             time.sleep(self.interval_seconds)
+
+    def load(
+        self,
+        symbol,
+        timeframe,
+        start,
+        end,
+    ):
+        return self.candles

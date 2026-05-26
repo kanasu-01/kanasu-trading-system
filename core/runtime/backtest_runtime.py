@@ -28,6 +28,8 @@ from core.config.app_config import (
 from core.config.backtest_config import (
     BacktestConfig,
 )
+from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
 
 
 def run_backtest(
@@ -35,6 +37,8 @@ def run_backtest(
     strategy: BaseStrategy,
     config: BacktestConfig,
     app_config: AppConfig,
+    runtime_context: RuntimeContext,
+    dataset_context: DatasetContext,
 ) -> None:
     feed = HistoricalFeed(
         broker,
@@ -48,7 +52,12 @@ def run_backtest(
         end=config.end,
     )
 
-    engine = BacktestEngine(strategy=strategy, initial_capital=config.initial_capital)
+    engine = BacktestEngine(
+        strategy=strategy,
+        initial_capital=config.initial_capital,
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+    )
     backtest_result = engine.run_stream(candle_stream)
 
     ## Performance metrics OR Backtest summary report

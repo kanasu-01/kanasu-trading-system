@@ -17,16 +17,21 @@ class TradeJournal:
         session_id: str,
         journal_dir: str = "journals",
         csv_filename: str = "trades.csv",
-        json_filename: str = "trades.json",
+        json_filename: str = "trades.jsonl",
     ):
-        self.journal_path = Path(journal_dir)
-        self.journal_path.mkdir(parents=True, exist_ok=True)
+        self.journal_path = Path(journal_dir) / session_id
+
+        self.journal_path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         self.csv_path = self.journal_path / csv_filename
         self.json_path = self.journal_path / json_filename
         self.fieldnames = [
             "timestamp",
             "session_id",
+            "symbol",
             "entry_time",
             "entry_price",
             "exit_time",
@@ -35,6 +40,8 @@ class TradeJournal:
             "quantity",
             "direction",
             "exit_reason",
+            "gross_pnl",
+            "transaction_cost",
             "pnl",
             "pnl_pct",
         ]
@@ -66,14 +73,16 @@ class TradeJournal:
             )
             writer.writerow(trade)
 
-    def _append_json(self, trade: Dict) -> None:
-        if self.json_path.exists():
-            with open(self.json_path, "r") as f:
-                data = json.load(f)
-        else:
-            data = []
+    def _append_json(
+        self,
+        trade: Dict,
+    ) -> None:
 
-        data.append(trade)
+        with open(self.json_path, "a") as f:
 
-        with open(self.json_path, "w") as f:
-            json.dump(data, f, indent=2, default=str)
+            json_record = json.dumps(
+                trade,
+                default=str,
+            )
+
+            f.write(json_record + "\n")

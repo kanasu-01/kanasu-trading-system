@@ -4,10 +4,13 @@ from datetime import datetime
 
 @dataclass
 class Position:
+    symbol: str
 
     entry_time: datetime
 
     entry_price: float
+
+    entry_transaction_cost: float
 
     quantity: int
 

@@ -1,6 +1,5 @@
 from typing import List
 from core.entities.trade import Trade
-from core.entities.trade import Trade
 
 
 class PerformanceMetrics:
@@ -34,12 +33,24 @@ class PerformanceMetrics:
 
         max_drawdown = PerformanceMetrics._max_drawdown(trades)
 
+        total_transaction_cost = sum(t.transaction_cost for t in trades)
+
+        gross_pnl = sum(t.gross_pnl for t in trades)
+
+        net_pnl = sum(t.pnl for t in trades)
+
         return {
             "total_trades": total_trades,
             "win_rate": round(win_rate * 100, 2),
             "avg_win_pct": round(avg_win, 2),
             "avg_loss_pct": round(avg_loss, 2),
             "expectancy_pct": round(expectancy, 2),
+            "gross_pnl": round(gross_pnl, 2),
+            "net_pnl": round(net_pnl, 2),
+            "total_transaction_cost": round(
+                total_transaction_cost,
+                2,
+            ),
             "max_drawdown_pct": round(max_drawdown, 2),
         }
 
@@ -48,18 +59,19 @@ class PerformanceMetrics:
         """
         Simple equity curve drawdown using % returns.
         """
-        equity = 0.0
-        peak = 0.0
+        equity = 1.0
+        peak = 1.0
         max_dd = 0.0
 
         for trade in trades:
-            equity += trade.pnl_pct
+            equity *= 1 + (trade.pnl_pct / 100)
 
             if equity > peak:
                 peak = equity
 
-            drawdown = equity - peak
+            drawdown = (equity - peak) / peak
+
             if drawdown < max_dd:
                 max_dd = drawdown
 
-        return abs(max_dd)
+        return abs(max_dd) * 100

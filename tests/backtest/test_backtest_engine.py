@@ -5,6 +5,12 @@ from core.entities.candle import Candle
 from core.backtest.backtest_engine import (
     BacktestEngine,
 )
+from core.runtime.runtime_context import (
+    RuntimeContext,
+)
+from core.runtime.dataset_context import (
+    DatasetContext,
+)
 
 from core.strategies.sma_crossover_strategy import (
     SMACrossOverStrategy,
@@ -54,6 +60,8 @@ def test_backtest_engine_executes_successfully():
     engine = BacktestEngine(
         strategy=strategy,
         initial_capital=100000,
+        runtime_context=RuntimeContext(),
+        dataset_context=DatasetContext(symbol="Test"),
     )
 
     result = engine.run(candles)
