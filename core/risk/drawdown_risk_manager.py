@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 
 
@@ -9,7 +10,11 @@ class DrawdownPeriod(Enum):
 class DrawdownRiskManager:
     """
     Daily / weekly drawdown guard.
-    STEP 7.4: Stops new trades after loss limits are breached.
+
+    Stops new trades after loss limits are breached.
+
+    Daily P&L resets when a new calendar day begins.
+    Weekly P&L resets when a new ISO calendar week begins.
     """
 
     def __init__(
@@ -17,26 +22,53 @@ class DrawdownRiskManager:
         max_daily_loss_pct: float = 3.0,
         max_weekly_loss_pct: float = 6.0,
     ):
-        """
-        :param max_daily_loss_pct: Max allowed daily loss (%)
-        :param max_weekly_loss_pct: Max allowed weekly loss (%)
-        """
         self.max_daily_loss_pct = max_daily_loss_pct
         self.max_weekly_loss_pct = max_weekly_loss_pct
 
         self.daily_pnl_pct = 0.0
         self.weekly_pnl_pct = 0.0
 
-    def record_trade_pnl(self, pnl_pct: float) -> None:
+        self._current_date = None
+        self._current_week = None
+
+    def update_period(
+        self,
+        timestamp: datetime,
+    ) -> None:
         """
-        Record PnL after trade closes.
+        Reset drawdown counters when the trading period changes.
         """
+
+        current_date = timestamp.date()
+        current_week = timestamp.isocalendar().week
+
+        if self._current_date is None:
+            self._current_date = current_date
+            self._current_week = current_week
+            return
+
+        if current_date != self._current_date:
+            self.daily_pnl_pct = 0.0
+            self._current_date = current_date
+
+        if current_week != self._current_week:
+            self.weekly_pnl_pct = 0.0
+            self._current_week = current_week
+
+    def record_trade_pnl(
+        self,
+        pnl_pct: float,
+    ) -> None:
+        """
+        Record P&L after a trade closes.
+        """
+
         self.daily_pnl_pct += pnl_pct
         self.weekly_pnl_pct += pnl_pct
 
     def can_trade(self) -> bool:
         """
-        Check if new trades are allowed.
+        Check whether new trades are allowed.
         """
 
         if self.daily_pnl_pct <= -self.max_daily_loss_pct:
@@ -47,9 +79,12 @@ class DrawdownRiskManager:
 
         return True
 
-    def reset(self, period: DrawdownPeriod) -> None:
+    def reset(
+        self,
+        period: DrawdownPeriod,
+    ) -> None:
         """
-        Reset PnL counters at period boundaries.
+        Manual reset retained for explicit use when required.
         """
 
         if period == DrawdownPeriod.DAILY:

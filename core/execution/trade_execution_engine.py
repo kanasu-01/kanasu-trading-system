@@ -114,6 +114,8 @@ class TradeExecutionEngine:
 
         self.last_execution_quantity = None
 
+        self.drawdown_manager.update_period(candle.timestamp)
+
         # ---------------- NO POSITION ----------------
 
         open_position = self._get_open_position(symbol)
@@ -255,9 +257,7 @@ class TradeExecutionEngine:
                     slipped_exit_price = self.slippage_model.apply_sell_slippage(
                         candle.close
                     )
-
                 else:
-
                     slipped_exit_price = candle.close
 
                 exit_price = self.cost_model.apply_sell_costs(slipped_exit_price)

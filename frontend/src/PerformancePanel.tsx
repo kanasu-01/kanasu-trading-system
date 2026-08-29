@@ -1,4 +1,6 @@
 import type { BarRecord } from "../types/BarRecord";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { DashboardSection } from "@/components/dashboard/DashboardSection";
 
 type Props = {
   records: BarRecord[];
@@ -31,26 +33,32 @@ export function PerformancePanel({ records, cursor }: Props) {
     }
   }
 
-  const winRate =
-    trades > 0 ? ((wins / trades) * 100).toFixed(1) : "0";
+  const winRate = trades > 0 ? ((wins / trades) * 100).toFixed(1) : "0";
 
-  const avgTrade =
-    trades > 0 ? (profit / trades).toFixed(2) : "0";
+  const avgTrade = trades > 0 ? (profit / trades).toFixed(2) : "0";
 
   return (
-    <div
-      style={{
-        borderTop: "1px solid #333",
-        paddingTop: 6,
-        display: "flex",
-        gap: 20,
-        fontSize: 13,
-      }}
-    >
-      <div>Trades: {trades}</div>
-      <div>Win Rate: {winRate}%</div>
-      <div>Total PnL: {profit.toFixed(2)}</div>
-      <div>Avg Trade: {avgTrade}</div>
-    </div>
+    <DashboardSection title="Performance">
+      <div
+        className="
+        grid
+        grid-cols-2
+        md:grid-cols-4
+        gap-3
+      "
+      >
+        <MetricCard label="Trades" value={trades} />
+
+        <MetricCard label="Win Rate" value={`${winRate}%`} />
+
+        <MetricCard
+          label="Total PnL"
+          value={profit.toFixed(2)}
+          valueClassName={profit >= 0 ? "text-green-400" : "text-red-400"}
+        />
+
+        <MetricCard label="Avg Trade" value={avgTrade} />
+      </div>
+    </DashboardSection>
   );
 }

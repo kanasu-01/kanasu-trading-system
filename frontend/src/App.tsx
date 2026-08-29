@@ -1,17 +1,22 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-
 import { BacktestPage } from "./pages/BacktestPage";
+
+import { Routes, Route } from "react-router-dom";
+
+import { ReplayPage } from "./pages/ReplayPage";
 
 import { PaperTradingPage } from "./pages/PaperTradingPage";
 
 import { PortfolioPage } from "./pages/PortfolioPage";
+import { HomePage } from "./pages/HomePage";
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/backtest" replace />} />
+      <Route path="/" element={<HomePage />} />
 
       <Route path="/backtest" element={<BacktestPage />} />
+
+      <Route path="/replay" element={<ReplayPage />} />
 
       <Route path="/paper" element={<PaperTradingPage />} />
 

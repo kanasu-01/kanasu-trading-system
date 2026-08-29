@@ -19,6 +19,17 @@ export function AppNavbar() {
       }}
     >
       <NavLink
+        to="/"
+        style={({ isActive }) => ({
+          ...linkStyle,
+
+          background: isActive ? "#1e293b" : "transparent",
+        })}
+      >
+        Home
+      </NavLink>
+
+      <NavLink
         to="/backtest"
         style={({ isActive }) => ({
           ...linkStyle,
@@ -27,6 +38,17 @@ export function AppNavbar() {
         })}
       >
         Backtest
+      </NavLink>
+
+      <NavLink
+        to="/replay"
+        style={({ isActive }) => ({
+          ...linkStyle,
+
+          background: isActive ? "#1e293b" : "transparent",
+        })}
+      >
+        Replay
       </NavLink>
 
       <NavLink
