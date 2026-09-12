@@ -160,15 +160,15 @@ class TradeExecutionEngine:
 
                 return
 
-            turnover = entry_price * qty
+            entry_transaction_cost = 0.0
 
-            costs = self.brokerage_model.calculate(
-                turnover=turnover,
-            )
+            if self.runtime_context.execution_config.brokerage_enabled:
+                turnover = entry_price * qty
+                entry_transaction_cost = self.brokerage_model.calculate(
+                    turnover=turnover,
+                ).total_cost
 
-            self.last_transaction_cost = costs.total_cost
-
-            entry_transaction_cost = costs.total_cost
+            self.last_transaction_cost = entry_transaction_cost
 
             if not self.portfolio_risk_manager.can_open_new_trade(
                 open_trade_risks_pct=[],
@@ -286,14 +286,16 @@ class TradeExecutionEngine:
         if open_position is None:
             return
 
-        turnover = exit_price * open_position.quantity
+        exit_transaction_cost = 0.0
 
-        exit_costs = self.brokerage_model.calculate(
-            turnover=turnover,
-        )
+        if self.runtime_context.execution_config.brokerage_enabled:
+            turnover = exit_price * open_position.quantity
+            exit_transaction_cost = self.brokerage_model.calculate(
+                turnover=turnover,
+            ).total_cost
 
         total_transaction_cost = (
-            open_position.entry_transaction_cost + exit_costs.total_cost
+            open_position.entry_transaction_cost + exit_transaction_cost
         )
 
         trade = TradeBuilder.build_long_trade(
@@ -310,7 +312,7 @@ class TradeExecutionEngine:
         self.portfolio_manager.close_position(
             symbol=symbol,
             exit_price=exit_price,
-            exit_transaction_cost=exit_costs.total_cost,
+            exit_transaction_cost=exit_transaction_cost,
         )
 
         self.journal.log_trade(trade)

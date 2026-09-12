@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 
+from core.config.execution_config import ExecutionConfig
 from core.execution.trade_execution_engine import (
     TradeExecutionEngine,
 )
@@ -249,3 +250,62 @@ def test_slippage_is_applied_once_and_brokerage_remains_explicit():
     assert completed_trade.transaction_cost == pytest.approx(
         expected_entry_cost + expected_exit_cost
     )
+
+
+def test_brokerage_can_be_disabled_independently_of_slippage():
+    slippage_pct = 0.0005
+    execution_config = ExecutionConfig(
+        slippage_pct=slippage_pct,
+        brokerage_enabled=False,
+        slippage_enabled=True,
+    )
+    runtime_context = RuntimeContext(execution_config=execution_config)
+    engine = TradeExecutionEngine(
+        strategy=SMACrossOverStrategy(),
+        account_capital=100000,
+        session_id="brokerage_disabled",
+        runtime_context=runtime_context,
+    )
+    series = CandleSeries([])
+    buy_reference_price = 100
+    sell_reference_price = 110
+    expected_entry_fill = buy_reference_price * (1 + slippage_pct)
+    expected_exit_fill = sell_reference_price * (1 - slippage_pct)
+
+    engine.on_signal(
+        signal=SignalType.BUY,
+        candle=build_fixed_candle(
+            minute=15,
+            open_price=100,
+            high=101,
+            low=99,
+            close=buy_reference_price,
+        ),
+        series=series,
+        symbol="TEST",
+    )
+
+    position = engine.get_runtime_position(symbol="TEST")
+    assert position is not None
+
+    engine.on_signal(
+        signal=SignalType.SELL,
+        candle=build_fixed_candle(
+            minute=30,
+            open_price=110,
+            high=111,
+            low=109,
+            close=sell_reference_price,
+        ),
+        series=series,
+        symbol="TEST",
+    )
+
+    assert len(engine.completed_trades) == 1
+    completed_trade = engine.completed_trades[0]
+
+    assert position.entry_price == pytest.approx(expected_entry_fill)
+    assert completed_trade.exit_price == pytest.approx(expected_exit_fill)
+    assert position.entry_transaction_cost == 0
+    assert completed_trade.transaction_cost == 0
+    assert completed_trade.pnl == pytest.approx(completed_trade.gross_pnl)
