@@ -306,7 +306,10 @@ class TradeExecutionEngine:
             exit_time=candle.timestamp,
         )
 
-        self.drawdown_manager.record_trade_pnl(trade.pnl_pct)
+        account_pnl_pct = (
+            trade.pnl / self.portfolio_manager.initial_capital
+        ) * 100
+        self.drawdown_manager.record_trade_pnl(account_pnl_pct)
 
         self.completed_trades.append(trade)
         self.portfolio_manager.close_position(

@@ -309,3 +309,61 @@ def test_brokerage_can_be_disabled_independently_of_slippage():
     assert position.entry_transaction_cost == 0
     assert completed_trade.transaction_cost == 0
     assert completed_trade.pnl == pytest.approx(completed_trade.gross_pnl)
+
+
+def test_drawdown_tracks_account_pnl_percentage():
+    account_capital = 100000
+    execution_config = ExecutionConfig(
+        slippage_enabled=False,
+        brokerage_enabled=False,
+    )
+    engine = TradeExecutionEngine(
+        strategy=SMACrossOverStrategy(),
+        account_capital=account_capital,
+        session_id="account_drawdown_percentage",
+        runtime_context=RuntimeContext(execution_config=execution_config),
+    )
+    series = CandleSeries([])
+
+    engine.on_signal(
+        signal=SignalType.BUY,
+        candle=build_fixed_candle(
+            minute=15,
+            open_price=100,
+            high=101,
+            low=99,
+            close=100,
+        ),
+        series=series,
+        symbol="TEST",
+    )
+
+    position = engine.get_runtime_position(symbol="TEST")
+    assert position is not None
+    actual_quantity = position.quantity
+
+    engine.on_signal(
+        signal=None,
+        candle=build_fixed_candle(
+            minute=30,
+            open_price=100,
+            high=101,
+            low=97,
+            close=99,
+        ),
+        series=series,
+        symbol="TEST",
+    )
+
+    assert actual_quantity > 0
+    assert len(engine.completed_trades) == 1
+    completed_trade = engine.completed_trades[0]
+    expected_account_pnl_pct = completed_trade.pnl / account_capital * 100
+
+    assert completed_trade.pnl_pct != pytest.approx(expected_account_pnl_pct)
+    assert engine.drawdown_manager.daily_pnl_pct == pytest.approx(
+        expected_account_pnl_pct
+    )
+    assert engine.drawdown_manager.weekly_pnl_pct == pytest.approx(
+        expected_account_pnl_pct
+    )
