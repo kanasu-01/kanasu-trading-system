@@ -367,3 +367,41 @@ def test_drawdown_tracks_account_pnl_percentage():
     assert engine.drawdown_manager.weekly_pnl_pct == pytest.approx(
         expected_account_pnl_pct
     )
+
+
+def test_buy_execution_price_reports_actual_fill():
+    slippage_pct = 0.0005
+    execution_config = ExecutionConfig(
+        slippage_pct=slippage_pct,
+        slippage_enabled=True,
+        brokerage_enabled=False,
+    )
+    engine = TradeExecutionEngine(
+        strategy=SMACrossOverStrategy(),
+        account_capital=100000,
+        session_id="buy_fill_reporting",
+        runtime_context=RuntimeContext(execution_config=execution_config),
+    )
+    buy_candle = build_fixed_candle(
+        minute=15,
+        open_price=100,
+        high=101,
+        low=99,
+        close=100,
+    )
+    expected_entry_fill = buy_candle.close * (1 + slippage_pct)
+
+    engine.on_signal(
+        signal=SignalType.BUY,
+        candle=buy_candle,
+        series=CandleSeries([]),
+        symbol="TEST",
+    )
+
+    position = engine.get_runtime_position(symbol="TEST")
+
+    assert position is not None
+    assert position.entry_price == pytest.approx(expected_entry_fill)
+    assert position.entry_price != pytest.approx(buy_candle.close)
+    assert engine.last_execution_event == "BUY"
+    assert engine.last_execution_price == pytest.approx(position.entry_price)

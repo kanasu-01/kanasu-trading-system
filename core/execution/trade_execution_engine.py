@@ -196,7 +196,7 @@ class TradeExecutionEngine:
 
             self.last_execution_event = "BUY"
 
-            self.last_execution_price = candle.close
+            self.last_execution_price = entry_price
 
             self.last_execution_quantity = qty
 
