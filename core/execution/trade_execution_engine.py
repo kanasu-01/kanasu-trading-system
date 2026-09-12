@@ -16,10 +16,6 @@ from core.entities.position import Position
 from core.execution.trade_builder import TradeBuilder
 from core.logging.logger import get_logger
 
-from core.execution.execution_cost_model import (
-    ExecutionCostModel,
-)
-
 from core.strategies.base_strategy import (
     BaseStrategy,
 )
@@ -85,8 +81,6 @@ class TradeExecutionEngine:
 
         self.drawdown_manager = DrawdownRiskManager()
 
-        self.cost_model = ExecutionCostModel()
-
         self.journal = TradeJournal(session_id=session_id)
 
         self.completed_trades: List[Trade] = []
@@ -145,19 +139,15 @@ class TradeExecutionEngine:
             if stop_price is None:
                 return
 
-            raw_entry_price = candle.close
-
             if self.runtime_context.execution_config.slippage_enabled:
 
-                slipped_entry_price = self.slippage_model.apply_buy_slippage(
-                    raw_entry_price
+                entry_price = self.slippage_model.apply_buy_slippage(
+                    candle.close
                 )
 
             else:
 
-                slipped_entry_price = raw_entry_price
-
-            entry_price = self.cost_model.apply_buy_costs(slipped_entry_price)
+                entry_price = candle.close
 
             qty = self.risk_manager.calculate_position_size(
                 entry_price=entry_price,
@@ -198,6 +188,11 @@ class TradeExecutionEngine:
             )
 
             self.portfolio_manager.open_position(position)
+            self.portfolio_manager.mark_to_market(
+                {
+                    symbol: candle.close,
+                }
+            )
 
             self.last_execution_event = "BUY"
 
@@ -211,6 +206,8 @@ class TradeExecutionEngine:
                 f"Qty={qty} | "
                 f"Stop={stop_price:.2f}"
             )
+
+            return
 
         # ---------------- POSITION OPEN ----------------
         open_position = self._get_open_position(symbol)
@@ -227,15 +224,13 @@ class TradeExecutionEngine:
 
                 if self.runtime_context.execution_config.slippage_enabled:
 
-                    slipped_stop_price = self.slippage_model.apply_sell_slippage(
+                    exit_price = self.slippage_model.apply_sell_slippage(
                         open_position.stop_price
                     )
 
                 else:
 
-                    slipped_stop_price = open_position.stop_price
-
-                exit_price = self.cost_model.apply_sell_costs(slipped_stop_price)
+                    exit_price = open_position.stop_price
 
                 exit_quantity = open_position.quantity
 
@@ -257,13 +252,12 @@ class TradeExecutionEngine:
 
                 if self.runtime_context.execution_config.slippage_enabled:
 
-                    slipped_exit_price = self.slippage_model.apply_sell_slippage(
+                    exit_price = self.slippage_model.apply_sell_slippage(
                         candle.close
                     )
                 else:
-                    slipped_exit_price = candle.close
+                    exit_price = candle.close
 
-                exit_price = self.cost_model.apply_sell_costs(slipped_exit_price)
                 exit_quantity = open_position.quantity
 
                 self._close_position(
