@@ -6,7 +6,6 @@ from core.entities.candle_series import CandleSeries
 from core.strategies.strategy_runner import StrategyRunner
 from core.strategies.base_strategy import BaseStrategy
 from core.backtest.bar_record import BarRecorder
-from core.portfolio.portfolio_manager import PortfolioManager
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.runtime.runtime_context import (
     RuntimeContext,
@@ -62,11 +61,6 @@ class BacktestEngine:
         series = CandleSeries([])
         self.runner.start(series)
 
-        # current_trade: Optional[Dict] = None
-
-        # Portfolio manager
-        portfolio = PortfolioManager(initial_capital=self.initial_capital)
-
         for candle in candles:
 
             try:
@@ -80,21 +74,7 @@ class BacktestEngine:
                     symbol=self.dataset_context.symbol,
                 )
 
-                runtime_position = self.execution_engine.get_runtime_position(
-                    symbol=self.dataset_context.symbol,
-                )
-
-                position_size = (
-                    runtime_position.quantity if runtime_position is not None else 0
-                )
-
-                portfolio.update_equity(
-                    cash=portfolio.cash,
-                    position_size=position_size,
-                    current_price=candle.close,
-                )
-
-                state = portfolio.snapshot()
+                state = self.execution_engine.portfolio_manager.snapshot()
 
                 self.bar_recorder.record(
                     candle=candle,

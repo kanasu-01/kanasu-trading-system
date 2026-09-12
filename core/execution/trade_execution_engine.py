@@ -197,10 +197,7 @@ class TradeExecutionEngine:
                 direction="LONG",
             )
 
-            self.portfolio_manager.add_position(
-                symbol=symbol,
-                position=position,
-            )
+            self.portfolio_manager.open_position(position)
 
             self.last_execution_event = "BUY"
 
@@ -219,6 +216,12 @@ class TradeExecutionEngine:
         open_position = self._get_open_position(symbol)
 
         if open_position is not None:
+
+            self.portfolio_manager.mark_to_market(
+                {
+                    symbol: candle.close,
+                }
+            )
 
             if candle.low <= open_position.stop_price:
 
@@ -310,8 +313,11 @@ class TradeExecutionEngine:
         self.drawdown_manager.record_trade_pnl(trade.pnl_pct)
 
         self.completed_trades.append(trade)
-        self.portfolio_manager.remove_position(symbol)
-        self.portfolio_manager.record_realized_pnl(trade.pnl)
+        self.portfolio_manager.close_position(
+            symbol=symbol,
+            exit_price=exit_price,
+            exit_transaction_cost=exit_costs.total_cost,
+        )
 
         self.journal.log_trade(trade)
 
