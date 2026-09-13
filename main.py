@@ -74,7 +74,10 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             config=backtest_config,
             app_config=app_config,
             runtime_context=RuntimeContext(),
-            dataset_context=DatasetContext(symbol=backtest_config.symbol),
+            dataset_context=DatasetContext(
+                symbol=backtest_config.symbol,
+                timeframe=backtest_config.timeframe,
+            ),
         )
 
     elif app_config.runtime_mode == RuntimeMode.WALK_FORWARD:
@@ -108,6 +111,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             runtime_context=RuntimeContext(),
             dataset_context=DatasetContext(
                 symbol=backtest_config.symbol,
+                timeframe=backtest_config.timeframe,
             ),
             initial_capital=(backtest_config.initial_capital),
         )

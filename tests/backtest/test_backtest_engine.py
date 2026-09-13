@@ -68,6 +68,21 @@ class DeterministicRoundTripStrategy(BaseStrategy):
         self._candle_count = 0
 
 
+def test_dataset_context_represents_symbol_and_optional_timeframe():
+    dataset_context = DatasetContext(
+        symbol="RELIANCE",
+        timeframe="15m",
+    )
+
+    assert dataset_context.symbol == "RELIANCE"
+    assert dataset_context.timeframe == "15m"
+
+    symbol_only_context = DatasetContext(symbol="TEST")
+
+    assert symbol_only_context.symbol == "TEST"
+    assert symbol_only_context.timeframe is None
+
+
 def test_backtest_engine_executes_successfully():
 
     candles = build_dummy_candles(500)

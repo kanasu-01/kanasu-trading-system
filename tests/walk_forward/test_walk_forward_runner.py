@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from core.entities.candle import Candle
+from core.runtime.dataset_context import DatasetContext
+
+import core.walk_forward.runner as runner_module
 
 from core.walk_forward.window_generator import (
     WalkForwardWindowGenerator,
@@ -8,6 +12,10 @@ from core.walk_forward.window_generator import (
 
 from core.walk_forward.optimizer import (
     GridSearchOptimizer,
+)
+from core.walk_forward.optimization_result import (
+    OptimizationEvaluation,
+    OptimizationResult,
 )
 
 from core.walk_forward.metrics import (
@@ -88,6 +96,10 @@ def test_walk_forward_runner_executes():
         strategy_cls=SMACrossOverStrategy,
         param_space=param_space,
         candles=candles,
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+        ),
     )
 
     assert result is not None
@@ -95,3 +107,82 @@ def test_walk_forward_runner_executes():
     assert result.windows is not None
 
     assert len(result.windows) > 0
+
+
+def test_walk_forward_runner_propagates_dataset_context(monkeypatch):
+    dataset_context = DatasetContext(
+        symbol="RELIANCE",
+        timeframe="15m",
+    )
+    candles = build_dummy_candles(2)
+    optimizer_contexts = []
+    out_of_sample_contexts = []
+
+    class SingleWindowGenerator:
+        def generate(self, source_candles):
+            yield runner_module.WalkForwardWindow(
+                train_bars=source_candles[:1],
+                test_bars=source_candles[1:],
+                window_index=0,
+            )
+
+    class SpyOptimizer:
+        def optimize(
+            self,
+            *,
+            strategy_cls,
+            param_space,
+            train_bars,
+            dataset_context,
+        ):
+            optimizer_contexts.append(dataset_context)
+            evaluation = OptimizationEvaluation(
+                params=param_space[0],
+                score=1.0,
+                metrics={},
+            )
+            return OptimizationResult(
+                best_params=param_space[0],
+                best_score=1.0,
+                evaluations=[evaluation],
+            )
+
+    class StubMetrics:
+        def compute(self, trades):
+            return {}
+
+    class SpyBacktestEngine:
+        def __init__(
+            self,
+            *,
+            strategy,
+            initial_capital,
+            runtime_context,
+            dataset_context,
+        ):
+            out_of_sample_contexts.append(dataset_context)
+
+        def run(self, source_candles):
+            return SimpleNamespace(trades=[])
+
+    monkeypatch.setattr(runner_module, "BacktestEngine", SpyBacktestEngine)
+    monkeypatch.setattr(
+        runner_module.WalkForwardResult,
+        "from_windows",
+        classmethod(lambda cls, windows: SimpleNamespace(windows=windows)),
+    )
+
+    runner = WalkForwardRunner(
+        window_generator=SingleWindowGenerator(),
+        optimizer=SpyOptimizer(),
+        metrics=StubMetrics(),
+    )
+    runner.run(
+        strategy_cls=SMACrossOverStrategy,
+        param_space=[{"fast_period": 10, "slow_period": 30}],
+        candles=candles,
+        dataset_context=dataset_context,
+    )
+
+    assert optimizer_contexts == [dataset_context]
+    assert out_of_sample_contexts == [dataset_context]

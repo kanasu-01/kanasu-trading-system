@@ -34,6 +34,7 @@ class GridSearchOptimizer:
         strategy_cls: Type,
         param_space: List[Dict[str, Any]],
         train_bars: List[Candle],
+        dataset_context: DatasetContext,
     ) -> OptimizationResult:
         """
         Returns the best parameter set based on in-sample performance.
@@ -55,9 +56,7 @@ class GridSearchOptimizer:
                 strategy=strategy,
                 initial_capital=100000,
                 runtime_context=RuntimeContext(),
-                dataset_context=DatasetContext(
-                    symbol="Test",
-                ),
+                dataset_context=dataset_context,
             )
 
             backtest_result = engine.run(train_bars)

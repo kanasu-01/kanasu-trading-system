@@ -8,10 +8,10 @@ class DatasetContext:
 
     Future:
     - exchange
-    - timeframe
     - datasource
     - corporate action metadata
     - timezone
     """
 
     symbol: str
+    timeframe: str | None = None

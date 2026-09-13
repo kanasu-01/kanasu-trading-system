@@ -33,6 +33,7 @@ from core.config.app_config import (
 from core.config.backtest_config import (
     BacktestConfig,
 )
+from core.runtime.dataset_context import DatasetContext
 
 from core.strategies.strategy_factory import (
     get_strategy_class,
@@ -126,6 +127,10 @@ def run_walk_forward(
         strategy_cls=strategy_cls,
         param_space=(WALK_FORWARD_CONFIG.param_space),
         candles=candles,
+        dataset_context=DatasetContext(
+            symbol=config.symbol,
+            timeframe=config.timeframe,
+        ),
     )
 
     # -----------------------------------------
