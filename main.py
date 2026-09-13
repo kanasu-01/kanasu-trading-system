@@ -77,6 +77,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             dataset_context=DatasetContext(
                 symbol=backtest_config.symbol,
                 timeframe=backtest_config.timeframe,
+                timezone=backtest_config.timezone,
             ),
         )
 
@@ -112,6 +113,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             dataset_context=DatasetContext(
                 symbol=backtest_config.symbol,
                 timeframe=backtest_config.timeframe,
+                timezone=backtest_config.timezone,
             ),
             initial_capital=(backtest_config.initial_capital),
         )

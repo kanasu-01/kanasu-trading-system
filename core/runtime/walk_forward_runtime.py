@@ -130,6 +130,7 @@ def run_walk_forward(
         dataset_context=DatasetContext(
             symbol=config.symbol,
             timeframe=config.timeframe,
+            timezone=config.timezone,
         ),
     )
 

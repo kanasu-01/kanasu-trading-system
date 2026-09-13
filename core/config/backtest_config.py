@@ -19,6 +19,7 @@ class BacktestConfig:
     enable_exports: bool
 
     strategy_params: dict = field(default_factory=dict)
+    timezone: str | None = None
 
 
 BACKTEST_CONFIG = BacktestConfig(
@@ -31,6 +32,7 @@ BACKTEST_CONFIG = BacktestConfig(
     enable_replay=False,
     enable_visualization=True,
     enable_exports=True,
+    timezone="Asia/Kolkata",
     strategy_params={
         "fast_period": 100,
         "slow_period": 200,

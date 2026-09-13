@@ -10,8 +10,8 @@ class DatasetContext:
     - exchange
     - datasource
     - corporate action metadata
-    - timezone
     """
 
     symbol: str
     timeframe: str | None = None
+    timezone: str | None = None
