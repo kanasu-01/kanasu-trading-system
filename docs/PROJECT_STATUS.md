@@ -1,93 +1,55 @@
 # Kanasu Trading System — Project Status
 
-## Project
-Kanasu Trading System
+## Current dashboard
 
-## Current Development Stage
+| Field | Current value |
+|---|---|
+| Project | Kanasu Trading System |
+| Migration baseline | 2026-09-13 |
+| Branch | `m3-offline-foundation-data` |
+| HEAD | `4305697 Add SQLite candle persistence` |
+| Latest reported test baseline | 86 passed |
+| Version | V1 — Research and Real-Market-Data Paper Trading |
+| Phase | P1 — Trusted Historical Data Foundation |
+| Milestone | M3 — Offline / Historical Market-Data Foundation |
+| Step | M3.6 — Local Historical Persistence and Retrieval |
+| Lifecycle | IN_PROGRESS |
+| Next coding task | M3.6b — Coverage and Missing-Range Planning |
 
-Phase 8 — Execution / Risk Validation
+The 86-test result is previously verified evidence at this baseline. Tests were not rerun during the documentation migration dated above.
 
-## Current Focus
+## Completed foundation
 
-Validate execution, portfolio, risk and drawdown behaviour
-before moving toward more advanced trading intelligence.
+- M0 — Repository / foundation hygiene
+- M1 — Authoritative simulated portfolio accounting
+- M2 and M2.1–M2.4 — Execution economics/accounting correctness
+- M3.1 — Candle finite-value validation
+- M3.2 — Canonical CSV candle loader
+- M3.3a — Dataset identity propagation
+- M3.3b — Dataset timezone identity as metadata
+- M3.4 — Candle sequence integrity
+- M3.5 — Safe historical chunk composition
+- M3.6a — SQLite candle persistence
 
-## Recently Completed
+Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
-- Trade execution engine integration
-- Brokerage cost model
-- Slippage model
-- Position book
-- Portfolio manager foundation
-- Daily drawdown reset
-- Weekly drawdown reset
-- Daily reset preserves weekly drawdown
-- Execution engine unit test
-- Backtest execution validation
+## Current work
 
-## Current Backtest Baseline
+M3.6b establishes retrieval-coverage semantics and deterministic missing-range planning. Stored candles, retrieval coverage, expected-bar completeness, and source policy remain distinct concepts. See [AD-008](architecture/DECISIONS.md#ad-008--retrieval-coverage-and-expected-bar-completeness) and the [Validation Plan](validation/VALIDATION_PLAN.md#m36b-coverage-and-missing-range-planning).
 
-Latest observed run:
+## Important V1 blockers
 
-- Symbol: RELIANCE
-- Timeframe: 15m
-- Strategy: SMACrossOver
-- Trades: 23
-- Win rate: 26.09%
-- Average win: 3.13%
-- Average loss: -1.79%
-- Expectancy: -0.51%
-- Gross P&L: -2172.17
-- Net P&L: -2877.69
-- Transaction cost: 705.52
-- Maximum drawdown: 21.40%
+- local-first historical retrieval and historical-path parity;
+- explicit timestamp/bound compatibility for local storage integration;
+- backtest validity and reproducible research records;
+- WFA termination, configuration propagation, and account-metric validity;
+- real-market-data ingestion for paper trading;
+- an operational paper-session lifecycle;
+- API/frontend integration with actual runtime and research results; and
+- completion of all V1 validation and release gates.
 
-IMPORTANT:
-These numbers are development/backtest observations, not evidence
-that the strategy is profitable or production-ready.
+Technical findings that are deliberately unresolved are recorded in [Deferred Work](roadmap/DEFERRED_WORK.md). The ordered delivery plan is in the [Roadmap](roadmap/ROADMAP.md).
 
-## Current Validation
+## Release boundary
 
-### Passing
-
-- Drawdown risk tests: 4 passed
-- Trade execution test: 1 passed
-
-## Current Known Concerns
-
-- P&L percentage calculation needs financial consistency review.
-- Portfolio accounting needs further validation.
-- Backtest portfolio/equity accounting needs further validation.
-- Drawdown implementation needs validation against actual equity,
-  including unrealized P&L, before Live Trading.
-- Paper Trading runtime still requires further validation.
-- Live Trading is not implemented.
-
-## Next Development Step
-
-Review and correct P&L / portfolio accounting before adding
-additional trading intelligence.
-
-## Deferred Work
-
-See:
-
-docs/roadmap/DEFERRED_WORK.md
-
-## Future Features
-
-See:
-
-docs/roadmap/FUTURE_FEATURES.md
-
-## AI Research
-
-See:
-
-docs/roadmap/AI_RESEARCH_BACKLOG.md
-
-## Development Rule
-
-Any feature, modification, architectural decision, or discovered
-problem that is intentionally postponed must be recorded in the
-appropriate documentation before moving to another task.
+V1 does not place real-money broker orders. Live execution is deferred to V2 and requires additional execution, reconciliation, recovery, operational-safety, and external acceptance evidence.

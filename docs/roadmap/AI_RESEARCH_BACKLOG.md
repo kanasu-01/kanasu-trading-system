@@ -1,201 +1,124 @@
-# Kanasu — AI Research Backlog
+# Kanasu AI Research Backlog
 
-This document records AI capabilities that may eventually become
-part of Kanasu.
+## Purpose
 
-The objective is not to add AI merely for the sake of using AI.
+This ledger preserves AI-001 through AI-010 as research hypotheses. These identifiers are permanent and are not roadmap implementation commitments.
 
-AI components must demonstrate measurable improvement over a
-well-defined baseline.
+An item remains research until it defines:
 
----
+- a falsifiable hypothesis;
+- prerequisites and roadmap dependencies;
+- a deterministic or simple statistical baseline;
+- a point-in-time dataset and labels;
+- leakage-resistant evaluation;
+- success and failure criteria;
+- an experiment outcome; and
+- an explicit decision to reject, continue research, or propose promotion.
+
+AI must demonstrate measurable benefit over its baseline. A failed experiment with a documented result can be completed research. No model may bypass deterministic risk controls.
 
 ## AI-001 — News Sentiment Model
 
-Goal:
-Determine whether newly published information is likely positive,
-negative or neutral for a company/security.
+**Research status:** DEFERRED.
 
-Potential inputs:
-- News headline
-- Article text
-- Source
-- Publication timestamp
-- Company
-- Sector
-- Historical price reaction
+Hypothesis: information available at publication time can classify company/security news in a way that adds measurable value over a simple baseline.
 
-Future evaluation:
-Compare AI sentiment against subsequent market behaviour.
+Potential inputs include headline, article text, source, publication timestamp, company and sector. Subsequent price behavior may be an evaluation label, not an input that leaks the future.
 
----
+Prerequisites: legally usable point-in-time news, publication/effective timestamps, symbol/entity resolution and a non-AI baseline.
 
 ## AI-002 — Company News Intelligence
 
-Goal:
-Convert large amounts of company-related news into structured
-information.
+**Research status:** DEFERRED.
 
-Potential outputs:
-- Event type
-- Importance
-- Sentiment
-- Expected impact
-- Confidence
-- Affected company
-- Affected sector
+Hypothesis: NLP can convert company news into reliable structured event type, importance, sentiment, confidence, affected company and sector fields.
 
----
+Prerequisites: AI-001 data foundations, event taxonomy, annotation/evaluation set and point-in-time guarantees.
 
 ## AI-003 — Historical Condition Probability
 
-Goal:
-Given a current market condition, find historically similar
-conditions and estimate the probability of future outcomes.
+**Research status:** DEFERRED.
 
-Potential features:
-- Trend
-- Volatility
-- Volume
-- Momentum
-- Price structure
-- Market regime
-- Time of day
-- Relative market strength
+Hypothesis: similarity across trend, volatility, volume, momentum, price structure, market regime, time of day and relative strength can produce calibrated out-of-sample outcome distributions.
 
----
+Descriptive similarity must be distinguished from predictive value. Compare against unconditional and simple rule-based distributions.
 
 ## AI-004 — Support / Resistance Intelligence
 
-Goal:
-Identify significant support and resistance areas using multiple
-sources of evidence rather than a single technical indicator.
+**Research status:** DEFERRED.
 
-Potential inputs:
-- Historical price reactions
-- Volume
-- Swing points
-- Volatility
-- Market structure
-- Timeframe agreement
+Hypothesis: combining price reactions, volume, swing points, volatility, structure and timeframe agreement improves a measurable support/resistance objective over deterministic methods.
 
----
+The first baseline should be deterministic; ML is optional rather than assumed.
 
 ## AI-005 — Big Money Flow
 
-Goal:
-Estimate institutional or large-participant activity.
+**Research status:** DEFERRED.
 
-Potential inputs may include:
-- Volume
-- Delivery data
-- Open interest
-- Futures data
-- Options data
-- Block/bulk activity
-- Market breadth
+Hypothesis: explicitly defined observable features can estimate a useful large-participant activity proxy.
 
-Important:
-"Big money flow" must be defined quantitatively before attempting
-to claim accuracy.
+Potential inputs include volume, delivery data, open interest, futures/options data, block/bulk activity and breadth. “Big money” or “institutional” activity must not be claimed without a quantitative target and evidence.
 
----
+Prerequisites include the relevant point-in-time datasets and, for derivatives, instrument/contract semantics.
 
 ## AI-006 — Social / Telegram Sentiment
 
-Goal:
-Detect emerging narratives and sentiment changes.
+**Research status:** DEFERRED.
 
-Potential outputs:
-- Sentiment
-- Topic
-- Velocity
-- Unusual activity
-- Confidence
+Hypothesis: emerging narrative, sentiment velocity or unusual activity from permitted sources adds out-of-sample value after manipulation and noise.
 
-Important:
-Data availability, reliability, manipulation and legal/ToS
-constraints must be evaluated.
-
----
+Prerequisites: lawful/ToS-compliant access, source reliability, timestamp integrity, manipulation controls and a stable baseline.
 
 ## AI-007 — Trade Quality Model
 
-Goal:
-Estimate the probability that a candidate trade will produce a
-positive risk-adjusted outcome.
+**Research status:** DEFERRED.
 
-Potential output:
+Hypothesis: features available at decision time improve calibrated positive risk-adjusted outcome estimates over a strategy-only baseline.
 
-Trade Quality Score
-Probability of Profit
-Expected Return
-Expected Drawdown
-Confidence
-
----
+Potential outputs include probability, expected return/drawdown and confidence. Labels and evaluation must include execution costs and avoid selection leakage.
 
 ## AI-008 — Regime Detection
 
-Goal:
-Identify the current market regime.
+**Research status:** DEFERRED.
 
-Examples:
-- Trending
-- Sideways
-- High volatility
-- Low volatility
-- Risk-on
-- Risk-off
+Hypothesis: an explicit trending/sideways, volatility or risk-on/off regime representation improves a downstream validated decision.
 
----
+Descriptive clusters are not automatically actionable regimes. Evaluation must test the downstream use.
 
 ## AI-009 — Adaptive Strategy Selection
 
-Goal:
-Determine which validated strategy is most appropriate for the
-current market regime.
+**Research status:** DEFERRED.
 
-Important:
-The AI should select among validated strategies rather than
-inventing trades without constraints.
+Hypothesis: regime-conditioned selection among already validated strategies improves out-of-sample account outcomes over a fixed selection rule.
 
----
+Prerequisites: validated candidate strategies, nested model-selection controls, complete configuration propagation and account-valid metrics.
 
 ## AI-010 — AI-Assisted Risk Management
 
-Potential capabilities:
+**Research status:** DEFERRED.
 
-- Dynamic risk allocation
-- Position-size adjustment
-- Risk concentration detection
-- Correlation-aware exposure
-- Drawdown adaptation
+Candidate capabilities include bounded allocation suggestions, position-size adjustments, concentration detection, correlation-aware exposure and drawdown adaptation.
 
-Important:
-AI must never bypass hard safety/risk controls.
+AI output remains advisory and constrained. Hard exposure, order and loss controls remain deterministic and authoritative.
 
----
+## Research flow
 
-## AI Development Principle
+~~~text
+point-in-time data
+        ↓
+reproducible features
+        ↓
+deterministic baseline and model
+        ↓
+calibrated probability/confidence
+        ↓
+validated strategy decision
+        ↓
+deterministic risk controls
+        ↓
+execution
+~~~
 
-Kanasu AI should initially be an intelligence layer around a
-deterministic trading system.
+## Promotion rule
 
-AI recommendations must pass through:
-
-Market Data
-    ↓
-Feature Engineering
-    ↓
-AI / Statistical Model
-    ↓
-Probability / Confidence
-    ↓
-Strategy Decision
-    ↓
-Risk Controls
-    ↓
-Execution Engine
-
-Hard risk controls remain deterministic.
+Promotion from this ledger requires a roadmap proposal and, where the design changes a durable boundary, an architecture decision. The proposal must carry the experiment evidence, remaining failure modes, operational cost and monitoring requirement. Research status never grants order authority.

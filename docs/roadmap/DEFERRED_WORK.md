@@ -1,146 +1,128 @@
-# Kanasu — Deferred Work
+# Kanasu Deferred Work
 
-This document records work that has been identified but intentionally
-postponed.
+## Purpose
 
-Items must not disappear simply because development moves to another
-task.
+This ledger preserves material technical issues that are understood but intentionally outside the active task. An item remains visible until it is resolved, cancelled or superseded with evidence. Product ideas belong in the [Product Vision](../PRODUCT_VISION.md) or [Roadmap](ROADMAP.md); architecture choices belong in [Decisions](../architecture/DECISIONS.md).
 
----
+Existing identifiers are permanent.
 
 ## DW-001 — Equity-Based Drawdown
 
-Status: Deferred
+**Status:** OPEN
+**Target:** M4/M5 risk and research validity; required before V2.
 
-Current approach:
-Daily and weekly drawdown are currently based on recorded trade P&L.
+Account-level net realized trade contribution was corrected in M2.3. Daily and weekly drawdown controls still aggregate recorded closed-trade percentages rather than being defined from actual account equity through time, including unrealized P&L where appropriate.
 
-Required future work:
-Evaluate and implement drawdown based on actual portfolio equity,
-including unrealized P&L where appropriate.
-
-Reason deferred:
-Keep the current MVP implementation simple while validating the
-basic risk-control mechanism.
-
-Revisit:
-Before Live Trading.
-
-Priority:
-HIGH
-
-
----
+Required work: define the intended daily/weekly denominator, treatment of realized and unrealized changes, session boundaries, reset semantics, and deterministic validation cases.
 
 ## DW-002 — P&L Percentage Accounting
 
-Status: Deferred / Current Focus
+**Status:** PARTIALLY ADDRESSED
+**Target:** M4/M5.
 
-Issue:
-Trade P&L percentage and monetary P&L need to be defined consistently,
-particularly when transaction costs and slippage are included.
+M2 established explicit fill/cost ownership, monetary gross/net P&L, and account-level net P&L input to DrawdownRiskManager. Trade.pnl_pct remains an instrument-price percentage return.
 
-Required future work:
-Establish clear gross P&L, net P&L, gross return percentage and
-net return percentage definitions.
-
-Revisit:
-Immediately.
-
-Priority:
-HIGH
-
-
----
+Required work: preserve the instrument meaning where useful while defining gross trade return, net trade return and account/equity return for reporting and research. Instrument pnl_pct must not substitute for an account-return metric.
 
 ## DW-003 — Portfolio Accounting Consistency
 
-Status: Deferred
+**Status:** RESOLVED
 
-Issue:
-Portfolio state and execution state require further validation to
-ensure there is one authoritative representation of capital,
-positions, realized P&L, unrealized P&L and equity.
+**Resolution scope:** M1 authoritative simulated backtest/execution path.
+**Evidence:** commit ffc8cc6 and the portfolio/execution/backtest regression tests.
 
-Required future work:
-Review PortfolioManager and BacktestEngine integration.
+PortfolioManager owns simulated cash, position value, equity and P&L; PositionBook owns open Position objects; TradeExecutionEngine uses the authoritative lifecycle; BacktestEngine reports the execution portfolio snapshot.
 
-Revisit:
-Before advanced performance analytics.
-
-Priority:
-HIGH
-
-
----
+This resolution does not claim paper API/runtime integration, broker reconciliation or multi-symbol portfolio validation. Those have separate items.
 
 ## DW-004 — Paper Trading Runtime Validation
 
-Status: Deferred
+**Status:** OPEN
+**Target:** V1 M6/M7.
 
-Issue:
-The paper-trading runtime architecture exists but requires further
-validation with the complete runtime, API and frontend flow.
+The current principal paper path uses CSV replay, while API paper support manages session metadata without starting the complete PaperRuntime. Real live-market-data paper operation, truthful lifecycle state, authoritative snapshots, journals, failure handling, stop behavior and recovery policy remain to be implemented and validated.
 
-Required future work:
-Validate:
-- session lifecycle
-- feed
-- strategy runner
-- execution engine
-- portfolio state
-- snapshots
-- API
-- frontend
-- stop/start behaviour
-
-Revisit:
-After core execution/risk validation.
-
-Priority:
-HIGH
-
-
----
+See [Paper Runtime](../design/PAPER_RUNTIME.md).
 
 ## DW-005 — Live Trading
 
-Status: Deferred
+**Status:** DEFERRED TO V2
+**Consequence when active:** VERY HIGH.
 
-Current state:
-LIVE mode is not implemented.
+Real-money execution is outside V1. V2 requires broker order lifecycle, stable identity/idempotency, cancellation/partial fills, reconciliation, restart recovery, cash/position/order checks, operational safety, restricted rollout, and applicable broker/exchange/regulatory acceptance.
 
-Required future work:
-Build live broker execution only after paper trading has been
-validated.
-
-Important:
-Live Trading must reuse the validated market-data, strategy,
-execution, risk, portfolio, session and monitoring architecture.
-
-Revisit:
-After Paper Trading MVP is stable.
-
-Priority:
-VERY HIGH
-
-
----
+Existing adapter or dormant engine code does not satisfy this release gate.
 
 ## DW-006 — Multi-Symbol Portfolio
 
-Status: Deferred
+**Status:** DEFERRED
+**Target:** V3+ candidate scope.
 
-Current state:
-PositionBook has a structure that can support multiple symbols,
-but the current MVP remains effectively single-symbol focused.
+PositionBook structure alone does not establish multi-symbol capital allocation, synchronized data, aggregate exposure, correlation, portfolio drawdown or risk semantics. Preserve the single-symbol boundary until those contracts are designed and validated.
 
-Required future work:
-Validate multi-symbol positions, portfolio exposure and aggregate
-risk.
+## DW-007 — WFA Expanding-Window Termination
 
-Revisit:
-After single-symbol execution is stable.
+**Status:** OPEN
+**Target:** M5.
 
-Priority:
-MEDIUM
+The expanding-window generator can repeat a window indefinitely because the advancing cursor does not affect the expanding train start/end calculation after the first valid window.
+
+Required work: write finite deterministic rolling/expanding-window contracts, repair the generator, and test boundaries and termination without changing research policy implicitly.
+
+## DW-008 — WFA Configuration, Economics and Account Metrics
+
+**Status:** OPEN
+**Target:** M5.
+
+Optimizer/runner paths create backtests with hardcoded capital and fresh runtime defaults. Some scoring and drawdown calculations use instrument Trade.pnl_pct or synthetic compounded trade returns instead of authoritative account outcomes.
+
+Required work: propagate the effective capital, execution/risk configuration and dataset identity; define account-valid optimization metrics; define window overlap/equity-stitching semantics; preserve per-window evidence.
+
+## DW-009 — Strategy and Execution Position-State Agreement
+
+**Status:** OPEN
+**Target:** M4 before strategy conclusions; M7 before paper acceptance.
+
+A strategy can change its local position-open state after emitting BUY without a complete response for risk rejection, affordability rejection or forced stop exit. Strategy state can then disagree with the execution portfolio.
+
+Required work: define a small execution-feedback/state-authority contract and test accepted entry, rejected entry, strategy exit and forced exit.
+
+## DW-010 — SQLite Timestamp and Range-Bound Compatibility
+
+**Status:** OPEN
+**Target:** M3.6c/M3.6d prerequisite.
+
+SQLiteCandleStore preserves ISO timestamp text and orders/filters it lexically. Dataset timezone is metadata and does not normalize Candle timestamps. Mixed offsets or incompatible naive/aware request bounds can therefore produce misleading ordering or omissions.
+
+Required work: explicitly define supported timestamp/bound compatibility before local-first integration. Do not silently add UTC conversion under M3.6b.
+
+## DW-011 — Offline Runtime Requires Broker Login
+
+**Status:** OPEN
+**Target:** M3.7.
+
+Main constructs/authenticates a broker before selecting a mode, so a request satisfiable from local data is not fully local.
+
+Required work: introduce an explicit historical source policy and lazy provider construction after local-first retrieval contracts are complete. See proposed AD-009.
+
+## DW-012 — Legacy Replay, Export and CSVBroker Contracts
+
+**Status:** OPEN
+**Target:** Triage during M3.7/M3.8 or the relevant replay/export milestone.
+
+Legacy launchers and adapters retain stale constructor/entity assumptions. Historical CSV export loses timestamp offset/microseconds and constructs HistoricalFeed with an outdated signature. CSVBroker does not conform to current Candle/BaseBroker contracts. BarByBarReplay does not provide a complete current replay workflow.
+
+Required work: decide which public paths remain supported, write compatibility tests for retained paths, and retire or repair them without using them to bypass canonical data boundaries.
+
+## DW-013 — API Placeholders and Paper Runtime Disconnection
+
+**Status:** OPEN
+**Target:** M7/M8.
+
+The backtest run API returns a fixed mock result. Paper API endpoints create/session-stop metadata but do not own the real PaperRuntime. The frontend therefore cannot yet serve as a validated research/paper control plane.
+
+Required work: replace placeholders through bounded vertical slices using real jobs and authoritative snapshots; expose truthful loading, running, stopped and failed states.
+
+## Maintenance
+
+New entries use the next available DW identifier after inspecting this ledger. Group related symptoms by root cause where practical. A resolution records the exact scope, evidence and related milestone/decision; it does not erase history.

@@ -1,73 +1,58 @@
-# React + TypeScript + Vite
+# Kanasu Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Kanasu frontend is a React 19, TypeScript and Vite application. It is intended to become the responsive browser control and reporting surface for V1 research and real-market-data paper trading.
 
-Currently, two official plugins are available:
+## Setup and commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+From the frontend directory:
 
-## React Compiler
+~~~powershell
+npm install
+npm run dev
+~~~
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Available package scripts:
 
-## Expanding the ESLint configuration
+- npm run dev — start the Vite development server.
+- npm run build — run the TypeScript project build and create the Vite production bundle.
+- npm run lint — run ESLint across the frontend.
+- npm run preview — serve the built bundle locally for preview.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+The repository currently ignores package-lock.json. Dependency reproducibility should be addressed deliberately before release; do not infer a lockfile workflow that the repository does not currently preserve.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Current pages and components
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+The router currently exposes:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- / — HomePage
+- /backtest — BacktestPage
+- /replay — ReplayPage
+- /paper — PaperTradingPage
+- /portfolio — PortfolioPage
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Existing supporting code includes API clients for backtest and paper routes, a lightweight-charts candle chart, trade markers/zones, SMA indicator helpers, replay controller, performance panel, navigation/layout, metric cards, decision display and shared UI controls.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Code presence does not imply that each page is connected to a validated backend workflow.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## API expectations and current limitations
+
+The frontend expects an HTTP API under an /api base path. At this baseline, the API base URL is hard-coded in the backtest and paper API clients rather than supplied through a portable environment configuration.
+
+Current backend behavior includes:
+
+- backtest configuration metadata;
+- a backtest run endpoint that returns a fixed mock result;
+- paper start/stop/status endpoints that manage session metadata; and
+- no complete API-owned feed/strategy/execution/portfolio paper lifecycle.
+
+Replay currently loads a static JSON path. These development paths must be replaced or explicitly retained through validated contracts before the UI can be considered a complete research/paper control plane.
+
+The backend is authoritative for strategy execution, orders, positions, cash, equity, P&L and session state. The frontend must present backend snapshots rather than reconstruct those values.
+
+## V1 direction
+
+The intended UI supports actual backtest and WFA jobs, dataset/source identity, reproducible results, trades/equity/drawdown/costs, real-market-data paper controls, authoritative portfolio snapshots, and clear loading/empty/error/stopped/failed states.
+
+Desktop and mobile-browser layouts are V1 targets. Native mobile is a later horizon after APIs and responsive workflows are stable.
+
+See [Product Vision](../docs/PRODUCT_VISION.md), [Project Status](../docs/PROJECT_STATUS.md), [Architecture](../docs/architecture/ARCHITECTURE.md), and [Paper Runtime](../docs/design/PAPER_RUNTIME.md).

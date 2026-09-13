@@ -1,0 +1,158 @@
+# Kanasu Roadmap
+
+## Purpose
+
+This document owns Kanasu's permanent delivery hierarchy, sequencing, dependencies and roadmap status. Product boundaries are defined in the [Product Vision](../PRODUCT_VISION.md); current active work is summarized in [Project Status](../PROJECT_STATUS.md); workflow and status rules are defined in [Governance](../governance/GOVERNANCE.md).
+
+## Permanent hierarchy
+
+~~~text
+Version
+  → Phase
+      → Milestone
+          → Step
+              → Task
+~~~
+
+- **Version** — a coherent product release and acceptance boundary.
+- **Phase** — a dependency-oriented group of milestones.
+- **Milestone** — a substantial capability with exit criteria.
+- **Step** — a bounded part of a milestone.
+- **Task** — a concrete deliverable with evidence and closure criteria.
+
+Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remains M3.6b even if its phase or target version changes.
+
+## V1 — Research and Real-Market-Data Paper Trading
+
+### P0 — Project Foundation
+
+- **M0 — DONE** — Repository / foundation hygiene.
+- **M1 — DONE** — Authoritative simulated portfolio accounting.
+- **M2 — DONE** — Execution economics/accounting correctness.
+  - **M2.1 — DONE** — Single execution-price ownership and same-bar stop causality.
+  - **M2.2 — DONE** — Independent brokerage-enabled semantics.
+  - **M2.3 — DONE** — Account-level net P&L contribution to drawdown manager.
+  - **M2.4 — DONE** — BUY execution-price reporting consistency.
+
+### P1 — Trusted Historical Data Foundation
+
+- **M3 — IN_PROGRESS** — Offline / historical market-data foundation.
+  - **M3.1 — DONE** — Candle finite-value validation.
+  - **M3.2 — DONE** — Canonical CSV candle loader and compatibility wrapper.
+  - **M3.3a — DONE** — Dataset symbol/timeframe identity propagation.
+  - **M3.3b — DONE** — Dataset timezone identity metadata.
+  - **M3.4 — DONE** — Candle sequence integrity.
+  - **M3.5 — DONE** — Safe historical chunk composition.
+  - **M3.6 — IN_PROGRESS** — Local historical persistence and retrieval.
+    - **M3.6a — DONE** — SQLite candle persistence.
+    - **M3.6b — READY / NEXT** — Coverage and missing-range planning.
+    - **M3.6c — PLANNED** — Local-first historical retrieval service.
+    - **M3.6d — PLANNED** — Integration and failure validation.
+  - **M3.7 — RESERVED** — Historical source policy/runtime wiring.
+  - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
+
+### P2 — Trusted Research Engine
+
+- **M4 — RESERVED** — Backtest validity.
+- **M5 — RESERVED** — WFA validity.
+
+### P3 — Real-Market-Data Paper Runtime
+
+- **M6 — RESERVED** — Live market-data foundation.
+- **M7 — RESERVED** — Paper-session integration.
+
+### P4 — Research and Paper Application
+
+- **M8 — RESERVED** — Research and paper application.
+
+### P5 — V1 Acceptance and Release
+
+- **M9 — RESERVED** — V1 validation and release.
+
+M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement.
+
+## Near-term detailed work
+
+### M3.6b — Coverage and missing-range planning
+
+**Outcome:** Represent trusted retrieval coverage and calculate deterministic missing request ranges.
+
+**Contract:**
+
+- Stored candles, retrieval coverage, expected-bar completeness and source policy are distinct.
+- The planner operates on request and coverage intervals.
+- It does not inspect or synthesize expected candles.
+- It does not contact a broker or database.
+- It does not normalize timestamps.
+
+**Required evidence:** No coverage, full coverage, coverage outside the request, partial beginning/end, internal and multiple disjoint coverage, overlapping/touching/nested/duplicate coverage, permitted unordered input, and exact boundaries. See the [Validation Plan](../validation/VALIDATION_PLAN.md#m36b-coverage-and-missing-range-planning).
+
+**Dependencies:** AD-008.
+
+### M3.6c — Local-first historical retrieval service
+
+**Outcome:** A small orchestration boundary reads local candles, asks the planner for uncovered ranges, fetches only permitted gaps, validates provider output, persists accepted data and returns a canonical chronological result.
+
+**Dependencies:** M3.6a and M3.6b; explicit provider empty/partial/failure semantics; approved timestamp-bound compatibility.
+
+**Required evidence:** Fully cached requests avoid provider access; partial coverage fetches only gaps; exact overlaps reconcile safely; conflicts/failures do not create false coverage; fresh store instances can reuse accepted data.
+
+### M3.6d — Integration and failure validation
+
+**Outcome:** Prove the store, coverage representation, retrieval service and historical validation work together under success and failure.
+
+**Required evidence:** Atomic consistency between accepted candles and coverage claims, durable reuse, partial-response handling, rollback/conflict behavior, and explicit errors for incompatible timestamp styles.
+
+### M3.7 — Historical source policy/runtime wiring
+
+**Status:** RESERVED.
+
+Candidate outcome: explicit local-only, local-first and provider-backed behavior. Fully local execution should not require broker authentication.
+
+### M3.8 — Historical-path parity and reproducibility
+
+**Status:** RESERVED.
+
+Candidate outcome: equivalent accepted data produces equivalent canonical candles, trades and account curves through provider-fresh and local-store paths, with an inspectable dataset/configuration identity.
+
+## Remaining V1 milestones
+
+### M4 — Backtest validity
+
+Reserved scope includes declared timing/fill/stop assumptions, strategy/execution state agreement, account-based reporting, reproducible run manifests, deterministic reference scenarios, and removal of placeholder research results from authoritative workflows.
+
+### M5 — WFA validity
+
+Reserved scope includes finite expanding/rolling windows, complete configuration/economic propagation, leakage-resistant train/test separation, account-valid metrics, an explicit overlap/stitching policy and reproducible per-window evidence.
+
+### M6 — Live market-data foundation
+
+Reserved scope includes one real provider, completed-candle semantics, sequence validation, freshness/disconnect behavior and diagnostic recording. It does not include real-money orders.
+
+### M7 — Paper-session integration
+
+Reserved scope includes a real-data feed, strategy, risk, simulated execution, authoritative portfolio, journal, snapshots, truthful start/stop/failure states, and a recovery policy.
+
+### M8 — Research and paper application
+
+Reserved scope includes actual research jobs/results, dataset/source visibility, portfolio/trade/equity views, paper controls, errors and a responsive browser interface. Delivery should use small backend-to-UI vertical slices.
+
+### M9 — V1 validation and release
+
+Reserved scope includes reproducible reference results, subsystem and workflow evidence, failure scenarios, paper observation, documentation synchronization and all mandatory V1 release gates.
+
+## V2 and progressive horizons
+
+**V2 — Controlled Real-Money Execution** follows V1 acceptance. Its detailed milestone identifiers are intentionally not allocated. It requires order identity, acknowledgement/rejection/cancellation/partial-fill semantics, reconciliation, restart recovery, operational risk controls, restricted rollout and applicable external acceptance.
+
+V3+ candidates include multi-symbol portfolio research, scanners and market intelligence, fundamentals, derivatives, additional brokers/markets, advanced statistical/ML research, optional multi-user delivery and eventually native mobile. These are progressively elaborated in the [Product Vision](../PRODUCT_VISION.md) and [AI Research Backlog](AI_RESEARCH_BACKLOG.md); they are not current commitments.
+
+## Progress measurement
+
+Unsupported overall project percentages are prohibited.
+
+Future baselined scopes may estimate leaf tasks with 1, 2, 3, 5, 8 or 13 effort points and report implementation and validation separately. Do not use lines of code, number of tests, calendar time, or number of roadmap headings as completion percentages. Do not retroactively invent estimates for completed historical work merely to produce a percentage. Parent and child effort must not be double-counted.
+
+## Historical identifiers
+
+M0–M3 and their existing children are permanent. Old roadmap table serials, Phase 8 and 10.9B/C/D labels are historical terminology, not modern milestone identifiers. Their provenance and crosswalk are retained in the [Legacy Project Snapshot](../archive/LEGACY_PROJECT_SNAPSHOT.md).
