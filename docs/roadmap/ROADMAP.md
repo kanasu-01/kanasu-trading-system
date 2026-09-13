@@ -46,8 +46,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M3.6 — IN_PROGRESS** — Local historical persistence and retrieval.
     - **M3.6a — DONE** — SQLite candle persistence.
     - **M3.6b — DONE** — Coverage and missing-range planning.
-    - **M3.6c — READY / NEXT** — Local-first historical retrieval service.
-    - **M3.6d — PLANNED** — Integration and failure validation.
+    - **M3.6c — DONE** — Local-first historical retrieval service.
+    - **M3.6d — READY / NEXT** — Integration and failure validation.
   - **M3.7 — RESERVED** — Historical source policy/runtime wiring.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
 
@@ -107,7 +107,28 @@ M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservat
 
 **Required evidence:** Fully cached requests avoid provider access; partial coverage fetches only gaps; exact overlaps reconcile safely; conflicts/failures do not create false coverage; fresh store instances can reuse accepted data.
 
+**Completion evidence:**
+
+- Implementation commit: `1c4a877 Add local-first historical retrieval`
+- Focused M3.6c/store tests: 57 passed
+- All market-data tests: 99 passed
+- Full suite: 159 passed
+- Post-commit full suite: 159 passed
+- Explicit retrieval coverage is persisted independently of candles
+- Fully covered requests avoid provider calls
+- Only missing ranges are fetched
+- Confirmed-empty and partial provider evidence are explicit
+- Accepted candles and coverage are persisted transactionally
+- SQLite chronological and range comparison uses parsed Python datetimes
+- Mixed naive/aware dataset state is rejected
+- Different aware offsets remain supported without normalization
+- Equivalent aware timestamps at one instant have one candle identity
+- HistoricalFeed, BaseBroker and AngelOne remain unchanged
+- No source-policy, authentication or runtime wiring was added
+
 ### M3.6d — Integration and failure validation
+
+**Status:** READY / NEXT. Implementation and validation have not started.
 
 **Outcome:** Prove the store, coverage representation, retrieval service and historical validation work together under success and failure.
 

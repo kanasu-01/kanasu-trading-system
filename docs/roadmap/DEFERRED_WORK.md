@@ -89,12 +89,14 @@ Required work: define a small execution-feedback/state-authority contract and te
 
 ## DW-010 — SQLite Timestamp and Range-Bound Compatibility
 
-**Status:** OPEN
-**Target:** M3.6c/M3.6d prerequisite.
+**Status:** RESOLVED
 
-SQLiteCandleStore preserves ISO timestamp text and orders/filters it lexically. Dataset timezone is metadata and does not normalize Candle timestamps. Mixed offsets or incompatible naive/aware request bounds can therefore produce misleading ordering or omissions.
+**Resolution scope:** M3.6c local historical storage/retrieval timestamp compatibility.
+**Evidence:** AD-013; implementation commit `1c4a877`; M3.6c timestamp/storage regression tests.
 
-Required work: explicitly define supported timestamp/bound compatibility before local-first integration. Do not silently add UTC conversion under M3.6b.
+M3.6c removed lexical ISO-string ordering/filtering as the chronological authority. Persisted timestamps are parsed and compared using Python datetime semantics. Incompatible naive/aware state is rejected explicitly; differing aware offsets remain supported; timestamp representations are preserved without UTC normalization; and aware timestamps representing the same instant define one candle identity across differing offsets.
+
+This resolution does not claim migration or automatic repair of old invalid databases, and it does not claim storage scalability has been solved. Those concerns are recorded in DW-014.
 
 ## DW-011 — Offline Runtime Requires Broker Login
 
@@ -122,6 +124,25 @@ Required work: decide which public paths remain supported, write compatibility t
 The backtest run API returns a fixed mock result. Paper API endpoints create/session-stop metadata but do not own the real PaperRuntime. The frontend therefore cannot yet serve as a validated research/paper control plane.
 
 Required work: replace placeholders through bounded vertical slices using real jobs and authoritative snapshots; expose truthful loading, running, stopped and failed states.
+
+## DW-014 — SQLite Chronology Indexing and Legacy Timestamp-State Migration
+
+**Status:** DEFERRED
+**Target:** M3.8 or later storage hardening; required before scale makes dataset scans operationally significant.
+
+M3.6c deliberately uses correctness-first dataset scans to compare parsed datetime identity and timezone awareness. This is correct for the current milestone but may become inefficient for very large datasets.
+
+Existing databases that already contain invalid mixed-awareness state or historical cross-offset duplicate logical timestamps are rejected rather than automatically repaired.
+
+Future work, if required, should define:
+
+- a chronology-safe persisted indexing/key strategy;
+- explicit schema migration;
+- a legacy invalid-state detection and repair policy;
+- backward-compatibility tests; and
+- performance evidence.
+
+This is not a current M3.6 correctness blocker.
 
 ## Maintenance
 

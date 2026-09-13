@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `1e8065a Add historical coverage planner` |
-| Latest reported test baseline | `111 passed at 1e8065a` |
+| Implementation verification baseline | `1c4a877 Add local-first historical retrieval` |
+| Latest reported test baseline | `159 passed at 1c4a877` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.6 — Local Historical Persistence and Retrieval |
 | Lifecycle | IN_PROGRESS |
-| Next coding task | M3.6c — Local-First Historical Retrieval Service |
+| Next coding task | M3.6d — Integration and Failure Validation |
 
-The 111-test result was verified at implementation baseline `1e8065a`.
+The 159-test full suite was rerun after implementation commit `1c4a877` and passed.
 
 ## Completed foundation
 
@@ -32,6 +32,7 @@ The 111-test result was verified at implementation baseline `1e8065a`.
 - M3.5 — Safe historical chunk composition
 - M3.6a — SQLite candle persistence
 - M3.6b — Coverage and missing-range planning
+- M3.6c — Local-first historical retrieval service
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -43,16 +44,29 @@ Completion here refers to the accepted scope of each historical task. It does no
 - `git diff --check`: passed
 - Implementation commit: `1e8065a Add historical coverage planner`
 
+## M3.6c validation evidence
+
+- Focused M3.6c/store tests: 57 passed
+- All market-data tests: 99 passed
+- Full suite before commit: 159 passed
+- Full suite after commit `1c4a877`: 159 passed
+- `git diff --check`: passed
+- Implementation commit: `1c4a877 Add local-first historical retrieval`
+
+The accepted M3.6c contract keeps persistent retrieval coverage separate from stored candles. Fully covered requests avoid provider calls, and uncovered requests fetch only missing retrieval ranges. Confirmed-empty coverage is valid evidence; partial results persist only explicit coverage; and provider failures or results without coverage evidence create no false claim. Accepted candles and coverage are persisted transactionally.
+
+Service requests and coverage use half-open `[start, end)` intervals while SQLite candle reads remain inclusive. A `DatasetContext` cannot mix naive and aware persisted timestamps, but different aware offsets remain supported through Python datetime semantics. Equivalent aware timestamps for the same instant are one candle identity, with the first stored representation retained. No timezone normalization was introduced.
+
 ## Current work
 
-M3.6b is complete. M3.6c — Local-First Historical Retrieval Service is the next planned coding task and has not started.
+M3.6c is complete.
 
-M3.6c must integrate local persistence and the coverage planner without conflating stored candles, retrieval coverage, expected-bar completeness, or source policy. DW-010 timestamp/range-bound compatibility and explicit provider empty/partial/failure semantics must be addressed as part of the M3.6c contract before unsafe integration.
+M3.6d — Integration and Failure Validation is the next planned coding task and has not started. Its existing roadmap scope is to prove that the store, coverage representation, retrieval service and historical validation work together under success and failure, including atomic consistency, durable reuse, partial responses, rollback/conflicts and incompatible timestamp errors. M3.6c evidence does not complete M3.6d.
 
 ## Important V1 blockers
 
-- local-first historical retrieval and historical-path parity;
-- explicit timestamp/bound compatibility for local storage integration;
+- M3.6d integration and failure validation;
+- historical-path parity and reproducibility;
 - backtest validity and reproducible research records;
 - WFA termination, configuration propagation, and account-metric validity;
 - real-market-data ingestion for paper trading;
