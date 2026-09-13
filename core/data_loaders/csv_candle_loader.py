@@ -1,33 +1,10 @@
-import csv
-from datetime import datetime
-from typing import List
-
 from core.entities.candle import Candle
+from core.market_data.csv_candle_loader import (
+    load_candles_from_csv as canonical_load_candles_from_csv,
+)
 
 
-def load_candles_from_csv(file_path: str) -> List[Candle]:
-    """
-    Load OHLCV candles from a CSV file.
+def load_candles_from_csv(file_path: str) -> list[Candle]:
+    """Load candles through the canonical market-data CSV loader."""
 
-    Expected CSV format:
-    timestamp,open,high,low,close,volume
-    2023-01-02 09:15:00,2570.0,2582.5,2568.0,2579.8,182345
-    """
-
-    candles: List[Candle] = []
-
-    with open(file_path, "r", newline="") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            candle = Candle(
-                timestamp=datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S"),
-                open=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
-                close=float(row["close"]),
-                volume=float(row["volume"]),
-            )
-            candles.append(candle)
-
-    return candles
+    return canonical_load_candles_from_csv(file_path)
