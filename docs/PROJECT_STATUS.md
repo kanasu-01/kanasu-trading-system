@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `4305697 Add SQLite candle persistence` |
-| Latest reported test baseline | `86 passed at 4305697` |
+| Implementation verification baseline | `1e8065a Add historical coverage planner` |
+| Latest reported test baseline | `111 passed at 1e8065a` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.6 — Local Historical Persistence and Retrieval |
 | Lifecycle | IN_PROGRESS |
-| Next coding task | M3.6b — Coverage and Missing-Range Planning |
+| Next coding task | M3.6c — Local-First Historical Retrieval Service |
 
-The 86-test result was previously verified at implementation baseline `4305697`. Tests were not rerun during the documentation migration committed at `170f618`.
+The 111-test result was verified at implementation baseline `1e8065a`.
 
 ## Completed foundation
 
@@ -31,12 +31,23 @@ The 86-test result was previously verified at implementation baseline `4305697`.
 - M3.4 — Candle sequence integrity
 - M3.5 — Safe historical chunk composition
 - M3.6a — SQLite candle persistence
+- M3.6b — Coverage and missing-range planning
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
+## M3.6b validation evidence
+
+- Focused historical coverage tests: 25 passed
+- All market-data tests: 51 passed
+- Full suite: 111 passed
+- `git diff --check`: passed
+- Implementation commit: `1e8065a Add historical coverage planner`
+
 ## Current work
 
-M3.6b establishes retrieval-coverage semantics and deterministic missing-range planning. Stored candles, retrieval coverage, expected-bar completeness, and source policy remain distinct concepts. See [AD-008](architecture/DECISIONS.md#ad-008--retrieval-coverage-and-expected-bar-completeness) and the [Validation Plan](validation/VALIDATION_PLAN.md#m36b-coverage-and-missing-range-planning).
+M3.6b is complete. M3.6c — Local-First Historical Retrieval Service is the next planned coding task and has not started.
+
+M3.6c must integrate local persistence and the coverage planner without conflating stored candles, retrieval coverage, expected-bar completeness, or source policy. DW-010 timestamp/range-bound compatibility and explicit provider empty/partial/failure semantics must be addressed as part of the M3.6c contract before unsafe integration.
 
 ## Important V1 blockers
 

@@ -45,8 +45,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M3.5 — DONE** — Safe historical chunk composition.
   - **M3.6 — IN_PROGRESS** — Local historical persistence and retrieval.
     - **M3.6a — DONE** — SQLite candle persistence.
-    - **M3.6b — READY / NEXT** — Coverage and missing-range planning.
-    - **M3.6c — PLANNED** — Local-first historical retrieval service.
+    - **M3.6b — DONE** — Coverage and missing-range planning.
+    - **M3.6c — READY / NEXT** — Local-first historical retrieval service.
     - **M3.6d — PLANNED** — Integration and failure validation.
   - **M3.7 — RESERVED** — Historical source policy/runtime wiring.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
@@ -88,6 +88,16 @@ M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservat
 **Required evidence:** No coverage, full coverage, coverage outside the request, partial beginning/end, internal and multiple disjoint coverage, overlapping/touching/nested/duplicate coverage, permitted unordered input, and exact boundaries. See the [Validation Plan](../validation/VALIDATION_PLAN.md#m36b-coverage-and-missing-range-planning).
 
 **Dependencies:** AD-008.
+
+**Completion evidence:**
+
+- Implementation commit: `1e8065a Add historical coverage planner`
+- Focused historical coverage tests: 25 passed
+- All market-data tests: 51 passed
+- Full suite: 111 passed
+- Interval contract: half-open `[start, end)`
+- SQLiteCandleStore and HistoricalFeed behavior unchanged
+- No provider, source-policy, or local-first orchestration added
 
 ### M3.6c — Local-first historical retrieval service
 
