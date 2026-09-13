@@ -137,7 +137,9 @@ A task may be DONE only when its accepted evidence and required documentation sy
 
 ## 4. M3.6b — Coverage and missing-range planning
 
-M3.6b deals only with retrieval coverage and deterministic missing-range planning. It excludes broker/provider wiring, SQLite orchestration, expected-bar generation, market or holiday calendars, timezone conversion, arbitrary naive/aware normalization and source-policy implementation.
+M3.6b deals only with retrieval coverage and deterministic missing-range planning. Request, coverage and returned missing ranges use half-open `[start, end)` intervals: start is included and end is excluded. It excludes broker/provider wiring, SQLite orchestration, expected-bar generation, market or holiday calendars, timezone conversion, arbitrary naive/aware normalization and source-policy implementation.
+
+The planner contract does not change SQLiteCandleStore.load(), whose candle-read range is inclusive at both ends. Any adapter between those semantics belongs to M3.6c.
 
 Required focused cases:
 
@@ -150,16 +152,16 @@ Required focused cases:
 7. An internal covered interval produces two missing intervals.
 8. Multiple disjoint covered intervals produce all missing intervals.
 9. Overlapping coverage intervals are reconciled for planning.
-10. Touching intervals obey the explicitly selected endpoint convention.
+10. Touching intervals are continuous coverage under the half-open convention.
 11. Nested intervals do not create false gaps.
 12. Duplicate intervals do not change the result.
-13. Unordered intervals are either accepted deterministically or rejected by an explicit contract.
+13. Unordered intervals are accepted and normalized deterministically.
 14. Coverage extending outside the request is clipped to the request.
-15. Exact start and end boundaries follow the declared inclusive/exclusive convention.
+15. Exact request-start and request-end boundaries obey `[start, end)`.
 16. Invalid request or coverage intervals are rejected explicitly.
 17. Incompatible naive/aware timestamps produce a clear error rather than implicit conversion.
 
-Acceptance evidence must identify the interval convention precisely. It must not infer expected market bars from coverage.
+Acceptance evidence must show that returned missing ranges are chronological, non-overlapping and non-empty. It must not infer expected market bars from coverage.
 
 ## 5. V1 release gates
 

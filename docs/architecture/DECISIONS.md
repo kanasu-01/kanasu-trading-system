@@ -88,6 +88,10 @@ Source policy
 
 M3.6b defines retrieval coverage and deterministic missing-range planning. It must not silently introduce market/holiday calendars, expected-bar generation, provider wiring, SQLite orchestration, timezone conversion, arbitrary naive/aware normalization, or source-policy implementation.
 
+M3.6b coverage intervals are half-open: `[start, end)`. The start is included and the end is excluded. Overlapping and touching coverage is continuous for planning, so subtraction requires no datetime epsilon or timeframe assumption.
+
+This is the coverage planner's interval contract. It does not change SQLiteCandleStore.load(), whose candle-read range remains inclusive at both ends. Translating between those contracts belongs to M3.6c.
+
 Retrieval coverage states what request interval has trustworthy retrieval evidence under a declared contract. Expected-bar completeness asks whether every market event or bar that should exist is represented; answering that later may require session, calendar, suspension, source and instrument semantics.
 
 ### AD-009 — Explicit historical source policy
