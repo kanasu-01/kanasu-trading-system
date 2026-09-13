@@ -43,11 +43,11 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M3.3b — DONE** — Dataset timezone identity metadata.
   - **M3.4 — DONE** — Candle sequence integrity.
   - **M3.5 — DONE** — Safe historical chunk composition.
-  - **M3.6 — IN_PROGRESS** — Local historical persistence and retrieval.
+  - **M3.6 — DONE** — Local historical persistence and retrieval.
     - **M3.6a — DONE** — SQLite candle persistence.
     - **M3.6b — DONE** — Coverage and missing-range planning.
     - **M3.6c — DONE** — Local-first historical retrieval service.
-    - **M3.6d — READY / NEXT** — Integration and failure validation.
+    - **M3.6d — DONE** — Integration and failure validation.
   - **M3.7 — RESERVED** — Historical source policy/runtime wiring.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
 
@@ -128,11 +128,34 @@ M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservat
 
 ### M3.6d — Integration and failure validation
 
-**Status:** READY / NEXT. Implementation and validation have not started.
+**Status:** DONE.
 
 **Outcome:** Prove the store, coverage representation, retrieval service and historical validation work together under success and failure.
 
 **Required evidence:** Atomic consistency between accepted candles and coverage claims, durable reuse, partial-response handling, rollback/conflict behavior, and explicit errors for incompatible timestamp styles.
+
+**Completion evidence:**
+
+- Validation commit: `dc5bda3 Add M3.6d integration validation`
+- Focused M3.6d integration suite: 11 passed
+- M3.6 neighborhood: 93 passed
+- All market-data tests: 110 passed
+- Full suite: 170 passed
+- Post-commit full suite: 170 passed
+- No production-code correction required
+- Cold-to-warm durable retrieval was proven
+- Earlier accepted results survive later provider failure
+- Partial results resume only remaining gaps
+- Rollback is per accepted provider result
+- Raw coverage rows integrate correctly with planner reconciliation
+- Incompatible timestamp-awareness state fails safely before provider access
+- Corrupt legacy duplicate logical timestamps are rejected, not repaired
+- Half-open service semantics survive persistence and reload
+- Confirmed-empty coverage is durably reusable
+- `DatasetContext` isolation is preserved
+- No source policy, broker authentication behavior, provider construction, HistoricalFeed wiring or M3.7 implementation was added
+
+**M3.6 completion boundary:** M3.6a–M3.6d are DONE at the accepted local persistence, coverage-planning, retrieval-service and integration-validation scope. This does not establish runtime source selection, broker-free offline startup, historical-path parity, backtest validity, paper-trading readiness or V1 release readiness.
 
 ### M3.7 — Historical source policy/runtime wiring
 

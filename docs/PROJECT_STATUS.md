@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `1c4a877 Add local-first historical retrieval` |
-| Latest reported test baseline | `159 passed at 1c4a877` |
+| Implementation verification baseline | `dc5bda3 Add M3.6d integration validation` |
+| Latest reported test baseline | `170 passed at dc5bda3` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.6 — Local Historical Persistence and Retrieval |
-| Lifecycle | IN_PROGRESS |
-| Next coding task | M3.6d — Integration and Failure Validation |
+| Lifecycle | DONE |
+| Next planned review | M3.7 — Historical Source Policy / Runtime Wiring baselining; coding is not yet authorized |
 
-The 159-test full suite was rerun after implementation commit `1c4a877` and passed.
+The 170-test full suite was rerun after validation commit `dc5bda3` and passed.
 
 ## Completed foundation
 
@@ -33,6 +33,8 @@ The 159-test full suite was rerun after implementation commit `1c4a877` and pass
 - M3.6a — SQLite candle persistence
 - M3.6b — Coverage and missing-range planning
 - M3.6c — Local-first historical retrieval service
+- M3.6d — Integration and failure validation
+- M3.6 — Local historical persistence and retrieval
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -57,15 +59,32 @@ The accepted M3.6c contract keeps persistent retrieval coverage separate from st
 
 Service requests and coverage use half-open `[start, end)` intervals while SQLite candle reads remain inclusive. A `DatasetContext` cannot mix naive and aware persisted timestamps, but different aware offsets remain supported through Python datetime semantics. Equivalent aware timestamps for the same instant are one candle identity, with the first stored representation retained. No timezone normalization was introduced.
 
+## M3.6d validation evidence
+
+- Focused M3.6d integration suite: 11 passed
+- M3.6 coverage/store/retrieval/integration neighborhood: 93 passed
+- All market-data tests: 110 passed
+- Full suite: 170 passed
+- Post-commit full suite: 170 passed
+- `git diff --check`: passed
+- Validation commit: `dc5bda3 Add M3.6d integration validation`
+- Production code changes: none
+
+The integration evidence proves that complex cold retrieval becomes durable warm retrieval and that fully covered durable state avoids provider calls. Earlier accepted gaps survive a later provider failure, rollback is scoped to the failing provider result, and partial retrieval resumes only the actual remaining gaps. Raw overlapping or touching coverage is reconciled by the planner. Incompatible persisted/request awareness fails before provider access, while legacy same-instant cross-offset duplicate rows are rejected rather than repaired. Half-open service boundaries remain correct after durable reload, confirmed-empty coverage remains durable evidence, and `DatasetContext` isolation holds across complete retrieval lifecycles.
+
+M3.6d required no production correction. The existing M3.6c implementation satisfied all new integration cases.
+
 ## Current work
 
-M3.6c is complete.
+M3.6d is complete.
 
-M3.6d — Integration and Failure Validation is the next planned coding task and has not started. Its existing roadmap scope is to prove that the store, coverage representation, retrieval service and historical validation work together under success and failure, including atomic consistency, durable reuse, partial responses, rollback/conflicts and incompatible timestamp errors. M3.6c evidence does not complete M3.6d.
+M3.6 — Local Historical Persistence and Retrieval is complete at its accepted scope.
+
+The next roadmap candidate is M3.7 — Historical Source Policy / Runtime Wiring. M3.7 remains RESERVED pending a separate baselining/design review and is not yet authorized or IN_PROGRESS.
 
 ## Important V1 blockers
 
-- M3.6d integration and failure validation;
+- M3.7 historical source policy/runtime wiring;
 - historical-path parity and reproducibility;
 - backtest validity and reproducible research records;
 - WFA termination, configuration propagation, and account-metric validity;
