@@ -7,8 +7,9 @@
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
-| HEAD | `4305697 Add SQLite candle persistence` |
-| Latest reported test baseline | 86 passed |
+| Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
+| Implementation verification baseline | `4305697 Add SQLite candle persistence` |
+| Latest reported test baseline | `86 passed at 4305697` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
@@ -16,7 +17,7 @@
 | Lifecycle | IN_PROGRESS |
 | Next coding task | M3.6b — Coverage and Missing-Range Planning |
 
-The 86-test result is previously verified evidence at this baseline. Tests were not rerun during the documentation migration dated above.
+The 86-test result was previously verified at implementation baseline `4305697`. Tests were not rerun during the documentation migration committed at `170f618`.
 
 ## Completed foundation
 
