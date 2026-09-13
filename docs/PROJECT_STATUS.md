@@ -13,9 +13,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
-| Step | M3.6 — Local Historical Persistence and Retrieval |
-| Lifecycle | DONE |
-| Next planned review | M3.7 — Historical Source Policy / Runtime Wiring baselining; coding is not yet authorized |
+| Step | M3.7 — Historical Source Policy / Runtime Wiring |
+| Lifecycle | READY |
+| Next coding task | M3.7a — Historical Source Policy Contract |
 
 The 170-test full suite was rerun after validation commit `dc5bda3` and passed.
 
@@ -76,11 +76,9 @@ M3.6d required no production correction. The existing M3.6c implementation satis
 
 ## Current work
 
-M3.6d is complete.
-
 M3.6 — Local Historical Persistence and Retrieval is complete at its accepted scope.
 
-The next roadmap candidate is M3.7 — Historical Source Policy / Runtime Wiring. M3.7 remains RESERVED pending a separate baselining/design review and is not yet authorized or IN_PROGRESS.
+M3.7 — Historical Source Policy / Runtime Wiring is baselined and READY. M3.7a — Historical Source Policy Contract is the next authorized coding task. M3.7b–M3.7d are PLANNED and have not started. M3.8 remains RESERVED.
 
 ## Important V1 blockers
 

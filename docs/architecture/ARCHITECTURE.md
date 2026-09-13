@@ -20,7 +20,7 @@ This document owns Kanasu's current and target system architecture. It describes
 | Area | Current responsibility |
 |---|---|
 | core/entities | Candle, CandleSeries, signals, positions, trades and other domain entities. |
-| core/market_data | Feed abstractions, historical chunk retrieval/composition, mock live replay, canonical CSV parsing, and SQLite candle persistence. |
+| core/market_data | Feed abstractions, historical chunk retrieval/composition, mock live replay, canonical CSV parsing, SQLite candle/coverage persistence, deterministic missing-range planning, and validated local-first retrieval. |
 | core/data_loaders | Compatibility import path delegating CSV parsing to core/market_data. |
 | core/broker | Broad broker abstraction plus current AngelOne and legacy CSV implementations. |
 | core/strategies | Strategy contracts, strategy runner, and strategy implementations. |
@@ -60,7 +60,7 @@ browser → API routes
     → fixed mock backtest response OR paper session metadata
 ~~~
 
-SQLiteCandleStore is implemented but is not yet used by backtest, WFA, or paper orchestration.
+SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. Backtest and WFA do not yet consume that source-composition path; they still use broker-backed HistoricalFeed directly.
 
 ## 5. Simulated execution and accounting
 
@@ -100,7 +100,9 @@ HistoricalFeed.stream() validates each returned broker chunk, rejects same-chunk
 
 core.market_data.csv_candle_loader is the canonical CSV parser. core.data_loaders.csv_candle_loader is a compatibility wrapper.
 
-SQLiteCandleStore persists candles by deterministic dataset identity plus ISO timestamp. It provides inclusive range reads, chronological database query ordering, exact-duplicate idempotence, conflict rejection, atomic batch save, and persistence across instances.
+SQLiteCandleStore persists candles and explicit retrieval coverage by deterministic dataset identity. It provides inclusive candle reads using parsed Python datetime comparison, exact-duplicate idempotence, conflict rejection, transactional candle-plus-coverage writes, and persistence across instances. It preserves timestamp representation, rejects mixed naive/aware dataset state, and permits differing aware offsets under Python datetime semantics.
+
+The M3.6 coverage planner deterministically subtracts persisted half-open coverage from a requested `[start, end)` interval. LocalFirstHistoricalService uses that planner, fetches only missing ranges from an injected provider, validates explicit provider evidence and canonical candle sequence, persists accepted results transactionally, and reloads a chronological half-open result. Confirmed-empty and partial coverage are explicit; candle presence never implies retrieval coverage. Durable cold-to-warm reuse and failure behavior are validated.
 
 Dataset identity currently contains:
 
@@ -114,11 +116,12 @@ Timezone identity does not imply timestamp localization or conversion.
 
 ### KNOWN DIVERGENCES
 
-- The persistent store has no coverage or retrieval orchestration yet.
-- ISO timestamp text filtering/order is not a general cross-offset chronology and can conflict with incompatible naive/aware request bounds.
-- Provider empty/partial response and completeness semantics are not established.
+- The M3.6 local persistence/retrieval capabilities are not yet wired into backtest or WFA runtime source selection.
+- Backtest and WFA still construct broker-backed HistoricalFeed directly, and main constructs/authenticates AngelOne before historical-source need is known.
+- Historical source policy and lazy provider construction are not yet implemented in runtime configuration/composition.
+- AngelOne currently rejects an empty historical candle result; the future provider adapter must establish confirmed-empty behavior without inferring expected bars.
+- BacktestConfig request boundaries can be naive while external provider timestamps can be aware; the adapter/runtime boundary must make compatibility explicit without silent normalization.
 - Historical CSV export and legacy CSVBroker/replay paths retain stale contracts.
-- Main currently authenticates a broker before mode selection, so a conceptually local run is not fully local.
 
 ## 7. Research architecture
 
@@ -154,8 +157,9 @@ The backend remains the intended authority for trading and account state. The fr
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
 
-- local storage is not integrated into a local-first historical service;
-- retrieval coverage is not represented;
+- local-first persistence and retrieval are not wired into backtest/WFA source selection;
+- main constructs and authenticates AngelOne before historical-source need is known;
+- explicit source-policy selection and lazy external-provider construction remain unimplemented;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;
@@ -168,9 +172,20 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 ### TARGET
 
 ~~~text
-CSV / broker historical API / local SQLite / live provider
+Backtest / WFA historical request
                          ↓
-       source parsing + normalization boundary
+      explicit historical-source composition
+       ├─ LOCAL_ONLY → local store/coverage only
+       ├─ LOCAL_FIRST → local store/coverage → missing ranges only
+       │                                      ↓
+       │                              lazy HistoricalProvider
+       └─ PROVIDER_BACKED → required HistoricalProvider
+                                              ↓
+                  broker adapter → HistoricalFeed → BaseBroker
+                         ↓
+           accepted candles and explicit coverage
+                         ↓
+             local persistence and validation
                          ↓
           canonical validated Candle stream
                          ↓
@@ -187,7 +202,7 @@ CSV / broker historical API / local SQLite / live provider
                 responsive frontend
 ~~~
 
-Historical retrieval should be a small service that combines explicit source policy, trusted retrieval coverage, the local store, provider access, and the existing validation boundaries. A fully local request should not require broker authentication. The service must distinguish stored candles, retrieval coverage, expected-bar completeness, and source policy.
+Historical source composition combines explicit policy, trusted retrieval coverage, the local store, lazy provider access, and existing validation boundaries. `LOCAL_ONLY` and fully covered `LOCAL_FIRST` requests do not construct a provider or authenticate a broker; `PROVIDER_BACKED` requires external access. Source policy remains separate from `RuntimeMode` and from broker capability. HistoricalFeed retains broker chunk composition/validation beneath the provider adapter. The composition layer continues to distinguish stored candles, retrieval coverage, expected-bar completeness, and source policy.
 
 Live paper uses real market data but simulated execution and authoritative simulated accounting. Real broker execution belongs to V2 behind order identity, reconciliation, recovery and operational safety contracts.
 

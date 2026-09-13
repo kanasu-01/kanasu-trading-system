@@ -96,11 +96,25 @@ Retrieval coverage states what request interval has trustworthy retrieval eviden
 
 ### AD-009 — Explicit historical source policy
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
-Historical consumers select an explicit local-only, local-first or provider-backed policy. A request satisfiable from local storage should not require broker authentication.
+**Target:** M3.7
 
-Target step: M3.7.
+Historical source composition owns an explicit policy above local persistence and external-provider capabilities:
+
+- `LOCAL_ONLY` uses persisted local retrieval evidence only. It never constructs or contacts an external provider and never requires broker authentication. Complete local coverage returns local candles; incomplete coverage fails explicitly with the remaining missing ranges and cannot fall back to a provider.
+- `LOCAL_FIRST` checks trusted local coverage first. Complete local coverage returns without invoking a provider factory, constructing a broker or logging in. When coverage is incomplete, provider construction is lazy and occurs only after the missing ranges are known; only those ranges are fetched through the accepted M3.6 contracts.
+- `PROVIDER_BACKED` requires external provider access for the requested interval. Pre-existing local coverage cannot suppress that access or independently declare the provider-sourced request complete, though local state remains available for persistence and conflict handling.
+
+Source policy is not a `BaseBroker` or `AngelOneBroker` responsibility. `RuntimeMode` answers which operation Kanasu runs; historical source policy answers where historical data may or must come from. The two concepts remain independent. Backtest and WFA should consume canonical historical candles without owning the local/provider choice.
+
+The broker historical provider adapter must reuse `HistoricalFeed`, which continues to own broker request limits, chunk traversal, overlap reconciliation, duplicate/conflict rejection and chronological chunk validation. A successfully completed external request supplies explicit coverage for its requested interval, including a confirmed-empty result with no candles. Coverage is never inferred from candle count, first/last timestamps, spacing or an expected number of bars. Provider failures and malformed results create no coverage claim; market calendars, holiday/session inference and expected-bar completeness remain outside this decision.
+
+M3.7 preserves M3.6 timestamp fidelity and comparison rules. It does not normalize to UTC, localize timestamps, strip offsets or silently convert naive/aware values. Request/provider awareness compatibility must be explicit. Current `BacktestConfig` boundaries can be naive while provider timestamps can be aware, so this is a required design and validation concern.
+
+Current AngelOne historical retrieval rejects an empty candle result. M3.7b must determine and test the minimal adapter or broker correction needed to support confirmed-empty external evidence; this acceptance does not claim that concern is fixed.
+
+Accepted during M3.7 baselining. External provider construction is lazy, and only M3.7a is authorized as the next coding task by this baseline.
 
 ### AD-010 — Real-data paper with simulated authority
 

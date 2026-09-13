@@ -48,7 +48,11 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.6b — DONE** — Coverage and missing-range planning.
     - **M3.6c — DONE** — Local-first historical retrieval service.
     - **M3.6d — DONE** — Integration and failure validation.
-  - **M3.7 — RESERVED** — Historical source policy/runtime wiring.
+  - **M3.7 — READY** — Historical source policy/runtime wiring.
+    - **M3.7a — READY / NEXT** — Historical source policy contract.
+    - **M3.7b — PLANNED** — Broker historical provider adapter.
+    - **M3.7c — PLANNED** — Backtest/WFA runtime wiring and lazy provider construction.
+    - **M3.7d — PLANNED** — Source-policy integration and failure validation.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
 
 ### P2 — Trusted Research Engine
@@ -69,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7 is baselined; only M3.7a is authorized as the next coding task.
 
 ## Near-term detailed work
 
@@ -159,9 +163,53 @@ M3.7, M3.8 and M4–M9 are reserved proposals until formally baselined. Reservat
 
 ### M3.7 — Historical source policy/runtime wiring
 
-**Status:** RESERVED.
+**Status:** READY.
 
-Candidate outcome: explicit local-only, local-first and provider-backed behavior. Fully local execution should not require broker authentication.
+**Outcome:** Put an explicit historical-source composition boundary above local persistence and external-provider capabilities, then wire backtest and WFA to it without moving source policy into broker adapters.
+
+**Accepted policies:**
+
+- `LOCAL_ONLY` uses persisted retrieval evidence only, never constructs or contacts an external provider, and fails with the remaining missing ranges when local coverage is incomplete.
+- `LOCAL_FIRST` checks trusted local coverage first and constructs an external provider only after actual missing ranges are known. Complete local coverage requires no provider construction or broker authentication.
+- `PROVIDER_BACKED` requires external provider access for the requested interval even when local coverage already exists. Existing local state remains available for persistence and conflict handling but cannot alone complete the request.
+
+`RuntimeMode` selects the operation Kanasu runs; historical source policy selects where historical data may or must come from. These are independent configuration concerns. HistoricalFeed retains ownership of broker request limits, chunk traversal and broker-chunk validation/composition. See accepted AD-009 and the [Validation Plan](../validation/VALIDATION_PLAN.md#m37-historical-source-policy-runtime-wiring).
+
+#### M3.7a — Historical source policy contract
+
+**Status:** READY / NEXT.
+
+**Outcome:** Define and test the policy-selection boundary for `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` using fake providers and factories.
+
+**Required evidence:** `LOCAL_ONLY` never invokes a provider factory and fails clearly on incomplete coverage; fully covered `LOCAL_FIRST` avoids provider construction; missing `LOCAL_FIRST` coverage invokes the provider lazily; `PROVIDER_BACKED` requires provider access despite existing local coverage; source policy remains independent of `RuntimeMode`; and the policy contract introduces no broker-specific dependency.
+
+M3.7a is the only coding task authorized by this baseline.
+
+#### M3.7b — Broker historical provider adapter
+
+**Status:** PLANNED.
+
+**Outcome:** Adapt the accepted `HistoricalProvider` contract to broker historical retrieval through `HistoricalFeed`, preserving HistoricalFeed ownership of chunk composition and validation.
+
+**Required evidence:** Successful requests emit explicit coverage; a successful zero-candle request can express confirmed-empty coverage; provider failure creates no coverage; malformed or conflicting broker data still fails; timestamp-awareness compatibility is explicit; and no market-calendar or expected-bar inference is introduced. This step determines whether AngelOne needs a minimal correction for its current rejection of empty results.
+
+#### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
+
+**Status:** PLANNED.
+
+**Outcome:** Make backtest and WFA consume historical candles through source composition instead of requiring immediate broker construction or owning source-selection logic.
+
+**Required evidence:** `LOCAL_ONLY` and fully cached `LOCAL_FIRST` require no AngelOne credentials or login; missing `LOCAL_FIRST` coverage constructs the provider/broker only after gaps are known; and `PROVIDER_BACKED` requires the provider/broker.
+
+#### M3.7d — Source-policy integration and failure validation
+
+**Status:** PLANNED.
+
+**Outcome:** Validate complete source-policy and research-runtime behavior under success and failure.
+
+**Required evidence:** Fully local offline execution; warm `LOCAL_FIRST` operation without broker authentication; missing-gap provider fallback; mandatory `PROVIDER_BACKED` access; provider construction/login failure behavior; no false coverage after failure; confirmed-empty external results; explicit timestamp-awareness incompatibility; identical source-policy semantics in backtest and WFA; and DW-011 resolution evidence.
+
+DW-011 remains OPEN until M3.7d closure.
 
 ### M3.8 — Historical-path parity and reproducibility
 

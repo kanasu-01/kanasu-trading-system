@@ -208,7 +208,44 @@ Required integration evidence:
 
 Atomicity is per accepted provider result, not one transaction spanning the entire multi-gap `retrieve()` call. M3.6d adds no source-policy, broker-authentication or provider-construction behavior.
 
-## 7. V1 release gates
+<a id="m37-historical-source-policy-runtime-wiring"></a>
+
+## 7. M3.7 — Historical source policy/runtime wiring
+
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. These requirements are baselined, not yet validated.
+
+Cross-step invariants:
+
+1. `LOCAL_ONLY` never invokes a provider factory, constructs a broker or authenticates externally; incomplete local coverage fails with the remaining missing ranges.
+2. Fully covered `LOCAL_FIRST` retrieval never invokes a provider factory, constructs a broker or authenticates externally.
+3. Missing `LOCAL_FIRST` coverage constructs the provider lazily only after gaps are known and fetches only those gaps.
+4. `PROVIDER_BACKED` requires provider access for the requested interval even when local coverage exists.
+5. Broker authentication occurs only when external capability is required by policy and request state.
+6. Stored candles, retrieval coverage, expected-bar completeness and source policy remain distinct; M3.6 half-open coverage and transactional evidence semantics remain unchanged.
+7. A successfully confirmed empty external response can provide explicit coverage; coverage is never inferred from candle count, first/last timestamps, spacing or expected bars.
+8. Provider failure or malformed results create no false coverage.
+9. Historical source policy is independent of `RuntimeMode`.
+10. Backtest and WFA ultimately consume identical source-policy semantics without owning source selection.
+11. No expected-bar, market-calendar, holiday or session inference is introduced.
+12. No timestamp normalization, localization, offset stripping or silent naive/aware conversion is introduced; request/provider awareness compatibility is explicit.
+
+### M3.7a — Historical source policy contract
+
+Use fake providers and factories to prove policy selection in isolation: zero factory calls for `LOCAL_ONLY`; explicit missing ranges for incomplete local coverage; zero factory calls for fully covered `LOCAL_FIRST`; lazy construction for missing `LOCAL_FIRST` gaps; mandatory access for `PROVIDER_BACKED`; independence from `RuntimeMode`; and no dependency on `BaseBroker`, AngelOne or another broker implementation.
+
+### M3.7b — Broker historical provider adapter
+
+Prove that the adapter implements the accepted `HistoricalProvider` result contract through `HistoricalFeed`. Successful retrieval emits explicit requested coverage, including confirmed-empty retrieval; failure emits none. HistoricalFeed must continue to own request limits, chunk traversal, overlap reconciliation and malformed/conflicting chunk rejection. Tests must make request/provider awareness compatibility explicit and must not infer expected bars. Determine with evidence whether AngelOne requires a minimal empty-result correction.
+
+### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
+
+Prove that backtest and WFA obtain historical candles through the source-composition boundary. `LOCAL_ONLY` and warm `LOCAL_FIRST` runs require no AngelOne credentials, construction or login; missing `LOCAL_FIRST` coverage constructs external capability only after gaps are known; `PROVIDER_BACKED` requires it. Neither runtime may duplicate policy decisions.
+
+### M3.7d — Source-policy integration and failure validation
+
+Prove fully local offline operation, warm local-first operation without authentication, missing-gap fallback, mandatory provider-backed access, provider-construction/login failure behavior, absence of false coverage after failure, confirmed-empty external behavior, explicit awareness incompatibility, and common backtest/WFA semantics. DW-011 may close only with this accepted runtime evidence.
+
+## 8. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
 
