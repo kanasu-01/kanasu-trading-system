@@ -163,7 +163,31 @@ Required focused cases:
 
 Acceptance evidence must show that returned missing ranges are chronological, non-overlapping and non-empty. It must not infer expected market bars from coverage.
 
-## 5. V1 release gates
+<a id="m36c-local-first-historical-retrieval-service"></a>
+
+## 5. M3.6c — Local-first historical retrieval service
+
+M3.6c composes persistent retrieval coverage, the M3.6b planner, an injected provider contract, and local candle persistence. Service requests and provider coverage use half-open `[start, end)` intervals. `SQLiteCandleStore.load()` remains inclusive at both ends; the service adapter excludes a candle exactly at the request end without using a datetime epsilon or timeframe duration.
+
+Required focused evidence:
+
+1. A fully covered request, including sparse or confirmed-empty local data, makes no provider call.
+2. Stored candles without retrieval coverage still require provider evidence.
+3. Partial coverage and multiple coverage islands request only the planned missing gaps.
+4. Full provider success persists candles and explicit coverage for reuse by a fresh store/service instance.
+5. Confirmed-empty coverage is persisted without inferring expected bars.
+6. A partial provider result persists only its claimed coverage, reports the remaining gaps, and a later call requests only those gaps.
+7. Provider failure or missing coverage evidence creates no false coverage claim.
+8. Coverage outside the requested gap, candles outside the gap or explicit coverage, incompatible timezone awareness, and malformed candle sequences are rejected before persistence.
+9. Exact stored candle overlap is idempotent; conflicting overlap rolls back new candles and coverage from that provider result.
+10. Candle and coverage state remain isolated by complete `DatasetContext` identity.
+11. SQLite candle and coverage writes are transactional and durably visible across instances.
+12. SQLite inclusive reads filter and order parsed datetimes with Python comparison semantics across aware offsets, reject naive/aware incompatibility clearly, and preserve timestamp offsets and precision without conversion. Each `DatasetContext` persists one awareness style across candle and coverage timestamps, while differing aware offsets remain valid. Equivalent aware timestamps with different serialized offsets form one candle identity while retaining the first stored representation; conflicting OHLCV is rejected transactionally.
+13. The half-open service result includes the request start and excludes the request end while leaving the inclusive store API unchanged.
+
+Acceptance evidence must confirm that M3.6c adds no broker authentication, provider construction, runtime source-policy selection, expected-bar logic, calendar/session inference, or timestamp normalization. DW-010 remains open until closure review determines the documented local-store compatibility concern is fully resolved in its intended scope.
+
+## 6. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
 

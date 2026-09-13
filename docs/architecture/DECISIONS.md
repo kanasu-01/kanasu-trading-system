@@ -126,6 +126,18 @@ API and UI results come from actual research jobs and authoritative runtime snap
 
 Target milestone: M8.
 
+### AD-013 — Local historical retrieval evidence and timestamp comparison
+
+**Status:** ACCEPTED
+
+**Target:** M3.6c
+
+Local historical retrieval uses explicit coverage supplied by the provider result. Candle presence, candle count, spacing, and first or last timestamps do not imply retrieval coverage. A result with full coverage is successful whether it contains candles or confirms an empty interval; subset coverage is partial; a result without coverage evidence is unknown and rejected; and a provider failure creates no coverage claim.
+
+Persisted ISO timestamps are parsed back to Python `datetime` values for chronological ordering and range filtering. Within one `DatasetContext`, persisted candle and retrieval-coverage timestamps use one timezone-awareness style; differing aware offsets remain valid and use normal Python comparison semantics. Aware timestamps representing the same absolute instant are one candle identity even when their serialized offsets differ; the existing stored representation is retained. The store does not localize, normalize, strip offsets, or otherwise convert timestamp identity. Dataset timezone remains metadata.
+
+Candles and coverage from one accepted provider result are persisted in one SQLite transaction. If candle persistence conflicts or fails, its coverage is rolled back with it. Historical source-policy selection and provider construction remain outside M3.6c and are targeted by M3.7.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.
