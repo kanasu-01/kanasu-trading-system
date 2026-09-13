@@ -185,9 +185,30 @@ Required focused evidence:
 12. SQLite inclusive reads filter and order parsed datetimes with Python comparison semantics across aware offsets, reject naive/aware incompatibility clearly, and preserve timestamp offsets and precision without conversion. Each `DatasetContext` persists one awareness style across candle and coverage timestamps, while differing aware offsets remain valid. Equivalent aware timestamps with different serialized offsets form one candle identity while retaining the first stored representation; conflicting OHLCV is rejected transactionally.
 13. The half-open service result includes the request start and excludes the request end while leaving the inclusive store API unchanged.
 
-Acceptance evidence must confirm that M3.6c adds no broker authentication, provider construction, runtime source-policy selection, expected-bar logic, calendar/session inference, or timestamp normalization. DW-010 remains open until closure review determines the documented local-store compatibility concern is fully resolved in its intended scope.
+Acceptance evidence must confirm that M3.6c adds no broker authentication, provider construction, runtime source-policy selection, expected-bar logic, calendar/session inference, or timestamp normalization. DW-010 is resolved for the accepted M3.6c timestamp-compatibility scope; DW-014 retains indexing, scalability and legacy-state migration concerns.
 
-## 6. V1 release gates
+<a id="m36d-integration-and-failure-validation"></a>
+
+## 6. M3.6d — Integration and failure validation
+
+M3.6d validates the existing M3.6 storage, retrieval coverage, missing-range planning, local-first retrieval, provider-result validation and canonical CandleSeries sequence boundary together. It does not redefine their accepted contracts.
+
+Required integration evidence:
+
+1. Complex cold retrieval across multiple planned gaps persists accepted results and becomes a warm retrieval requiring no provider call through a fresh store/service instance.
+2. An earlier accepted provider result remains durable when a later gap's provider call fails, and gaps after that failure are not requested during the failed call.
+3. Partial provider evidence persists only its explicit subset, the final incomplete error identifies the actual remaining ranges, and a later call resumes only those ranges.
+4. A conflicting later provider result rolls back its new candles and coverage while preserving results accepted for earlier gaps.
+5. Raw overlapping and touching coverage rows remain unmodified in storage and are reconciled by the M3.6b planner.
+6. Incompatible persisted/request timezone awareness fails before provider access without mutating accepted state.
+7. Legacy or corrupt cross-offset duplicate logical timestamps are rejected by CandleSeries validation without silent deduplication, repair or normalization.
+8. The half-open service result includes the request start and excludes its end after durable SQLite reload.
+9. Confirmed-empty coverage remains reusable across fresh instances without provider access.
+10. Candles and coverage remain isolated by complete `DatasetContext` identity through retrieval lifecycles.
+
+Atomicity is per accepted provider result, not one transaction spanning the entire multi-gap `retrieve()` call. M3.6d adds no source-policy, broker-authentication or provider-construction behavior.
+
+## 7. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
 
