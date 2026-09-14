@@ -53,9 +53,9 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — DONE** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — DONE** — Source-policy integration and failure validation.
-  - **M3.8 — READY / NOT AUTHORIZED** — Historical-path parity and reproducibility.
-    - **M3.8a — READY / NOT AUTHORIZED** — Historical input parity.
-    - **M3.8b — BASELINED** — Backtest result parity.
+  - **M3.8 — IN_PROGRESS** — Historical-path parity and reproducibility.
+    - **M3.8a — DONE** — Historical input parity.
+    - **M3.8b — BASELINED / NOT AUTHORIZED** — Backtest result parity.
     - **M3.8c — BASELINED** — Reproducibility identity and research-evidence persistence.
     - **M3.8d — BASELINED** — Integration and repeated-run validation.
 
@@ -77,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 is baselined but not authorized for implementation. M3.8a is the first implementation candidate and also requires separate explicit authorization. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
+M3.8 is IN_PROGRESS and M3.8a is complete at its accepted scope. M3.8b is the next implementation candidate but remains NOT AUTHORIZED and requires separate explicit authorization. M3.8c and M3.8d remain BASELINED. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
 
 ## Near-term detailed work
 
@@ -382,7 +382,7 @@ This evidence validates the accepted M3.7d matrix through the actual research-ru
 
 ### M3.8 — Historical-path parity and reproducibility
 
-**Status:** READY / NOT AUTHORIZED.
+**Status:** IN_PROGRESS.
 
 **Outcome:** Equivalent accepted historical data, used with the same research-relevant configuration, produces equivalent canonical historical input and deterministic stable Backtest output regardless of whether the data arrived through a provider-fresh path or an already persisted local-store path. M3.8 also establishes inspectable deterministic identity for the dataset, research-relevant configuration and stable result.
 
@@ -392,17 +392,32 @@ This milestone proves reproducibility and path parity. It does not establish Bac
 
 #### M3.8a — Historical input parity
 
-**Status:** READY / NOT AUTHORIZED.
+**Status:** DONE.
 
 **Outcome:** Prove that provider-fresh and local-store paths yield exactly equivalent canonical candles when their accepted underlying market data is equivalent.
 
 Required parity covers candle count, chronological order, timestamps, OHLCV values, `DatasetContext`, requested half-open `TimeRange` semantics and confirmed-empty behavior where applicable. Deterministic automated tests use fake/provider evidence and make no real AngelOne or network call. Source provenance may differ while canonical candle content remains equal.
 
-M3.8a is the first implementation candidate. Implementation requires separate explicit authorization after this baseline is reviewed and committed.
+**Completion evidence:**
+
+- Design baseline: `c53c640`
+- Implementation and validation commit: `0a8410ff Validate M3.8a historical input parity`
+- Pre-change full suite: 240 passed
+- Focused M3.8a: 5 passed
+- Source-policy regression: 33 passed
+- All market-data: 152 passed
+- Post-change full suite: 245 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test scope: `tests/market_data/test_historical_input_parity.py`, +247 / -0
+
+The evidence proves durable provider-fresh parity through both `LOCAL_ONLY` and warm `LOCAL_FIRST`, including candle count, chronology, timestamp representation, OHLCV values, half-open request boundaries, confirmed-empty evidence and `DatasetContext` isolation. Deterministic validation required no AngelOne, network or credentials. M3.8a completion does not validate Backtest-result parity, fingerprints/evidence persistence or full M3.8 integration.
 
 #### M3.8b — Backtest result parity
 
-**Status:** BASELINED.
+**Status:** BASELINED / NOT AUTHORIZED.
+
+M3.8b is the next implementation candidate. Implementation requires separate explicit authorization.
 
 **Outcome:** Given the same canonical candles and research-relevant configuration, provider-fresh and warm-local runs produce equivalent stable Backtest outcomes.
 

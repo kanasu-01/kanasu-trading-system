@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `7f968843 Validate M3.7d source-policy integration` |
-| Latest reported test baseline | `240 passed at 7f968843` |
+| Implementation verification baseline | `0a8410ff Validate M3.8a historical input parity` |
+| Latest reported test baseline | `245 passed at 0a8410ff` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.8 — Historical-path parity and reproducibility |
-| Lifecycle | READY / NOT AUTHORIZED |
-| Next implementation candidate | M3.8a — Historical input parity; implementation requires separate explicit authorization after this design baseline is reviewed and committed |
+| Lifecycle | IN_PROGRESS |
+| Next implementation candidate | M3.8b — Backtest result parity; implementation requires separate explicit authorization |
 
-The 240-test full suite was rerun at implementation and validation commit `7f968843` and passed.
+The 245-test full suite was rerun at implementation and validation commit `0a8410ff` and passed.
 
 ## Completed foundation
 
@@ -40,6 +40,7 @@ The 240-test full suite was rerun at implementation and validation commit `7f968
 - M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 - M3.7d — Source-policy integration and failure validation
 - M3.7 — Historical source policy/runtime wiring
+- M3.8a — Historical input parity
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -149,20 +150,37 @@ The default AngelOne-oriented BacktestConfig uses explicit Asia/Kolkata-aware re
 
 M3.7d validated the actual Backtest and WFA source-composition paths across fully offline `LOCAL_ONLY`, warm `LOCAL_FIRST`, missing-range durable reuse, mandatory `PROVIDER_BACKED` access, credential/construction/login and retrieval failures, confirmed-empty evidence, timestamp-awareness incompatibility, and common source-policy semantics. External failures create no false retrieval coverage, accepted earlier results remain durable, and errors and captured logs do not expose the exercised secret value. The existing production implementation satisfied the accepted integration matrix without correction.
 
+## M3.8a validation evidence
+
+- Design baseline: `c53c640`
+- Implementation and validation commit: `0a8410ff Validate M3.8a historical input parity`
+- Pre-change full suite: 240 passed
+- Focused M3.8a: 5 passed
+- Source-policy regression: 33 passed
+- All market-data: 152 passed
+- Post-change full suite: 245 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test scope: `tests/market_data/test_historical_input_parity.py`, +247 / -0
+
+M3.8a proves that equivalent provider-fresh historical data persists through SQLite and reproduces identical canonical candles from fresh local-store instances through both `LOCAL_ONLY` and warm `LOCAL_FIRST`. Candle count, chronology, timestamp representation and OHLCV values remain equal; half-open `[start, end)` boundaries include the request start and exclude the exact request end; confirmed-empty evidence remains durable without warm provider construction; and `DatasetContext` isolation holds. The deterministic validation uses no AngelOne, network or credentials and required no production correction.
+
+M3.8a completion does not validate M3.8b Backtest-result parity, M3.8c fingerprint/evidence persistence or M3.8d full integration.
+
 ## Current work
 
 M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
 
-DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path parity and reproducibility now has a baselined design and is READY / NOT AUTHORIZED. Its permanent child steps are:
+DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path parity and reproducibility is IN_PROGRESS. Its permanent child steps are:
 
-- M3.8a — Historical input parity — READY / NOT AUTHORIZED
-- M3.8b — Backtest result parity — BASELINED
+- M3.8a — Historical input parity — DONE
+- M3.8b — Backtest result parity — BASELINED / NOT AUTHORIZED
 - M3.8c — Reproducibility identity and research-evidence persistence — BASELINED
 - M3.8d — Integration and repeated-run validation — BASELINED
 
 M3.8 will prove that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It will also establish deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval already persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; M3.8 validates that these paths converge without redesigning them unless focused RED evidence proves a defect.
 
-M3.8a is the next implementation candidate. Coding requires separate explicit authorization after this design baseline is reviewed and committed. No M3.8 child is IN_PROGRESS or DONE.
+M3.8a is complete at its accepted scope. M3.8b is the next implementation candidate but remains NOT AUTHORIZED; coding requires separate explicit authorization. M3.8c and M3.8d remain baselined and unimplemented.
 
 ## Important V1 blockers
 

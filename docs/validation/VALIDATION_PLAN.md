@@ -424,13 +424,13 @@ The accepted evidence validates M3.7d through the bounded historical-source/rese
 
 ## 8. M3.8 — Historical-path parity and reproducibility
 
-**Status:** READY / not validated / implementation not authorized
+**Status:** IN_PROGRESS / partially validated through completed M3.8a
 
 M3.8 validates that equivalent accepted historical data and the same research-relevant configuration yield equivalent canonical historical inputs and stable deterministic Backtest outputs through provider-fresh and already persisted local-store paths. It also requires deterministic dataset, configuration and result identities plus inspectable research-evidence persistence. It does not validate Backtest economics or WFA validity.
 
 ### M3.8a — Historical input parity
 
-**Status:** READY / not validated / implementation not authorized
+**Status:** DONE / validated at accepted scope
 
 Authoritative automated tests must use deterministic fake/provider and local-store evidence without broker login or network access. For equivalent accepted data, provider-fresh and warm-local paths must produce equal:
 
@@ -443,6 +443,20 @@ Authoritative automated tests must use deterministic fake/provider and local-sto
 7. confirmed-empty results where applicable.
 
 Source provenance may differ and must be recorded separately; it must not alter otherwise identical canonical candle content.
+
+Completion evidence:
+
+- Design baseline: `c53c640`
+- Implementation commit: `0a8410ff Validate M3.8a historical input parity`
+- Pre-change full suite: 240 passed
+- Focused M3.8a: 5 passed
+- Source-policy regression: 33 passed
+- All market-data: 152 passed
+- Post-change full suite: 245 passed
+- `git diff --check`: passed
+- Production corrections: none
+
+This evidence validates provider-fresh to durable-local parity through `LOCAL_ONLY` and warm `LOCAL_FIRST`, with equal chronology, timestamp representation and OHLCV values. It also validates half-open request boundaries, confirmed-empty durability, `DatasetContext` isolation and deterministic execution without an external provider, network or credentials. No production correction was required.
 
 ### M3.8b — Backtest result parity
 
@@ -489,7 +503,7 @@ Required evidence:
 
 Deterministic fake/local parity is the authoritative automated evidence and belongs in relevant regression suites when changes affect historical retrieval/persistence, candle or dataset identity, Backtest inputs/results, or fingerprint logic. Real AngelOne/provider fresh-to-local smoke validation is optional supplementary milestone/release evidence because authentication, network, rate limits and provider corrections are external variables. Major validation points retain inspectable reference-run evidence; ordinary unit-test runs need not create permanent evidence records.
 
-M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. No M3.8 validation evidence or test count exists until implementation is separately authorized and completed.
+M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a is validated at its accepted scope; M3.8b, M3.8c and M3.8d remain unvalidated.
 
 ## 9. V1 release gates
 
