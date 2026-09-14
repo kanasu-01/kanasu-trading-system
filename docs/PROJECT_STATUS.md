@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `dc5bda3 Add M3.6d integration validation` |
-| Latest reported test baseline | `170 passed at dc5bda3` |
+| Implementation verification baseline | `073f3e9 Add historical source policy contract` |
+| Latest reported test baseline | `186 passed at 073f3e9` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
-| Lifecycle | READY |
-| Next coding task | M3.7a — Historical Source Policy Contract |
+| Lifecycle | IN_PROGRESS |
+| Next planned review | M3.7b — Broker Historical Provider Adapter baselining/design review; coding is not yet authorized |
 
-The 170-test full suite was rerun after validation commit `dc5bda3` and passed.
+The 186-test full suite was rerun at implementation commit `073f3e9` and passed.
 
 ## Completed foundation
 
@@ -35,6 +35,7 @@ The 170-test full suite was rerun after validation commit `dc5bda3` and passed.
 - M3.6c — Local-first historical retrieval service
 - M3.6d — Integration and failure validation
 - M3.6 — Local historical persistence and retrieval
+- M3.7a — Historical source policy contract
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -74,11 +75,24 @@ The integration evidence proves that complex cold retrieval becomes durable warm
 
 M3.6d required no production correction. The existing M3.6c implementation satisfied all new integration cases.
 
+## M3.7a validation evidence
+
+- Implementation commit: `073f3e9 Add historical source policy contract`
+- Focused M3.7a: 16 passed
+- M3.6 + M3.7a neighborhood: 109 passed
+- All market-data: 126 passed
+- Full suite: 186 passed
+- `git diff --check`: passed
+
+M3.7a establishes explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` policies. `LOCAL_ONLY` never invokes a provider. Warm `LOCAL_FIRST` also avoids provider construction, while missing coverage lazily creates one provider and reuses it across every missing gap. `PROVIDER_BACKED` always accesses the provider for the complete request, and completion depends only on that call's explicit coverage; old local coverage cannot mask partial provider evidence. Confirmed-empty provider evidence is valid.
+
+Provider-backed persistence remains non-destructive, and no refresh or replacement policy was introduced. `RuntimeMode` remains independent. M3.7a added no broker, AngelOne, HistoricalFeed, main, backtest or WFA wiring, and introduced no timestamp normalization or expected-bar, calendar or session inference.
+
 ## Current work
 
-M3.6 — Local Historical Persistence and Retrieval is complete at its accepted scope.
+M3.7a is complete at its accepted scope.
 
-M3.7 — Historical Source Policy / Runtime Wiring is baselined and READY. M3.7a — Historical Source Policy Contract is the next authorized coding task. M3.7b–M3.7d are PLANNED and have not started. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7b–M3.7d remain unimplemented. The next planned activity is a separate M3.7b baselining/design review; M3.7b coding is not yet authorized. M3.8 remains RESERVED.
 
 ## Important V1 blockers
 

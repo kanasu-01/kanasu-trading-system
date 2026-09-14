@@ -48,8 +48,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.6b — DONE** — Coverage and missing-range planning.
     - **M3.6c — DONE** — Local-first historical retrieval service.
     - **M3.6d — DONE** — Integration and failure validation.
-  - **M3.7 — READY** — Historical source policy/runtime wiring.
-    - **M3.7a — READY / NEXT** — Historical source policy contract.
+  - **M3.7 — IN_PROGRESS** — Historical source policy/runtime wiring.
+    - **M3.7a — DONE** — Historical source policy contract.
     - **M3.7b — PLANNED** — Broker historical provider adapter.
     - **M3.7c — PLANNED** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — PLANNED** — Source-policy integration and failure validation.
@@ -73,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7 is baselined; only M3.7a is authorized as the next coding task.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a is complete. M3.7b remains PLANNED pending a separate baselining/design review and is not yet authorized for implementation.
 
 ## Near-term detailed work
 
@@ -163,7 +163,7 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 
 ### M3.7 — Historical source policy/runtime wiring
 
-**Status:** READY.
+**Status:** IN_PROGRESS.
 
 **Outcome:** Put an explicit historical-source composition boundary above local persistence and external-provider capabilities, then wire backtest and WFA to it without moving source policy into broker adapters.
 
@@ -177,13 +177,28 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 
 #### M3.7a — Historical source policy contract
 
-**Status:** READY / NEXT.
+**Status:** DONE.
 
 **Outcome:** Define and test the policy-selection boundary for `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` using fake providers and factories.
 
 **Required evidence:** `LOCAL_ONLY` never invokes a provider factory and fails clearly on incomplete coverage; fully covered `LOCAL_FIRST` avoids provider construction; missing `LOCAL_FIRST` coverage invokes the provider lazily; `PROVIDER_BACKED` requires provider access despite existing local coverage; source policy remains independent of `RuntimeMode`; and the policy contract introduces no broker-specific dependency.
 
-M3.7a is the only coding task authorized by this baseline.
+**Completion evidence:**
+
+- Implementation commit: `073f3e9 Add historical source policy contract`
+- Focused M3.7a: 16 passed
+- M3.6 + M3.7a neighborhood: 109 passed
+- All market-data: 126 passed
+- Full suite: 186 passed
+- `HistoricalSourcePolicy` defines all three accepted policies
+- `HistoricalSource` owns policy selection and lazy provider-factory use
+- `LOCAL_FIRST` reuses `LocalFirstHistoricalService`
+- Provider-result validation and half-open loading are shared behavior-preserving helpers
+- Existing M3.6 behavior remains green
+- No runtime wiring or broker adapter work occurred
+- No destructive provider-backed refresh or replacement semantics were introduced
+
+M3.7b remains PLANNED pending a separate baselining/design review and is not yet authorized for implementation.
 
 #### M3.7b — Broker historical provider adapter
 

@@ -20,7 +20,7 @@ This document owns Kanasu's current and target system architecture. It describes
 | Area | Current responsibility |
 |---|---|
 | core/entities | Candle, CandleSeries, signals, positions, trades and other domain entities. |
-| core/market_data | Feed abstractions, historical chunk retrieval/composition, mock live replay, canonical CSV parsing, SQLite candle/coverage persistence, deterministic missing-range planning, and validated local-first retrieval. |
+| core/market_data | Feed abstractions, historical chunk retrieval/composition, mock live replay, canonical CSV parsing, SQLite candle/coverage persistence, deterministic missing-range planning, validated local-first retrieval, and the isolated historical source-policy boundary. |
 | core/data_loaders | Compatibility import path delegating CSV parsing to core/market_data. |
 | core/broker | Broad broker abstraction plus current AngelOne and legacy CSV implementations. |
 | core/strategies | Strategy contracts, strategy runner, and strategy implementations. |
@@ -60,7 +60,7 @@ browser → API routes
     → fixed mock backtest response OR paper session metadata
 ~~~
 
-SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. Backtest and WFA do not yet consume that source-composition path; they still use broker-backed HistoricalFeed directly.
+SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. HistoricalSourcePolicy and HistoricalSource implement the `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` selection contract with lazy provider-factory construction. This policy boundary is validated in isolation. It is not yet wired into AppConfig, main, backtest or WFA, which still use broker-backed HistoricalFeed directly.
 
 ## 5. Simulated execution and accounting
 
@@ -104,6 +104,8 @@ SQLiteCandleStore persists candles and explicit retrieval coverage by determinis
 
 The M3.6 coverage planner deterministically subtracts persisted half-open coverage from a requested `[start, end)` interval. LocalFirstHistoricalService uses that planner, fetches only missing ranges from an injected provider, validates explicit provider evidence and canonical candle sequence, persists accepted results transactionally, and reloads a chronological half-open result. Confirmed-empty and partial coverage are explicit; candle presence never implies retrieval coverage. Durable cold-to-warm reuse and failure behavior are validated.
 
+HistoricalSource owns source-policy selection and accepts a lazy provider factory. `LOCAL_ONLY` and warm `LOCAL_FIRST` retrieval avoid provider construction; missing `LOCAL_FIRST` coverage creates one provider and delegates to LocalFirstHistoricalService; `PROVIDER_BACKED` contacts the provider for the complete request and determines completion from that result's explicit coverage alone. Provider-result validation and half-open local loading are shared with the M3.6 service. Provider-backed persistence is currently non-destructive; refresh and replacement semantics are not established.
+
 Dataset identity currently contains:
 
 ~~~text
@@ -118,7 +120,8 @@ Timezone identity does not imply timestamp localization or conversion.
 
 - The M3.6 local persistence/retrieval capabilities are not yet wired into backtest or WFA runtime source selection.
 - Backtest and WFA still construct broker-backed HistoricalFeed directly, and main constructs/authenticates AngelOne before historical-source need is known.
-- Historical source policy and lazy provider construction are not yet implemented in runtime configuration/composition.
+- The validated HistoricalSource policy boundary is not yet configured through AppConfig or used by main, backtest or WFA. Runtime composition still constructs/authenticates AngelOne before historical-source need is known.
+- No real broker HistoricalProvider adapter exists yet.
 - AngelOne currently rejects an empty historical candle result; the future provider adapter must establish confirmed-empty behavior without inferring expected bars.
 - BacktestConfig request boundaries can be naive while external provider timestamps can be aware; the adapter/runtime boundary must make compatibility explicit without silent normalization.
 - Historical CSV export and legacy CSVBroker/replay paths retain stale contracts.
@@ -159,7 +162,7 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 
 - local-first persistence and retrieval are not wired into backtest/WFA source selection;
 - main constructs and authenticates AngelOne before historical-source need is known;
-- explicit source-policy selection and lazy external-provider construction remain unimplemented;
+- the source-policy contract exists, but runtime selection, provider adaptation and lazy broker construction remain unimplemented;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;

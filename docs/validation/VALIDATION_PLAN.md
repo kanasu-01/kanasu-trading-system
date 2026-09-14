@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. These requirements are baselined, not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a is validated at its accepted isolated policy-contract scope; M3.7b–M3.7d are not yet validated.
 
 Cross-step invariants:
 
@@ -231,7 +231,32 @@ Cross-step invariants:
 
 ### M3.7a — Historical source policy contract
 
-Use fake providers and factories to prove policy selection in isolation: zero factory calls for `LOCAL_ONLY`; explicit missing ranges for incomplete local coverage; zero factory calls for fully covered `LOCAL_FIRST`; lazy construction for missing `LOCAL_FIRST` gaps; mandatory access for `PROVIDER_BACKED`; independence from `RuntimeMode`; and no dependency on `BaseBroker`, AngelOne or another broker implementation.
+**Status:** DONE
+
+**Implementation commit:** `073f3e9 Add historical source policy contract`
+
+**Evidence:** Focused M3.7a: 16 passed; M3.6 + M3.7a neighborhood: 109 passed; all market-data: 126 passed; full suite: 186 passed.
+
+Validated behavior:
+
+1. Complete `LOCAL_ONLY` coverage returns local candles with zero provider-factory calls.
+2. Confirmed-empty `LOCAL_ONLY` coverage returns an empty result with zero provider-factory calls.
+3. Incomplete `LOCAL_ONLY` coverage reports the exact missing ranges.
+4. Stored candles without retrieval coverage do not establish completeness.
+5. Warm `LOCAL_FIRST` retrieval performs zero provider construction.
+6. Missing `LOCAL_FIRST` coverage constructs one provider lazily.
+7. One provider instance serves multiple missing ranges in one retrieval operation.
+8. `PROVIDER_BACKED` accesses the provider for the complete request despite complete local coverage.
+9. Confirmed-empty full provider evidence is accepted.
+10. Provider-backed completeness uses only the current provider result's explicit coverage.
+11. Old local coverage cannot mask partial provider evidence.
+12. Provider access required by policy fails clearly when no provider factory is available.
+13. Provider-backed retrieval reuses the accepted provider-result validation boundary.
+14. All policies reuse the accepted M3.6 half-open result semantics.
+15. Historical source policy remains independent of `RuntimeMode`.
+16. The policy boundary introduces no dependency on BaseBroker, AngelOne or another broker implementation.
+
+Provider-backed cache refresh or replacement semantics remain undefined and persistence remains non-destructive. Broker adapter behavior belongs to M3.7b. Runtime configuration, runtime wiring and lazy broker login belong to M3.7c. End-to-end policy/runtime validation belongs to M3.7d.
 
 ### M3.7b — Broker historical provider adapter
 

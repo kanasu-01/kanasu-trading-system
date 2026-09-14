@@ -114,7 +114,9 @@ M3.7 preserves M3.6 timestamp fidelity and comparison rules. It does not normali
 
 Current AngelOne historical retrieval rejects an empty candle result. M3.7b must determine and test the minimal adapter or broker correction needed to support confirmed-empty external evidence; this acceptance does not claim that concern is fixed.
 
-Accepted during M3.7 baselining. External provider construction is lazy, and only M3.7a is authorized as the next coding task by this baseline.
+Accepted during M3.7 baselining. External provider construction is lazy.
+
+M3.7a implementation evidence: `073f3e9 Add historical source policy contract`.
 
 ### AD-010 — Real-data paper with simulated authority
 
