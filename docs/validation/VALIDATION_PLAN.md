@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a and M3.7b are DONE and validated at their accepted isolated scopes. M3.7c and M3.7d are PLANNED and not yet validated. M3.7 as a whole is not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a and M3.7b are DONE and validated at their accepted isolated scopes. M3.7c is READY / NEXT but not yet validated; M3.7d is PLANNED and not yet validated. M3.7 as a whole is not yet validated.
 
 Cross-step invariants:
 
@@ -298,9 +298,29 @@ Coverage is evidence of successful complete retrieval, not an inference from can
 
 ### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
-**Status:** PLANNED / not yet validated
+**Status:** READY / not yet validated
 
-Prove that backtest and WFA obtain historical candles through the source-composition boundary. `LOCAL_ONLY` and warm `LOCAL_FIRST` runs require no AngelOne credentials, construction or login; missing `LOCAL_FIRST` coverage constructs external capability only after gaps are known; `PROVIDER_BACKED` requires it. Neither runtime may duplicate policy decisions.
+M3.7c proves runtime dependency wiring, source composition and lazy external construction without taking on the wider M3.7d failure matrix.
+
+Required acceptance evidence:
+
+1. Constructing historical source composition alone does not call `AngelOneConfig.load_from_env`, construct a broker or call broker login.
+2. `LOCAL_ONLY` with complete local coverage performs no external construction or login.
+3. Fully cached `LOCAL_FIRST` performs no external construction or login.
+4. Missing `LOCAL_FIRST` invokes the lazy provider only after local retrieval coverage has been examined.
+5. `PROVIDER_BACKED` invokes the external provider despite complete local coverage.
+6. Backtest retrieves candles through HistoricalSource and has no HistoricalFeed or BaseBroker dependency.
+7. WFA retrieves candles through the same HistoricalSource boundary and has no HistoricalFeed or BaseBroker dependency.
+8. Backtest and WFA do not duplicate `LOCAL_ONLY`, `LOCAL_FIRST` or `PROVIDER_BACKED` branching.
+9. Main performs no unconditional broker construction or login before selecting a runtime mode.
+10. The lazy historical provider path calls the existing broker factory with `paper_mode=True` and `enable_historical_api=True`, then composes HistoricalFeed and HistoricalFeedProvider.
+11. Existing HistoricalSource, HistoricalFeedProvider, HistoricalFeed, AngelOne historical, market-data and broader regression suites remain green.
+12. Historical request timestamps pass through unchanged; no UTC normalization, localization, offset stripping or silent awareness conversion is added.
+13. Incompatible request/provider timezone awareness remains an explicit failure.
+
+Configuration evidence must establish that AppConfig owns `historical_source_policy`, `historical_database_path` and `historical_request_delay_sec`, with accepted defaults `LOCAL_FIRST`, `data/historical.sqlite3` and the existing delay. The repository's default AngelOne-oriented BacktestConfig must use explicit timezone-aware Asia/Kolkata request bounds without creating an automatic DatasetContext-timezone localization rule.
+
+M3.7c does not validate fully offline end-to-end execution, missing credential behavior, provider construction/login failures, false-coverage prevention after failures, confirmed-empty cross-policy integration, identical complete Backtest/WFA policy semantics or DW-011 closure. Those remain M3.7d acceptance work.
 
 ### M3.7d — Source-policy integration and failure validation
 

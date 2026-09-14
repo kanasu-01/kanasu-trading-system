@@ -15,7 +15,7 @@
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
 | Lifecycle | IN_PROGRESS |
-| Next planned review | M3.7c — Backtest/WFA Runtime Wiring and Lazy Provider Construction baselining/design review; coding is not yet authorized |
+| Next implementation candidate | M3.7c — Backtest/WFA Runtime Wiring and Lazy Provider Construction; implementation requires separate explicit authorization |
 
 The 206-test full suite was rerun at implementation commit `b6a4fff` and passed.
 
@@ -112,7 +112,13 @@ AngelOne now returns `[]` for a valid `data=[]` response. Malformed responses re
 
 M3.7a and M3.7b are complete at their accepted scopes.
 
-M3.7 remains IN_PROGRESS. M3.7c and M3.7d remain PLANNED and unimplemented. The next activity is a separate M3.7c baselining/design review; M3.7c implementation is not authorized automatically and requires separate explicit authorization. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7c is baselined as READY / NEXT but remains unimplemented; implementation requires separate explicit authorization after this baseline is reviewed and committed. M3.7d remains PLANNED and unimplemented. M3.8 remains RESERVED.
+
+M3.7c will make backtest and WFA retrieve canonical candles through `HistoricalSource` instead of accepting a broker and constructing `HistoricalFeed`. A small composition factory will build the SQLite-backed source immediately while retaining external construction as a lazy provider factory. `LOCAL_ONLY` and warm `LOCAL_FIRST` must load no AngelOne credentials and construct or authenticate no broker; missing `LOCAL_FIRST` and all `PROVIDER_BACKED` retrieval invoke the external factory only when required by the accepted policy contract.
+
+`AppConfig` will own historical source policy, database path and request delay. The accepted V1 defaults are `LOCAL_FIRST`, `data/historical.sqlite3` and the existing request delay. Main will compose the source only for BACKTEST and WALK_FORWARD after selecting the runtime mode. M3.7c does not add historical wiring to PAPER or LIVE.
+
+The repository's default AngelOne-oriented `BACKTEST_CONFIG` will use explicit timezone-aware Asia/Kolkata start/end values. This is example configuration, not automatic localization through `DatasetContext.timezone`; arbitrary naive requests remain valid for compatible naive local data and fail explicitly against incompatible aware provider data.
 
 ## Important V1 blockers
 

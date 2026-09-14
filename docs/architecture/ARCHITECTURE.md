@@ -208,6 +208,12 @@ Backtest / WFA historical request
 
 Historical source composition combines explicit policy, trusted retrieval coverage, the local store, lazy provider access, and existing validation boundaries. `LOCAL_ONLY` and fully covered `LOCAL_FIRST` requests do not construct a provider or authenticate a broker; `PROVIDER_BACKED` requires external access. Source policy remains separate from `RuntimeMode` and from broker capability. HistoricalFeed retains broker chunk composition/validation beneath the provider adapter. The composition layer continues to distinguish stored candles, retrieval coverage, expected-bar completeness, and source policy.
 
+The M3.7c runtime-composition target gives `AppConfig` ownership of historical source policy, local database path and request delay. The accepted V1 defaults are `LOCAL_FIRST`, `data/historical.sqlite3` and the existing delay. A small historical-source factory may construct SQLiteCandleStore and HistoricalSource immediately, but it supplies an external-provider closure without invoking it. Only that closure loads AngelOne configuration, calls the existing eager broker factory with `paper_mode=True` and `enable_historical_api=True`, constructs HistoricalFeed and wraps it in HistoricalFeedProvider.
+
+Main selects BACKTEST or WALK_FORWARD before composing the historical source and performs no unconditional broker construction or login. Both research runtimes accept HistoricalSource, form the request from unchanged BacktestConfig boundaries, and retrieve canonical candles with DatasetContext and a half-open TimeRange. They do not import BaseBroker or HistoricalFeed and do not branch on source policy. PAPER and LIVE composition remains unchanged by M3.7c.
+
+The default AngelOne-oriented BacktestConfig will carry explicit timezone-aware Asia/Kolkata start/end values. This is an explicit example configuration choice. DatasetContext timezone remains metadata and does not localize arbitrary inputs; compatible naive local datasets remain supported, while incompatible request/provider awareness fails through existing validation.
+
 Live paper uses real market data but simulated execution and authoritative simulated accounting. Real broker execution belongs to V2 behind order identity, reconciliation, recovery and operational safety contracts.
 
 ## 12. Architecture decisions
