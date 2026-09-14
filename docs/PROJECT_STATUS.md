@@ -15,7 +15,7 @@
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
 | Lifecycle | IN_PROGRESS |
-| Next planned review | M3.7b — Broker Historical Provider Adapter baselining/design review; coding is not yet authorized |
+| Next implementation candidate | M3.7b — Broker Historical Provider Adapter |
 
 The 186-test full suite was rerun at implementation commit `073f3e9` and passed.
 
@@ -92,7 +92,7 @@ Provider-backed persistence remains non-destructive, and no refresh or replaceme
 
 M3.7a is complete at its accepted scope.
 
-M3.7 remains IN_PROGRESS. M3.7b–M3.7d remain unimplemented. The next planned activity is a separate M3.7b baselining/design review; M3.7b coding is not yet authorized. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7b — Broker Historical Provider Adapter is baselined as READY / NEXT, while M3.7c and M3.7d remain PLANNED and unimplemented. M3.7b is READY / NEXT after this baseline is reviewed and committed; implementation still requires separate explicit authorization. M3.8 remains RESERVED.
 
 ## Important V1 blockers
 

@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a is validated at its accepted isolated policy-contract scope; M3.7b–M3.7d are not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a is DONE and validated at its accepted isolated policy-contract scope. M3.7b is READY but not yet validated; M3.7c and M3.7d are PLANNED and not yet validated.
 
 Cross-step invariants:
 
@@ -260,7 +260,26 @@ Provider-backed cache refresh or replacement semantics remain undefined and pers
 
 ### M3.7b — Broker historical provider adapter
 
-Prove that the adapter implements the accepted `HistoricalProvider` result contract through `HistoricalFeed`. Successful retrieval emits explicit requested coverage, including confirmed-empty retrieval; failure emits none. HistoricalFeed must continue to own request limits, chunk traversal, overlap reconciliation and malformed/conflicting chunk rejection. Tests must make request/provider awareness compatibility explicit and must not infer expected bars. Determine with evidence whether AngelOne requires a minimal empty-result correction.
+**Status:** READY / not yet validated
+
+Required acceptance evidence:
+
+1. A successfully completed HistoricalFeed stream returns canonical collected candles with explicit coverage for the complete request.
+2. A successfully completed empty stream returns `candles = ()` and `coverage = (request,)`.
+3. Sparse candle presence does not reduce retrieval coverage or trigger expected-bar inference.
+4. A candle exactly at `request.start` is included.
+5. A candle exactly at `request.end` is excluded without datetime epsilon or timeframe arithmetic.
+6. A candle strictly outside the half-open request is rejected through the shared provider-result validation contract rather than silently clipped.
+7. If HistoricalFeed or its broker fails after emitting earlier chunks, the adapter raises and returns no HistoricalFetchResult or coverage.
+8. Request/candle naive-aware incompatibility fails explicitly without conversion, localization or offset stripping.
+9. Existing HistoricalFeed tests remain authoritative and green for chunk traversal, shared boundaries, overlap, duplicates, conflicts, chronology and mixed awareness; the adapter must not bypass or duplicate those responsibilities.
+10. The adapter reuses `validate_historical_fetch_result()` and canonical CandleSeries sequence behavior where applicable.
+11. A valid AngelOne response containing `data = []` returns an empty candle list.
+12. Missing `data`, invalid/non-collection data, and provider/API failure remain errors rather than confirmed-empty evidence.
+13. A valid non-empty AngelOne response retains the existing timestamp and OHLCV parsing behavior.
+14. BaseBroker remains unchanged as a broker capability and does not become a HistoricalProvider or source-policy owner.
+
+Coverage is evidence of successful complete retrieval, not an inference from candle content. No market-calendar, holiday, session, expected-bar, gap-filling or provider-backed destructive refresh behavior belongs to M3.7b. Runtime configuration, provider construction/login timing, main, backtest and WFA wiring remain M3.7c work; end-to-end policy behavior remains M3.7d work.
 
 ### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 

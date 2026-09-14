@@ -50,7 +50,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.6d — DONE** — Integration and failure validation.
   - **M3.7 — IN_PROGRESS** — Historical source policy/runtime wiring.
     - **M3.7a — DONE** — Historical source policy contract.
-    - **M3.7b — PLANNED** — Broker historical provider adapter.
+    - **M3.7b — READY / NEXT** — Broker historical provider adapter.
     - **M3.7c — PLANNED** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — PLANNED** — Source-policy integration and failure validation.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
@@ -73,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a is complete. M3.7b remains PLANNED pending a separate baselining/design review and is not yet authorized for implementation.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a is complete. M3.7b is READY / NEXT after this baseline is reviewed and committed; implementation is not authorized automatically and requires separate explicit authorization.
 
 ## Near-term detailed work
 
@@ -198,15 +198,30 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 - No runtime wiring or broker adapter work occurred
 - No destructive provider-backed refresh or replacement semantics were introduced
 
-M3.7b remains PLANNED pending a separate baselining/design review and is not yet authorized for implementation.
+M3.7b is READY / NEXT after this documentation baseline is reviewed and committed; implementation is not authorized automatically and requires separate explicit authorization.
 
 #### M3.7b — Broker historical provider adapter
 
-**Status:** PLANNED.
+**Status:** READY / NEXT.
 
-**Outcome:** Adapt the accepted `HistoricalProvider` contract to broker historical retrieval through `HistoricalFeed`, preserving HistoricalFeed ownership of chunk composition and validation.
+**Outcome:** Provide a broker-backed `HistoricalProvider` adapter that collects the canonical `HistoricalFeed` stream, claims complete request coverage only after successful full stream completion, supports confirmed-empty retrieval, adapts the exact request-end boundary to half-open semantics, and preserves explicit timestamp-awareness validation.
 
-**Required evidence:** Successful requests emit explicit coverage; a successful zero-candle request can express confirmed-empty coverage; provider failure creates no coverage; malformed or conflicting broker data still fails; timestamp-awareness compatibility is explicit; and no market-calendar or expected-bar inference is introduced. This step determines whether AngelOne needs a minimal correction for its current rejection of empty results.
+**Ownership and contract:**
+
+- The adapter implements the existing `HistoricalProvider` boundary and composes a supplied `HistoricalFeed`; it does not own authentication, source policy or runtime selection.
+- HistoricalFeed remains authoritative for broker limits, chunk traversal, shared boundaries, overlap reconciliation, duplicate/conflict rejection, chronology and mixed-awareness stream validation.
+- Successful completion for the full request returns `HistoricalFetchResult(candles=..., coverage=(request,))`. Coverage comes from successful operation completion, never candle count, first/last timestamps, spacing or expected bars. Sparse and empty successful streams retain full request coverage.
+- If the feed or broker raises, the adapter raises and returns no result or coverage, even if earlier chunks emitted candles. M3.7b does not invent failed-stream partial coverage.
+- The adapter includes a candle at `request.start` and excludes a candle exactly at `request.end` without epsilon or timeframe arithmetic. Other out-of-range candles are rejected through the shared provider-result validation boundary rather than silently clipped.
+- Request and candle timezone awareness must be compatible. The adapter performs no UTC conversion, localization, offset stripping or silent naive/aware conversion.
+- Accepted provider-result validation and canonical CandleSeries sequencing are reused rather than reimplemented.
+- BaseBroker remains a broker capability beneath HistoricalFeed and does not acquire source-policy or HistoricalProvider responsibilities.
+
+**AngelOne correction:** A valid successful response with `data = []` must return `[]`. Missing `data`, non-collection data, provider/API exceptions and other malformed responses remain errors. Normal non-empty response parsing must remain unchanged. This correction does not alter login, credentials, orders, runtime construction, request-format requirements or canonical timestamp policy.
+
+**Required evidence:** Successful candles, sparse results, confirmed-empty results, request-start inclusion, exact request-end exclusion, failed streams with no manufactured coverage, explicit awareness mismatch, preserved HistoricalFeed chunk-validation regressions, valid empty AngelOne response, malformed AngelOne response rejection, and non-empty AngelOne parsing regression.
+
+M3.7b adds no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. M3.7c and M3.7d remain PLANNED.
 
 #### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
