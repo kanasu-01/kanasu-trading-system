@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `388b5393 Validate M3.8b backtest result parity` |
-| Latest reported test baseline | `248 passed at 388b5393` |
+| Implementation verification baseline | `96382079 Implement M3.8c reproducibility identity and evidence` |
+| Latest reported test baseline | `306 passed at 96382079` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.8 — Historical-path parity and reproducibility |
 | Lifecycle | IN_PROGRESS |
-| Next implementation candidate | M3.8c — Reproducibility identity and research-evidence persistence; implementation requires separate explicit authorization |
+| Next implementation candidate | M3.8d — Integration and repeated-run validation; implementation requires separate explicit authorization |
 
-The 248-test full suite was rerun at implementation and validation commit `388b5393` and passed.
+The 306-test full suite was rerun at implementation and validation commit `96382079` and passed.
 
 ## Completed foundation
 
@@ -42,6 +42,7 @@ The 248-test full suite was rerun at implementation and validation commit `388b5
 - M3.7 — Historical source policy/runtime wiring
 - M3.8a — Historical input parity
 - M3.8b — Backtest result parity
+- M3.8c — Reproducibility identity and research-evidence persistence
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -188,6 +189,28 @@ Stable parity covers complete `Trade` records, `BarRecord` sequences, strategy/e
 
 M3.8b does not validate Backtest economic correctness; timing, fill or stop correctness; fingerprinting or canonical serialization; research-evidence persistence; WFA validity; or full M3.8 integration.
 
+## M3.8c validation evidence
+
+- Design baseline: `f32848c2`
+- Implementation commit: `96382079 Implement M3.8c reproducibility identity and evidence`
+- Pre-change full suite: 248 passed
+- Final focused M3.8c research suite: 58 passed
+- M3.8a regression: 5 passed
+- M3.8b regression: 3 passed
+- Post-change full suite: 306 passed
+- `git diff --check`: passed
+- Production files: +527 / -0
+- Test files: +639 / -0
+- Repository line changes: +1166 / -0
+- Production defects discovered: none
+- Runtime/M3.8d wiring: none
+
+M3.8c implements deterministic type-tagged canonical serialization and versioned, domain-separated SHA-256 fingerprints for canonical datasets, effective Backtest research configuration and stable Backtest results. Dataset identity rejects noncanonical chronology rather than sorting or repairing it. Configuration identity uses effective research values, while stable-result identity covers the current `Trade`, `BarRecord` and equity-curve contract and excludes random `session_id`.
+
+The immutable research-evidence model preserves explicit `ACCEPTED`, `FAILED` and `INCOMPLETE` states. Its dedicated SQLite store remains physically separate from historical candle/coverage storage, rejects duplicate evidence IDs, and supports exact durable reload. Boundary validation requires timezone-aware datetime creation values and ordered list/tuple artifact references of strings; malformed string, bytes, set and mapping inputs are rejected. No production defect was discovered, no AngelOne/network/credentials were required, and no runtime or M3.8d integration was added.
+
+M3.8c does not establish Backtest financial or economic validity. It also does not validate the complete provider-fresh → Backtest → fingerprints → evidence → durable-local repeated-run flow, which remains M3.8d work.
+
 ## Current work
 
 M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
@@ -196,14 +219,14 @@ DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path pari
 
 - M3.8a — Historical input parity — DONE
 - M3.8b — Backtest result parity — DONE
-- M3.8c — Reproducibility identity and research-evidence persistence — BASELINED / NOT AUTHORIZED
-- M3.8d — Integration and repeated-run validation — BASELINED
+- M3.8c — Reproducibility identity and research-evidence persistence — DONE
+- M3.8d — Integration and repeated-run validation — BASELINED / NOT AUTHORIZED
 
 M3.8 will prove that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It will also establish deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval already persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; M3.8 validates that these paths converge without redesigning them unless focused RED evidence proves a defect.
 
-M3.8a and M3.8b are complete at their accepted scopes. M3.8c is the next implementation candidate but remains NOT AUTHORIZED; coding requires separate explicit authorization. M3.8d remains baselined and unimplemented.
+M3.8a, M3.8b and M3.8c are complete at their accepted scopes. M3.8d is the next implementation candidate but remains BASELINED and NOT AUTHORIZED; coding requires separate explicit authorization.
 
-The M3.8c design is approved and baselined under accepted AD-015. It defines three separate versioned SHA-256 fingerprint domains for canonical datasets, effective Backtest research configuration and stable Backtest results; a deterministic type-tagged canonical serialization contract; and a minimal immutable research-evidence model with `ACCEPTED`, `FAILED` and `INCOMPLETE` states. Its dedicated SQLite evidence store remains logically and physically separate from the historical candle/coverage SQLite store. Runtime and end-to-end repeated-run integration remains M3.8d work. Fingerprint and evidence persistence capabilities are not yet implemented, and M3.8c implementation remains NOT AUTHORIZED.
+The accepted AD-015 M3.8c capability now provides three separate versioned SHA-256 fingerprint domains, deterministic type-tagged canonical serialization, immutable evidence records, and a dedicated SQLite evidence store that remains logically and physically separate from historical candle/coverage storage. Runtime and end-to-end repeated-run integration remains unimplemented M3.8d work. M4 continues to own Backtest financial and economic validity.
 
 ## Important V1 blockers
 

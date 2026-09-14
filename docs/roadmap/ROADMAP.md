@@ -56,8 +56,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M3.8 — IN_PROGRESS** — Historical-path parity and reproducibility.
     - **M3.8a — DONE** — Historical input parity.
     - **M3.8b — DONE** — Backtest result parity.
-    - **M3.8c — BASELINED / NOT AUTHORIZED** — Reproducibility identity and research-evidence persistence.
-    - **M3.8d — BASELINED** — Integration and repeated-run validation.
+    - **M3.8c — DONE** — Reproducibility identity and research-evidence persistence.
+    - **M3.8d — BASELINED / NOT AUTHORIZED** — Integration and repeated-run validation.
 
 ### P2 — Trusted Research Engine
 
@@ -77,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 is IN_PROGRESS, and M3.8a and M3.8b are complete at their accepted scopes. M3.8c is the next implementation candidate but remains NOT AUTHORIZED and requires separate explicit authorization. M3.8d remains BASELINED. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
+M3.8 is IN_PROGRESS, and M3.8a, M3.8b and M3.8c are complete at their accepted scopes. M3.8d is the next implementation candidate but remains BASELINED / NOT AUTHORIZED and requires separate explicit authorization. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
 
 ## Near-term detailed work
 
@@ -439,11 +439,11 @@ The accepted evidence proves exact equality of complete `Trade` records, `BarRec
 
 #### M3.8c — Reproducibility identity and research-evidence persistence
 
-**Status:** BASELINED / NOT AUTHORIZED.
+**Status:** DONE.
 
 **Outcome:** Establish deterministic identities for research inputs and stable output, together with a dedicated persistence boundary for inspectable reproducibility evidence.
 
-The design is approved and baselined under AD-015, which refines AD-014. M3.8c remains the next implementation candidate, but implementation requires separate explicit authorization.
+The accepted AD-015 design, which refines AD-014, is implemented and validated at the reusable M3.8c scope.
 
 **Canonical serialization v1:** Three independent SHA-256 domains carry explicit versioned schema identifiers for dataset, Backtest research-configuration and stable-result identity. Fingerprints use the self-describing `sha256:<64 lowercase hexadecimal characters>` form. Canonical values are type-tagged and preserve distinctions among `None`, Boolean, integer, finite float, string, datetime, list, tuple and mappings with sorted string keys. Floats use exact `float.hex()` representation; datetimes use microsecond-precision ISO form without timezone normalization. Unsupported values and non-finite floats fail explicitly. Tagged values are serialized as deterministic UTF-8 JSON before hashing; Python `hash()`, `repr()`, object identity and arbitrary string fallback are prohibited.
 
@@ -457,15 +457,34 @@ The design is approved and baselined under AD-015, which refines AD-014. M3.8c r
 
 The dedicated SQLite evidence store remains logically and physically separate from the historical candle/coverage SQLite store. It supports save, load by evidence ID, exact round trip and durable fresh-instance reload. Duplicate IDs fail without overwrite, and invalid accepted records fail before persistence. Detailed trades, bars and curves may remain referenced artifacts; the SQL layout and final filename remain implementation details.
 
-Proposed ownership is `core/research/reproducibility.py`, `core/research/models/research_evidence.py` and `core/research/sqlite_research_evidence_store.py`. The placeholder `research_session.py` and existing `ResearchRequest`/`ResearchResult` are not repurposed. M3.8c adds no runtime wiring; M3.8d owns the future end-to-end provider-fresh → Backtest → fingerprints → evidence persistence → durable-local rerun proof.
+Implemented ownership is `core/research/reproducibility.py`, `core/research/models/research_evidence.py` and `core/research/sqlite_research_evidence_store.py`. The placeholder `research_session.py` and existing `ResearchRequest`/`ResearchResult` were not repurposed. M3.8c added no runtime wiring; M3.8d owns the future end-to-end provider-fresh → Backtest → fingerprints → evidence persistence → durable-local rerun proof.
+
+Completion evidence:
+
+- Design baseline: `f32848c2`
+- Implementation commit: `96382079 Implement M3.8c reproducibility identity and evidence`
+- Full suite: 248 passed before implementation → 306 passed after implementation
+- Final focused M3.8c research suite: 58 passed
+- M3.8a regression: 5 passed
+- M3.8b regression: 3 passed
+- `git diff --check`: passed
+- Production files: +527 / -0
+- Test files: +639 / -0
+- Repository line changes: +1166 / -0
+- Production defects discovered: none
+- Runtime/M3.8d integration: none
+
+The accepted evidence covers deterministic type-tagged serialization, versioned domain-separated SHA-256 identities, strict dataset chronology, effective research-configuration identity, stable Backtest-result identity excluding `session_id`, immutable evidence statuses, and dedicated SQLite evidence persistence with duplicate protection and durable exact reload. Timestamp and artifact-reference boundaries fail explicitly. Validation required no AngelOne, network or credentials. M3.8c does not establish Backtest economic validity.
 
 **Non-goals:** Backtest economic/timing/fill/stop correctness, brokerage tax fidelity, WFA validity, paper/live behavior, final research catalog, analytics warehouse, UI/API workflow, broker-session lifecycle, market-calendar/expected-bar completeness and real-money execution.
 
 #### M3.8d — Integration and repeated-run validation
 
-**Status:** BASELINED.
+**Status:** BASELINED / NOT AUTHORIZED.
 
 **Outcome:** Prove the complete accepted M3.8 contract together.
+
+M3.8d is the next implementation candidate. Implementation requires separate explicit authorization and is not authorized automatically by M3.8c completion.
 
 Required evidence:
 

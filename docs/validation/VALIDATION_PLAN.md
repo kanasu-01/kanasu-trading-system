@@ -424,7 +424,7 @@ The accepted evidence validates M3.7d through the bounded historical-source/rese
 
 ## 8. M3.8 — Historical-path parity and reproducibility
 
-**Status:** IN_PROGRESS / partially validated through completed M3.8a and M3.8b
+**Status:** IN_PROGRESS / partially validated through completed M3.8a, M3.8b and M3.8c
 
 M3.8 validates that equivalent accepted historical data and the same research-relevant configuration yield equivalent canonical historical inputs and stable deterministic Backtest outputs through provider-fresh and already persisted local-store paths. It also requires deterministic dataset, configuration and result identities plus inspectable research-evidence persistence. It does not validate Backtest economics or WFA validity.
 
@@ -486,11 +486,11 @@ This evidence does not establish whether Backtest economics, timing, fills, stop
 
 ### M3.8c — Reproducibility identity and research-evidence persistence
 
-**Status:** BASELINED / not validated
+**Status:** DONE / validated at accepted scope
 
-M3.8c must validate the AD-015 versioned, type-tagged canonical serialization contract; independent SHA-256 dataset, effective Backtest-configuration and stable-result domains; immutable evidence status/model rules; and dedicated SQLite evidence persistence separate from historical candles and coverage. It remains unimplemented and unvalidated.
+M3.8c validates the AD-015 versioned, type-tagged canonical serialization contract; independent SHA-256 dataset, effective Backtest-configuration and stable-result domains; immutable evidence status/model rules; and dedicated SQLite evidence persistence separate from historical candles and coverage.
 
-Required deterministic evidence:
+Validated deterministic evidence:
 
 1. Repeated serialization of identical input produces identical canonical bytes and fingerprint.
 2. Mapping insertion order does not alter canonical identity.
@@ -526,13 +526,34 @@ Required deterministic evidence:
 
 Canonical tests must also prove domain/version separation, SHA-256 output form and meaningful distinctions between integer/float, list/tuple, and null/string/Boolean values. Dataset generation must reject noncanonical input without sorting, deduplication, chronology repair or timestamp conversion. Configuration identity uses effective research values and requires risk-per-trade to be supplied explicitly. Stable-result identity covers complete current `Trade`/`BarRecord` content and equity curve while excluding `session_id`; it does not assert financial correctness.
 
-The immutable evidence model contains evidence ID, timezone-aware microsecond-precision creation time, explicit status, `DatasetContext`, requested `TimeRange`, three fingerprints, provenance, optional repository revision, concise summary and artifact references. Evidence ID and creation time are not fingerprint inputs. The logical record contract is authoritative; exact SQL layout and final filename are not frozen.
+The immutable evidence model contains evidence ID, timezone-aware microsecond-precision creation time, explicit status, `DatasetContext`, requested `TimeRange`, three fingerprints, provenance, optional repository revision, concise summary and artifact references. Evidence ID and creation time are not fingerprint inputs. The logical record contract is authoritative; exact SQL layout and final filename are not frozen. Boundary validation rejects non-datetime creation values, naive creation timestamps, unordered or inappropriate artifact-reference inputs, and non-string artifact entries; ordered lists and tuples normalize to immutable tuples.
 
-M3.8c does not wire evidence persistence into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. M3.8d remains responsible for the complete fresh/local repeated-run integration. No M3.8c test count or implementation evidence exists yet.
+Completion evidence:
+
+- Design baseline: `f32848c2`
+- Implementation commit: `96382079 Implement M3.8c reproducibility identity and evidence`
+- Pre-change full suite: 248 passed
+- Final focused M3.8c research suite: 58 passed
+- M3.8a regression: 5 passed
+- M3.8b regression: 3 passed
+- Post-change full suite: 306 passed
+- `git diff --check`: passed
+- Production files: +527 / -0
+- Test files: +639 / -0
+- Repository line changes: +1166 / -0
+- Real provider/network/credentials: none
+- Runtime/M3.8d wiring: none
+- Production defects discovered: none
+
+The evidence validates deterministic bytes and fingerprints, domain/version separation, meaningful type distinctions, exact finite-float encoding, explicit unsupported/non-finite rejection, and preservation of supplied datetime representation. Dataset identity reacts to context, request and candle changes while rejecting noncanonical chronology without repair. Configuration identity reacts to effective research values while excluding presentation controls. Stable-result identity excludes `session_id`, reacts to complete Trade, BarRecord and account-state changes, and canonicalizes decision snapshots deterministically.
+
+Evidence validation also covers `ACCEPTED`/`FAILED`/`INCOMPLETE` invariants, exact durable reload through a fresh SQLite store instance, duplicate rejection without overwrite, physical separation from historical storage, and persistence of provenance, repository revision, summary and artifact references. Created-at and artifact-reference boundaries were explicitly hardened and validated.
+
+M3.8c does not wire evidence persistence into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. M3.8d remains responsible for the complete fresh/local repeated-run integration.
 
 ### M3.8d — Integration and repeated-run validation
 
-**Status:** BASELINED / not validated
+**Status:** BASELINED / not validated / NOT AUTHORIZED
 
 Required evidence:
 
@@ -553,7 +574,7 @@ Required evidence:
 
 Deterministic fake/local parity is the authoritative automated evidence and belongs in relevant regression suites when changes affect historical retrieval/persistence, candle or dataset identity, Backtest inputs/results, or fingerprint logic. Real AngelOne/provider fresh-to-local smoke validation is optional supplementary milestone/release evidence because authentication, network, rate limits and provider corrections are external variables. Major validation points retain inspectable reference-run evidence; ordinary unit-test runs need not create permanent evidence records.
 
-M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a and M3.8b are validated at their accepted scopes; M3.8c and M3.8d remain unvalidated.
+M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a, M3.8b and M3.8c are validated at their accepted scopes; M3.8d remains unvalidated and requires separate explicit implementation authorization.
 
 ## 9. V1 release gates
 

@@ -28,7 +28,7 @@ This document owns Kanasu's current and target system architecture. It describes
 | core/portfolio | Authoritative simulated account state and open-position ownership. |
 | core/risk | Position sizing, stops and recorded drawdown controls. |
 | core/backtest | Historical strategy/execution loop, bar reporting, results and replay-related paths. |
-| core/research | Minimal placeholder `ResearchSession`, `ResearchRequest` and `ResearchResult` workflow; deterministic fingerprints and research-evidence persistence are not implemented. |
+| core/research | Existing placeholder `ResearchSession`, `ResearchRequest` and `ResearchResult` workflow plus implemented deterministic canonical serialization, versioned dataset/configuration/result fingerprints, immutable research-evidence records, and dedicated SQLite evidence persistence. |
 | core/walk_forward | Window generation, optimization, out-of-sample evaluation and aggregation. |
 | core/runtime | Backtest, walk-forward and paper runtime orchestration plus dataset identity. |
 | api | Backtest configuration/mock result and paper-session metadata endpoints. |
@@ -135,9 +135,11 @@ Timezone identity does not imply timestamp localization or conversion.
 
 ### CURRENT
 
-BacktestEngine processes candles through the strategy and authoritative simulated portfolio, records bar state, and returns trades, bars and an equity curve. Walk-forward modules provide parameter search, in-sample/out-of-sample evaluation and aggregate results. `core/research` currently contains only a minimal placeholder `ResearchSession`/`ResearchRequest`/`ResearchResult` workflow; it does not implement M3.8c fingerprints or evidence persistence.
+BacktestEngine processes candles through the strategy and authoritative simulated portfolio, records bar state, and returns trades, bars and an equity curve. Walk-forward modules provide parameter search, in-sample/out-of-sample evaluation and aggregate results. `core/research` retains the minimal placeholder `ResearchSession`/`ResearchRequest`/`ResearchResult` workflow and now also implements the standalone M3.8c reproducibility primitives: deterministic canonical serialization, versioned dataset/configuration/stable-result fingerprints, immutable research-evidence records, and dedicated SQLite evidence persistence.
 
-M3.8a and M3.8b are complete at their accepted historical-input and stable Backtest-result parity scopes. M3.8c and M3.8d remain unimplemented and unvalidated.
+M3.8a, M3.8b and M3.8c are complete and validated at their accepted scopes. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence uses a physically separate SQLite store, and provenance remains separate from canonical dataset identity.
+
+The M3.8c primitives are not automatically wired into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. The complete provider-fresh → Backtest → fingerprints → evidence persistence → durable-local rerun integration remains unimplemented and unvalidated M3.8d work.
 
 ### TARGET
 
@@ -161,14 +163,14 @@ three fingerprints + provenance + evidence metadata
               separate research-evidence SQLite store
 ~~~
 
-M3.8c owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8c does not wire evidence persistence into Backtest, HistoricalSource, main, WFA, API or frontend; the complete fresh/local repeated-run flow belongs to M3.8d.
+The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. These capabilities remain intentionally outside Backtest, HistoricalSource, main, WFA, API and frontend composition; the complete fresh/local repeated-run flow belongs to M3.8d.
 
 ### KNOWN DIVERGENCES
 
 - Expanding-window generation can fail to terminate.
 - WFA creates backtests with hardcoded capital/fresh runtime settings instead of preserving all effective economics.
 - Some performance calculations use instrument Trade.pnl_pct or a synthetic compounded trade-return curve where account equity is required.
-- Research results do not yet carry a complete reproducibility manifest or dataset fingerprint.
+- Research runtimes do not yet compose the implemented fingerprints and evidence store into a complete persisted reproducibility record.
 - The PivotBoss implementation has unvalidated state/signal-contract issues and must not be treated as a validated research strategy.
 
 ## 8. Paper-runtime architecture
@@ -191,7 +193,7 @@ The backend remains the intended authority for trading and account state. The fr
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
 
-- M3.8a historical-input parity and M3.8b stable Backtest-result parity are validated, while M3.8c identity/evidence persistence and M3.8d full integration remain unimplemented and unvalidated;
+- M3.8a historical-input parity, M3.8b stable Backtest-result parity and M3.8c identity/evidence persistence are validated at their accepted scopes, while M3.8d full repeated-run integration remains unimplemented and unvalidated;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;
