@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `b6a4fff Add broker historical provider adapter` |
-| Latest reported test baseline | `206 passed at b6a4fff` |
+| Implementation verification baseline | `2db07c6 Wire historical source into research runtimes` |
+| Latest reported test baseline | `223 passed at 2db07c6` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
 | Lifecycle | IN_PROGRESS |
-| Next implementation candidate | M3.7c — Backtest/WFA Runtime Wiring and Lazy Provider Construction; implementation requires separate explicit authorization |
+| Next planned review | M3.7d — Source-Policy Integration and Failure Validation baselining/design review; implementation is not authorized |
 
-The 206-test full suite was rerun at implementation commit `b6a4fff` and passed.
+The 223-test full suite was rerun at implementation commit `2db07c6` and passed.
 
 ## Completed foundation
 
@@ -37,6 +37,7 @@ The 206-test full suite was rerun at implementation commit `b6a4fff` and passed.
 - M3.6 — Local historical persistence and retrieval
 - M3.7a — Historical source policy contract
 - M3.7b — Broker historical provider adapter
+- M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -108,17 +109,37 @@ The adapter includes a candle at `request.start`, excludes an exact `request.end
 
 AngelOne now returns `[]` for a valid `data=[]` response. Malformed responses remain errors, and non-empty timestamp/OHLCV parsing remains unchanged. BaseBroker, HistoricalFeed, HistoricalSource, AppConfig, main, backtest and WFA runtime were unchanged. No expected-bar, session, calendar or gap-inference logic was added.
 
+## M3.7c validation evidence
+
+- Parent design/baseline commit: `81600de275bf41d0dc75ea8b0c220dd4c2643eec Baseline M3.7c runtime wiring and lazy provider construction`
+- Implementation commit: `2db07c6da3af9a6434c51bfe1e629af65a001710 Wire historical source into research runtimes`
+- Pre-change full suite: 206 passed
+- Historical source factory: 11 passed
+- Runtime tests: 11 passed
+- HistoricalSource/feed/AngelOne neighborhood: 51 passed
+- All market-data: 147 passed
+- Backtest/WFA/runtime: 22 passed
+- Post-change full suite: 223 passed
+- `git diff --check`: passed
+- Interpreter: `.\.venv\Scripts\python.exe` using Python 3.11.9
+
+Backtest and WFA now obtain canonical historical candles through `HistoricalSource`. They no longer depend directly on BaseBroker or HistoricalFeed and contain no source-policy branching. Source composition creates the local SQLite capability immediately, including the database parent directory when needed, but it does not load AngelOne credentials, construct AngelOneBroker or log in. Only the lazy provider closure calls `create_angelone_broker(paper_mode=True, enable_historical_api=True)`, constructs HistoricalFeed with the configured request delay, and wraps it in HistoricalFeedProvider.
+
+At the M3.7c scope, complete `LOCAL_ONLY` and warm `LOCAL_FIRST` retrieval require no external construction. Missing `LOCAL_FIRST` coverage invokes the provider only after local coverage is examined, and `PROVIDER_BACKED` invokes the provider despite complete local coverage. `HistoricalSource` remains the sole policy owner.
+
+`AppConfig` now owns `historical_source_policy`, `historical_database_path` and `historical_request_delay_sec`, with defaults `HistoricalSourcePolicy.LOCAL_FIRST`, `data/historical.sqlite3` and `0.5`. `load_app_config()` supports `HISTORICAL_SOURCE_POLICY`, `HISTORICAL_DATABASE_PATH` and `HISTORICAL_REQUEST_DELAY_SEC`. Main no longer constructs or authenticates AngelOne before runtime selection; it composes HistoricalSource only for BACKTEST and WALK_FORWARD. M3.7c added no historical-source composition to PAPER or LIVE.
+
+The default AngelOne-oriented BacktestConfig uses explicit Asia/Kolkata-aware request boundaries. This is explicit configuration rather than runtime localization: DatasetContext timezone remains metadata, timestamp values pass through unchanged, and awareness incompatibility remains an explicit failure. M3.7c did not change HistoricalSource, HistoricalFeedProvider, HistoricalFeed, BaseBroker, AngelOne historical parsing, historical retrieval validation or SQLite coverage semantics. The broker factory remains source-policy unaware and eager only when called.
+
 ## Current work
 
-M3.7a and M3.7b are complete at their accepted scopes.
+M3.7a, M3.7b and M3.7c are complete at their accepted scopes.
 
-M3.7 remains IN_PROGRESS. M3.7c is baselined as READY / NEXT but remains unimplemented; implementation requires separate explicit authorization after this baseline is reviewed and committed. M3.7d remains PLANNED and unimplemented. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7d remains PLANNED, unimplemented and not yet validated. The next activity is a separate M3.7d baselining/design review; M3.7d implementation is not authorized automatically and requires separate explicit authorization. M3.8 remains RESERVED.
 
-M3.7c will make backtest and WFA retrieve canonical candles through `HistoricalSource` instead of accepting a broker and constructing `HistoricalFeed`. A small composition factory will build the SQLite-backed source immediately while retaining external construction as a lazy provider factory. `LOCAL_ONLY` and warm `LOCAL_FIRST` must load no AngelOne credentials and construct or authenticate no broker; missing `LOCAL_FIRST` and all `PROVIDER_BACKED` retrieval invoke the external factory only when required by the accepted policy contract.
+M3.7d retains the wider integration and failure evidence: fully offline end-to-end execution, missing-credential behavior, provider construction/login failures, absence of false coverage after failure, confirmed-empty cross-policy integration, common Backtest/WFA policy semantics and DW-011 closure evidence.
 
-`AppConfig` will own historical source policy, database path and request delay. The accepted V1 defaults are `LOCAL_FIRST`, `data/historical.sqlite3` and the existing request delay. Main will compose the source only for BACKTEST and WALK_FORWARD after selecting the runtime mode. M3.7c does not add historical wiring to PAPER or LIVE.
-
-The repository's default AngelOne-oriented `BACKTEST_CONFIG` will use explicit timezone-aware Asia/Kolkata start/end values. This is example configuration, not automatic localization through `DatasetContext.timezone`; arbitrary naive requests remain valid for compatible naive local data and fail explicitly against incompatible aware provider data.
+DW-011 remains OPEN. M3.7c structurally removed unconditional research-runtime broker construction, but closure requires the accepted M3.7d end-to-end evidence.
 
 ## Important V1 blockers
 

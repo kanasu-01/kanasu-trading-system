@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a and M3.7b are DONE and validated at their accepted isolated scopes. M3.7c is READY / NEXT but not yet validated; M3.7d is PLANNED and not yet validated. M3.7 as a whole is not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a, M3.7b and M3.7c are DONE and validated at their accepted scopes. M3.7d is PLANNED and not yet validated. M3.7 as a whole is not yet validated.
 
 Cross-step invariants:
 
@@ -298,11 +298,11 @@ Coverage is evidence of successful complete retrieval, not an inference from can
 
 ### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
-**Status:** READY / not yet validated
+**Status:** DONE / validated at M3.7c scope
 
 M3.7c proves runtime dependency wiring, source composition and lazy external construction without taking on the wider M3.7d failure matrix.
 
-Required acceptance evidence:
+Validated behavior:
 
 1. Constructing historical source composition alone does not call `AngelOneConfig.load_from_env`, construct a broker or call broker login.
 2. `LOCAL_ONLY` with complete local coverage performs no external construction or login.
@@ -318,7 +318,21 @@ Required acceptance evidence:
 12. Historical request timestamps pass through unchanged; no UTC normalization, localization, offset stripping or silent awareness conversion is added.
 13. Incompatible request/provider timezone awareness remains an explicit failure.
 
-Configuration evidence must establish that AppConfig owns `historical_source_policy`, `historical_database_path` and `historical_request_delay_sec`, with accepted defaults `LOCAL_FIRST`, `data/historical.sqlite3` and the existing delay. The repository's default AngelOne-oriented BacktestConfig must use explicit timezone-aware Asia/Kolkata request bounds without creating an automatic DatasetContext-timezone localization rule.
+Configuration evidence establishes that AppConfig owns `historical_source_policy`, `historical_database_path` and `historical_request_delay_sec`, with accepted defaults `LOCAL_FIRST`, `data/historical.sqlite3` and `0.5`. The repository's default AngelOne-oriented BacktestConfig uses explicit timezone-aware Asia/Kolkata request bounds without creating an automatic DatasetContext-timezone localization rule.
+
+Completion evidence:
+
+- Parent design/baseline commit: `81600de275bf41d0dc75ea8b0c220dd4c2643eec Baseline M3.7c runtime wiring and lazy provider construction`
+- Implementation commit: `2db07c6da3af9a6434c51bfe1e629af65a001710 Wire historical source into research runtimes`
+- Pre-change full suite: 206 passed
+- Historical source factory: 11 passed
+- Runtime tests: 11 passed
+- HistoricalSource/feed/AngelOne neighborhood: 51 passed
+- All market-data: 147 passed
+- Backtest/WFA/runtime: 22 passed
+- Post-change full suite: 223 passed
+- `git diff --check`: passed
+- Validation interpreter: `.\.venv\Scripts\python.exe`, Python 3.11.9
 
 M3.7c does not validate fully offline end-to-end execution, missing credential behavior, provider construction/login failures, false-coverage prevention after failures, confirmed-empty cross-policy integration, identical complete Backtest/WFA policy semantics or DW-011 closure. Those remain M3.7d acceptance work.
 

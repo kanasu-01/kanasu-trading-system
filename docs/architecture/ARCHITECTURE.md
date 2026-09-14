@@ -41,12 +41,12 @@ The repository is effectively single-symbol. Some containers could hold multiple
 
 ~~~text
 Backtest:
-configuration → broker login → HistoricalFeed → BacktestEngine
+configuration → HistoricalSource → canonical historical candles → BacktestEngine
     → StrategyRunner/CandleSeries → TradeExecutionEngine
     → PortfolioManager snapshot → BarRecord/BacktestResult
 
 Walk-forward:
-BacktestConfig → historical broker retrieval → WalkForwardRunner
+BacktestConfig → HistoricalSource → canonical historical candles → WalkForwardRunner
     → GridSearchOptimizer/BacktestEngine → out-of-sample BacktestEngine
     → aggregate result
 
@@ -60,7 +60,7 @@ browser → API routes
     → fixed mock backtest response OR paper session metadata
 ~~~
 
-SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. HistoricalSourcePolicy and HistoricalSource implement the `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` selection contract with lazy provider-factory construction. HistoricalFeedProvider now implements the broker-backed HistoricalProvider capability by composing HistoricalFeed. These policy and provider boundaries are validated in isolation but are not yet wired into AppConfig, main, backtest or WFA, which still use broker-backed HistoricalFeed directly.
+SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. HistoricalSourcePolicy and HistoricalSource implement the `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` selection contract. HistoricalFeedProvider implements the broker-backed HistoricalProvider capability by composing HistoricalFeed. AppConfig now owns the source-policy, database-path and request-delay configuration, and main composes HistoricalSource after selecting BACKTEST or WALK_FORWARD. Both research runtimes retrieve canonical candles through this boundary instead of depending directly on BaseBroker or HistoricalFeed.
 
 ## 5. Simulated execution and accounting
 
@@ -108,6 +108,12 @@ HistoricalSource owns source-policy selection and accepts a lazy provider factor
 
 HistoricalFeedProvider is the implemented bridge from the HistoricalProvider contract to HistoricalFeed. It collects the canonical completed stream, excludes only an exact request-end candle for half-open provider semantics, validates the resulting provider evidence through the shared M3.6 boundary, and claims full request coverage only after successful stream completion. Sparse and confirmed-empty results remain valid retrieval evidence. HistoricalFeed continues to own broker limits, chunk traversal, overlap reconciliation, duplicate/conflict rejection, chronology and stream-awareness validation. AngelOne accepts a valid empty historical data collection while malformed responses remain errors.
 
+The historical-source composition factory creates SQLiteCandleStore and HistoricalSource immediately and ensures the database parent directory exists. It does not load AngelOne credentials, construct AngelOneBroker or log in. Its lazy provider closure calls the source-policy-unaware broker factory with `paper_mode=True` and `enable_historical_api=True`, then constructs HistoricalFeed with the configured request delay and wraps it in HistoricalFeedProvider. Complete `LOCAL_ONLY` and warm `LOCAL_FIRST` retrieval therefore require no external construction; missing `LOCAL_FIRST` and `PROVIDER_BACKED` invoke the external path according to HistoricalSource policy.
+
+Backtest and WFA accept HistoricalSource, form a DatasetContext and half-open TimeRange from the configured request, and consume the returned canonical candles. They do not import BaseBroker or HistoricalFeed and contain no source-policy branching. Main performs no unconditional broker construction before runtime selection and composes this source only for BACKTEST and WALK_FORWARD; PAPER and LIVE received no historical-source behavior in M3.7c.
+
+The default AngelOne-oriented BacktestConfig uses explicit Asia/Kolkata-aware request boundaries. This is configuration, not automatic localization: DatasetContext timezone remains metadata, timestamps pass through unchanged, and incompatible request/provider awareness remains an explicit validation failure.
+
 Dataset identity currently contains:
 
 ~~~text
@@ -120,11 +126,8 @@ Timezone identity does not imply timestamp localization or conversion.
 
 ### KNOWN DIVERGENCES
 
-- The M3.6 local persistence/retrieval capabilities are not yet wired into backtest or WFA runtime source selection.
-- Backtest and WFA still construct broker-backed HistoricalFeed directly, and main constructs/authenticates AngelOne before historical-source need is known.
-- The validated HistoricalSource policy boundary is not yet configured through AppConfig or used by main, backtest or WFA. Runtime composition still constructs/authenticates AngelOne before historical-source need is known.
-- The broker-backed HistoricalFeedProvider exists and is validated in isolation, but runtime composition does not yet provide it lazily through HistoricalSource.
-- BacktestConfig request boundaries can be naive while external provider timestamps can be aware; the adapter/runtime boundary must make compatibility explicit without silent normalization.
+- M3.7c validates research-runtime dependency wiring and lazy external construction, but the wider M3.7d end-to-end policy/failure matrix remains unvalidated. DW-011 remains OPEN pending that evidence.
+- User-supplied request boundaries can still be naive while external provider timestamps can be aware; the accepted adapter/runtime boundary rejects incompatibility without silent normalization.
 - Historical CSV export and legacy CSVBroker/replay paths retain stale contracts.
 
 ## 7. Research architecture
@@ -161,9 +164,8 @@ The backend remains the intended authority for trading and account state. The fr
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
 
-- local-first persistence and retrieval are not wired into backtest/WFA source selection;
-- main constructs and authenticates AngelOne before historical-source need is known;
-- the source-policy contract and broker-backed provider adapter exist, but runtime selection and lazy broker construction remain unimplemented;
+- M3.7d end-to-end source-policy/failure validation and DW-011 closure evidence remain outstanding;
+- historical-path parity and reproducibility remain unvalidated;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;
@@ -208,11 +210,11 @@ Backtest / WFA historical request
 
 Historical source composition combines explicit policy, trusted retrieval coverage, the local store, lazy provider access, and existing validation boundaries. `LOCAL_ONLY` and fully covered `LOCAL_FIRST` requests do not construct a provider or authenticate a broker; `PROVIDER_BACKED` requires external access. Source policy remains separate from `RuntimeMode` and from broker capability. HistoricalFeed retains broker chunk composition/validation beneath the provider adapter. The composition layer continues to distinguish stored candles, retrieval coverage, expected-bar completeness, and source policy.
 
-The M3.7c runtime-composition target gives `AppConfig` ownership of historical source policy, local database path and request delay. The accepted V1 defaults are `LOCAL_FIRST`, `data/historical.sqlite3` and the existing delay. A small historical-source factory may construct SQLiteCandleStore and HistoricalSource immediately, but it supplies an external-provider closure without invoking it. Only that closure loads AngelOne configuration, calls the existing eager broker factory with `paper_mode=True` and `enable_historical_api=True`, constructs HistoricalFeed and wraps it in HistoricalFeedProvider.
+The implemented M3.7c runtime composition gives `AppConfig` ownership of historical source policy, local database path and request delay. The accepted V1 defaults are `LOCAL_FIRST`, `data/historical.sqlite3` and `0.5`. The historical-source factory constructs SQLiteCandleStore and HistoricalSource immediately but supplies an external-provider closure without invoking it. Only that closure loads AngelOne configuration, calls the existing eager broker factory with `paper_mode=True` and `enable_historical_api=True`, constructs HistoricalFeed and wraps it in HistoricalFeedProvider.
 
-Main selects BACKTEST or WALK_FORWARD before composing the historical source and performs no unconditional broker construction or login. Both research runtimes accept HistoricalSource, form the request from unchanged BacktestConfig boundaries, and retrieve canonical candles with DatasetContext and a half-open TimeRange. They do not import BaseBroker or HistoricalFeed and do not branch on source policy. PAPER and LIVE composition remains unchanged by M3.7c.
+Main now selects BACKTEST or WALK_FORWARD before composing the historical source and performs no unconditional broker construction or login. Both research runtimes accept HistoricalSource, form the request from BacktestConfig boundaries, and retrieve canonical candles with DatasetContext and a half-open TimeRange. They do not import BaseBroker or HistoricalFeed and do not branch on source policy. PAPER and LIVE composition remains unchanged by M3.7c.
 
-The default AngelOne-oriented BacktestConfig will carry explicit timezone-aware Asia/Kolkata start/end values. This is an explicit example configuration choice. DatasetContext timezone remains metadata and does not localize arbitrary inputs; compatible naive local datasets remain supported, while incompatible request/provider awareness fails through existing validation.
+The default AngelOne-oriented BacktestConfig carries explicit timezone-aware Asia/Kolkata start/end values. This is an explicit example configuration choice. DatasetContext timezone remains metadata and does not localize arbitrary inputs; compatible naive local datasets remain supported, while incompatible request/provider awareness fails through existing validation.
 
 Live paper uses real market data but simulated execution and authoritative simulated accounting. Real broker execution belongs to V2 behind order identity, reconciliation, recovery and operational safety contracts.
 
