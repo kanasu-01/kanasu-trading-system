@@ -1,7 +1,3 @@
-from core.market_data.historical_feed import (
-    HistoricalFeed,
-)
-
 from core.walk_forward.window_generator import (
     WalkForwardWindowGenerator,
 )
@@ -22,17 +18,11 @@ from core.walk_forward.reporting import (
     WalkForwardReporter,
 )
 
-from core.broker.base_broker import (
-    BaseBroker,
-)
-
-from core.config.app_config import (
-    AppConfig,
-)
-
 from core.config.backtest_config import (
     BacktestConfig,
 )
+from core.market_data.historical_coverage import TimeRange
+from core.market_data.historical_source import HistoricalSource
 from core.runtime.dataset_context import DatasetContext
 
 from core.strategies.strategy_factory import (
@@ -61,9 +51,8 @@ logger = get_logger(__name__)
 
 
 def run_walk_forward(
-    broker: BaseBroker,
+    historical_source: HistoricalSource,
     config: BacktestConfig,
-    app_config: AppConfig,
 ) -> None:
 
     logger.info(
@@ -73,22 +62,18 @@ def run_walk_forward(
     )
 
     # -----------------------------------------
-    # Historical Feed
+    # Historical Data
     # -----------------------------------------
 
-    feed = HistoricalFeed(
-        broker,
-        request_delay_sec=(app_config.historical_request_delay_sec),
-    )
-
-    candle_stream = feed.stream(
+    dataset_context = DatasetContext(
         symbol=config.symbol,
         timeframe=config.timeframe,
-        start=config.start,
-        end=config.end,
+        timezone=config.timezone,
     )
-
-    candles = list(candle_stream)
+    candles = historical_source.retrieve(
+        dataset_context,
+        TimeRange(config.start, config.end),
+    )
 
     strategy_cls = get_strategy_class(config)
 
@@ -127,11 +112,7 @@ def run_walk_forward(
         strategy_cls=strategy_cls,
         param_space=(WALK_FORWARD_CONFIG.param_space),
         candles=candles,
-        dataset_context=DatasetContext(
-            symbol=config.symbol,
-            timeframe=config.timeframe,
-            timezone=config.timezone,
-        ),
+        dataset_context=dataset_context,
     )
 
     # -----------------------------------------

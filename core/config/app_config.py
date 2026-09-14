@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from core.config.historical_source_policy import HistoricalSourcePolicy
 from core.config.runtime_mode import RuntimeMode
 
 
@@ -29,5 +30,11 @@ class AppConfig:
     broker_retry_attempts: int = 2
 
     broker_retry_delay_sec: float = 2.0
+
+    historical_source_policy: HistoricalSourcePolicy = (
+        HistoricalSourcePolicy.LOCAL_FIRST
+    )
+
+    historical_database_path: str = "data/historical.sqlite3"
 
     historical_request_delay_sec: float = 0.5

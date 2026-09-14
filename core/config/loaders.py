@@ -1,5 +1,6 @@
 import os
 from core.config.app_config import AppConfig
+from core.config.historical_source_policy import HistoricalSourcePolicy
 from core.config.runtime_mode import RuntimeMode
 
 
@@ -18,4 +19,14 @@ def load_app_config() -> AppConfig:
         slippage_pct=float(os.getenv("SLIPPAGE_PCT", 0.05)),
         brokerage_pct=float(os.getenv("BROKERAGE_PCT", 0.01)),
         journal_dir=os.getenv("JOURNAL_DIR", "journals"),
+        historical_source_policy=HistoricalSourcePolicy(
+            os.getenv("HISTORICAL_SOURCE_POLICY", "LOCAL_FIRST").upper()
+        ),
+        historical_database_path=os.getenv(
+            "HISTORICAL_DATABASE_PATH",
+            "data/historical.sqlite3",
+        ),
+        historical_request_delay_sec=float(
+            os.getenv("HISTORICAL_REQUEST_DELAY_SEC", 0.5)
+        ),
     )

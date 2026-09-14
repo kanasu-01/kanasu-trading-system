@@ -1,5 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
+
+
+ASIA_KOLKATA = timezone(
+    timedelta(hours=5, minutes=30),
+    name="Asia/Kolkata",
+)
 
 
 @dataclass
@@ -26,8 +32,8 @@ BACKTEST_CONFIG = BacktestConfig(
     symbol="RELIANCE",
     timeframe="15m",
     strategy_name="sma_crossover",
-    start=datetime(2024, 1, 2),
-    end=datetime(2025, 5, 25),
+    start=datetime(2024, 1, 2, tzinfo=ASIA_KOLKATA),
+    end=datetime(2025, 5, 25, tzinfo=ASIA_KOLKATA),
     initial_capital=100000,
     enable_replay=False,
     enable_visualization=True,

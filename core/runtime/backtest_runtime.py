@@ -1,7 +1,3 @@
-from core.market_data.historical_feed import (
-    HistoricalFeed,
-)
-
 from core.backtest.backtest_engine import (
     BacktestEngine,
 )
@@ -13,43 +9,29 @@ from core.backtest.backtest_runner import (
     visualize_backtest,
 )
 
-from core.broker.base_broker import (
-    BaseBroker,
-)
-
 from core.strategies.base_strategy import (
     BaseStrategy,
-)
-
-from core.config.app_config import (
-    AppConfig,
 )
 
 from core.config.backtest_config import (
     BacktestConfig,
 )
+from core.market_data.historical_coverage import TimeRange
+from core.market_data.historical_source import HistoricalSource
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 
 
 def run_backtest(
-    broker: BaseBroker,
+    historical_source: HistoricalSource,
     strategy: BaseStrategy,
     config: BacktestConfig,
-    app_config: AppConfig,
     runtime_context: RuntimeContext,
     dataset_context: DatasetContext,
 ) -> None:
-    feed = HistoricalFeed(
-        broker,
-        request_delay_sec=app_config.historical_request_delay_sec,
-    )
-
-    candle_stream = feed.stream(
-        symbol=config.symbol,
-        timeframe=config.timeframe,
-        start=config.start,
-        end=config.end,
+    candles = historical_source.retrieve(
+        dataset_context,
+        TimeRange(config.start, config.end),
     )
 
     engine = BacktestEngine(
@@ -58,7 +40,7 @@ def run_backtest(
         runtime_context=runtime_context,
         dataset_context=dataset_context,
     )
-    backtest_result = engine.run_stream(candle_stream)
+    backtest_result = engine.run_stream(candles)
 
     ## Performance metrics OR Backtest summary report
     print_performance_summary(backtest_result)

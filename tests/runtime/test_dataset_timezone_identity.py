@@ -62,8 +62,8 @@ def test_main_backtest_propagates_dataset_timezone(monkeypatch):
 
     monkeypatch.setattr(
         main_module,
-        "create_angelone_broker",
-        lambda **kwargs: object(),
+        "create_historical_source",
+        lambda app_config: object(),
     )
     monkeypatch.setattr(main_module, "create_strategy", lambda config: object())
     monkeypatch.setattr(
@@ -90,10 +90,13 @@ def test_main_paper_propagates_dataset_timezone(monkeypatch):
     )
     feed = object()
 
+    def unexpected_historical_source(app_config):
+        raise AssertionError("historical source was composed for PAPER")
+
     monkeypatch.setattr(
         main_module,
-        "create_angelone_broker",
-        lambda **kwargs: object(),
+        "create_historical_source",
+        unexpected_historical_source,
     )
     monkeypatch.setattr(main_module, "load_candles_from_csv", lambda **kwargs: [])
     monkeypatch.setattr(main_module, "MockLiveFeed", lambda **kwargs: feed)
@@ -121,12 +124,9 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
         timezone="Asia/Kolkata",
     )
 
-    class StubHistoricalFeed:
-        def __init__(self, broker, request_delay_sec):
-            pass
-
-        def stream(self, **kwargs):
-            return iter(())
+    class StubHistoricalSource:
+        def retrieve(self, dataset_context, request):
+            return []
 
     class SpyWalkForwardRunner:
         def __init__(self, **kwargs):
@@ -140,11 +140,6 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
         def log_summary(self, result):
             pass
 
-    monkeypatch.setattr(
-        walk_forward_runtime_module,
-        "HistoricalFeed",
-        StubHistoricalFeed,
-    )
     monkeypatch.setattr(
         walk_forward_runtime_module,
         "WalkForwardRunner",
@@ -177,9 +172,8 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
     )
 
     walk_forward_runtime_module.run_walk_forward(
-        broker=object(),
+        historical_source=StubHistoricalSource(),
         config=config,
-        app_config=AppConfig(),
     )
 
     assert_nse_dataset_identity(captured["dataset_context"])

@@ -3,7 +3,6 @@ import sys
 from core.runtime.walk_forward_runtime import (
     run_walk_forward,
 )
-from core.broker.base_broker import BaseBroker
 from core.config.app_config import AppConfig
 from core.config.runtime_mode import RuntimeMode
 import logging
@@ -17,10 +16,6 @@ from core.config.backtest_config import (
 from core.strategies.strategy_factory import (
     create_strategy,
 )
-from core.broker.broker_factory import (
-    create_angelone_broker,
-)
-
 from core.runtime.runtime_context import RuntimeContext
 
 from core.runtime.dataset_context import DatasetContext
@@ -29,20 +24,15 @@ from core.runtime.paper_runtime import (
     run_paper_trading,
 )
 
-from core.market_data.historical_feed import (
-    HistoricalFeed,
-)
-from core.market_data.base_feed import BaseFeed
-
 from core.market_data.mock_live_feed import (
     MockLiveFeed,
 )
 
-from core.entities.candle import (
-    Candle,
-)
 from core.market_data.csv_candle_loader import (
     load_candles_from_csv,
+)
+from core.market_data.historical_source_factory import (
+    create_historical_source,
 )
 
 load_dotenv()
@@ -56,23 +46,15 @@ logging.basicConfig(
 def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
     # -------- MODE --------
 
-    # -------- BROKER --------
-    broker = create_angelone_broker(
-        paper_mode=(app_config.runtime_mode != RuntimeMode.LIVE),
-        enable_historical_api=(
-            app_config.runtime_mode in [RuntimeMode.BACKTEST, RuntimeMode.WALK_FORWARD]
-        ),
-    )
-
     # -------- BACKTEST FLOW --------
     if app_config.runtime_mode == RuntimeMode.BACKTEST:
 
+        historical_source = create_historical_source(app_config)
         strategy = create_strategy(backtest_config)
         run_backtest(
-            broker=broker,
+            historical_source=historical_source,
             strategy=strategy,
             config=backtest_config,
-            app_config=app_config,
             runtime_context=RuntimeContext(),
             dataset_context=DatasetContext(
                 symbol=backtest_config.symbol,
@@ -83,10 +65,10 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
 
     elif app_config.runtime_mode == RuntimeMode.WALK_FORWARD:
 
+        historical_source = create_historical_source(app_config)
         run_walk_forward(
-            broker=broker,
+            historical_source=historical_source,
             config=backtest_config,
-            app_config=app_config,
         )
 
     elif app_config.runtime_mode == RuntimeMode.PAPER:
