@@ -13,9 +13,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
-| Step | M3.7 — Historical Source Policy / Runtime Wiring |
-| Lifecycle | DONE |
-| Next planned activity | M3.8 — Historical-path parity and reproducibility; baselining/design review only; implementation is not automatically authorized |
+| Step | M3.8 — Historical-path parity and reproducibility |
+| Lifecycle | READY / NOT AUTHORIZED |
+| Next implementation candidate | M3.8a — Historical input parity; implementation requires separate explicit authorization after this design baseline is reviewed and committed |
 
 The 240-test full suite was rerun at implementation and validation commit `7f968843` and passed.
 
@@ -153,7 +153,16 @@ M3.7d validated the actual Backtest and WFA source-composition paths across full
 
 M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
 
-DW-011 is resolved by the accepted M3.7d evidence. The next planned activity is an M3.8 — Historical-path parity and reproducibility baselining/design review only. M3.8 remains RESERVED, and implementation is not automatically authorized.
+DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path parity and reproducibility now has a baselined design and is READY / NOT AUTHORIZED. Its permanent child steps are:
+
+- M3.8a — Historical input parity — READY / NOT AUTHORIZED
+- M3.8b — Backtest result parity — BASELINED
+- M3.8c — Reproducibility identity and research-evidence persistence — BASELINED
+- M3.8d — Integration and repeated-run validation — BASELINED
+
+M3.8 will prove that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It will also establish deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval already persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; M3.8 validates that these paths converge without redesigning them unless focused RED evidence proves a defect.
+
+M3.8a is the next implementation candidate. Coding requires separate explicit authorization after this design baseline is reviewed and committed. No M3.8 child is IN_PROGRESS or DONE.
 
 ## Important V1 blockers
 

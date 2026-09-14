@@ -154,6 +154,20 @@ Persisted ISO timestamps are parsed back to Python `datetime` values for chronol
 
 Candles and coverage from one accepted provider result are persisted in one SQLite transaction. If candle persistence conflicts or fails, its coverage is rolled back with it. Historical source-policy selection and provider construction remain outside M3.6c and are targeted by M3.7.
 
+### AD-014 — Research reproducibility evidence is separate from historical market-data persistence
+
+**Status:** ACCEPTED
+
+**Target:** M3.8
+
+Historical candle and retrieval-coverage persistence remains the responsibility of the historical store. Research run identity, deterministic fingerprints, reproducibility evidence and references to detailed result artifacts belong to a separate research-evidence persistence boundary. Backtest or WFA research-result tables must not be added to the historical candle database.
+
+The initial research-evidence implementation may use a separate SQLite database/file, but it must remain logically and physically separate from the historical store. Source and provider provenance is recorded separately from canonical dataset identity so equivalent provider-fresh and local-store data can produce the same dataset fingerprint while retaining inspectable provenance.
+
+Dataset, research-configuration and stable-result fingerprint contracts use explicit versioned canonical serialization. Random execution-instance identifiers such as `session_id` and presentation-only options do not define research-result identity. Any other excluded nondeterministic field requires explicit justification.
+
+This decision does not prescribe a detailed SQL schema or final database filename. A minimal evidence record may contain fingerprints, run/request identity, provenance, repository revision, summary data and references to detailed artifacts. A complete research catalog, analytics/reporting warehouse and UI remain outside this decision.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

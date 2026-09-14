@@ -148,6 +148,8 @@ Future work, if required, should define:
 
 This is not a current M3.6 correctness blocker.
 
+M3.8 baselining does not automatically pull this work into implementation. Correctness-first historical dataset scans remain acceptable for the M3.8 parity scope unless focused evidence shows that they prevent M3.8 acceptance. DW-014 remains DEFERRED and requires separate scope and authorization.
+
 ## DW-015 — Broker Session and Authentication Lifecycle
 
 **Status:** OPEN

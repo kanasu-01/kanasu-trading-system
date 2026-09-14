@@ -420,7 +420,78 @@ M3.7d must not add real network calls, calendar/session/expected-bar inference, 
 
 The accepted evidence validates M3.7d through the bounded historical-source/research-runtime path. No production correction was required. M3.7a, M3.7b, M3.7c and M3.7d are validated at their accepted scopes, so M3.7 is complete and DW-011 is resolved at that scope. These validation claims do not extend into M3.8 historical-path parity, M4 backtest validity or M5 WFA validity.
 
-## 8. V1 release gates
+<a id="m38-historical-path-parity-and-reproducibility"></a>
+
+## 8. M3.8 — Historical-path parity and reproducibility
+
+**Status:** READY / not validated / implementation not authorized
+
+M3.8 validates that equivalent accepted historical data and the same research-relevant configuration yield equivalent canonical historical inputs and stable deterministic Backtest outputs through provider-fresh and already persisted local-store paths. It also requires deterministic dataset, configuration and result identities plus inspectable research-evidence persistence. It does not validate Backtest economics or WFA validity.
+
+### M3.8a — Historical input parity
+
+**Status:** READY / not validated / implementation not authorized
+
+Authoritative automated tests must use deterministic fake/provider and local-store evidence without broker login or network access. For equivalent accepted data, provider-fresh and warm-local paths must produce equal:
+
+1. candle count;
+2. chronological order;
+3. timestamps;
+4. open, high, low, close and volume values;
+5. `DatasetContext`;
+6. requested half-open `TimeRange` behavior; and
+7. confirmed-empty results where applicable.
+
+Source provenance may differ and must be recorded separately; it must not alter otherwise identical canonical candle content.
+
+### M3.8b — Backtest result parity
+
+**Status:** BASELINED / not validated
+
+With identical canonical candles and research-relevant configuration, provider-fresh and warm-local runs must have equivalent stable detailed Backtest results. Compare applicable trades, entry/exit timestamps, direction, prices, quantity, exit reason, gross/net P&L, transaction costs, stable bar-level strategy/execution events, execution prices/quantities, cash, equity, position size, drawdown and canonical equity curve.
+
+`BacktestResult.session_id` is intentionally excluded because it is execution-instance identity. Any other nondeterministic field excluded from parity requires explicit justification. Performance-summary equality is supporting evidence only and cannot replace detailed stable-result comparison.
+
+### M3.8c — Reproducibility identity and research-evidence persistence
+
+**Status:** BASELINED / not validated
+
+Validation must establish a versioned deterministic canonical serialization contract for:
+
+- a dataset fingerprint derived from canonical ordered candles and relevant dataset/request identity, equal across equivalent source paths and independent of separately recorded provenance;
+- a configuration fingerprint containing result-affecting dataset, request, strategy, parameter, capital, slippage, brokerage and other research settings while excluding presentation-only controls, export destinations, replay display and random execution IDs; and
+- a result fingerprint derived from stable Backtest result content while excluding random `session_id` and any other explicitly justified execution-instance field.
+
+Unordered Python `repr()`, object identity, process-specific `hash()` and other unstable representations are not acceptable evidence.
+
+Research evidence must persist through a boundary logically and physically separate from the historical candle/coverage store, consistent with AD-014. Tests must prove accepted/reference evidence can be stored, reloaded and inspected with appropriate run/evidence identity, timestamps, dataset/request identity, fingerprints, provenance, repository revision when available, concise summary and artifact references. Failed or incomplete runs must not be falsely recorded as accepted reproducible evidence.
+
+### M3.8d — Integration and repeated-run validation
+
+**Status:** BASELINED / not validated
+
+Required evidence:
+
+1. Provider-fresh canonical candles equal warm-local canonical candles.
+2. Repeated local retrieval remains identical.
+3. Identical canonical data and configuration yield equivalent stable trades and account/equity records.
+4. Dataset fingerprints match across equivalent paths.
+5. Configuration fingerprints match for equivalent research-relevant settings.
+6. Result fingerprints match for equivalent stable results.
+7. Changing a research-relevant input changes the appropriate identity or raises an explicit mismatch.
+8. Presentation-only changes do not falsely change research identity.
+9. Random session IDs do not break parity.
+10. Persisted reference evidence reloads into an inspectable record.
+11. Failed or incomplete runs do not become accepted evidence.
+12. Deterministic validation completes without a real provider or network.
+
+### Evidence policy and boundaries
+
+Deterministic fake/local parity is the authoritative automated evidence and belongs in relevant regression suites when changes affect historical retrieval/persistence, candle or dataset identity, Backtest inputs/results, or fingerprint logic. Real AngelOne/provider fresh-to-local smoke validation is optional supplementary milestone/release evidence because authentication, network, rate limits and provider corrections are external variables. Major validation points retain inspectable reference-run evidence; ordinary unit-test runs need not create permanent evidence records.
+
+M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. No M3.8 validation evidence or test count exists until implementation is separately authorized and completed.
+
+## 9. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
 

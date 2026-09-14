@@ -53,7 +53,11 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — DONE** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — DONE** — Source-policy integration and failure validation.
-  - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
+  - **M3.8 — READY / NOT AUTHORIZED** — Historical-path parity and reproducibility.
+    - **M3.8a — READY / NOT AUTHORIZED** — Historical input parity.
+    - **M3.8b — BASELINED** — Backtest result parity.
+    - **M3.8c — BASELINED** — Reproducibility identity and research-evidence persistence.
+    - **M3.8d — BASELINED** — Integration and repeated-run validation.
 
 ### P2 — Trusted Research Engine
 
@@ -73,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes. M3.8 remains RESERVED; its implementation is not authorized.
+M3.8 is baselined but not authorized for implementation. M3.8a is the first implementation candidate and also requires separate explicit authorization. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
 
 ## Near-term detailed work
 
@@ -378,9 +382,72 @@ This evidence validates the accepted M3.7d matrix through the actual research-ru
 
 ### M3.8 — Historical-path parity and reproducibility
 
-**Status:** RESERVED.
+**Status:** READY / NOT AUTHORIZED.
 
-Candidate outcome: equivalent accepted data produces equivalent canonical candles, trades and account curves through provider-fresh and local-store paths, with an inspectable dataset/configuration identity.
+**Outcome:** Equivalent accepted historical data, used with the same research-relevant configuration, produces equivalent canonical historical input and deterministic stable Backtest output regardless of whether the data arrived through a provider-fresh path or an already persisted local-store path. M3.8 also establishes inspectable deterministic identity for the dataset, research-relevant configuration and stable result.
+
+This milestone proves reproducibility and path parity. It does not establish Backtest economic validity or WFA validity, which remain M4 and M5 responsibilities.
+
+**Current architectural fact:** Provider-fresh retrieval and `LOCAL_FIRST` missing-range retrieval persist accepted candles and coverage into SQLite, then reload canonical local candles before a research runtime consumes them. `LOCAL_ONLY` and fully warm `LOCAL_FIRST` load canonical candles directly from the same local store. M3.8 validates that these accepted paths converge; it must not redesign the historical-source architecture unless focused RED evidence proves a defect.
+
+#### M3.8a — Historical input parity
+
+**Status:** READY / NOT AUTHORIZED.
+
+**Outcome:** Prove that provider-fresh and local-store paths yield exactly equivalent canonical candles when their accepted underlying market data is equivalent.
+
+Required parity covers candle count, chronological order, timestamps, OHLCV values, `DatasetContext`, requested half-open `TimeRange` semantics and confirmed-empty behavior where applicable. Deterministic automated tests use fake/provider evidence and make no real AngelOne or network call. Source provenance may differ while canonical candle content remains equal.
+
+M3.8a is the first implementation candidate. Implementation requires separate explicit authorization after this baseline is reviewed and committed.
+
+#### M3.8b — Backtest result parity
+
+**Status:** BASELINED.
+
+**Outcome:** Given the same canonical candles and research-relevant configuration, provider-fresh and warm-local runs produce equivalent stable Backtest outcomes.
+
+Parity compares detailed stable result content where applicable: completed trades; entry and exit timestamps, direction, prices, quantity and exit reason; gross/net P&L and transaction costs; stable bar-level strategy/execution events; execution prices and quantities; cash, equity, position size and drawdown; and the canonical equity curve. `BacktestResult.session_id` is excluded because it identifies an execution instance and may legitimately differ. Any other excluded nondeterministic field must be explicitly justified and documented. Derived summary equality is supporting evidence and is not sufficient by itself.
+
+#### M3.8c — Reproducibility identity and research-evidence persistence
+
+**Status:** BASELINED.
+
+**Outcome:** Establish deterministic identities for research inputs and stable output, together with a dedicated persistence boundary for inspectable reproducibility evidence.
+
+The versioned canonical serialization contract defines three separate fingerprints:
+
+- **Dataset fingerprint:** canonical ordered candles plus relevant dataset/request identity. Equivalent provider-fresh and local-store content produces the same fingerprint; source policy and provider provenance are recorded separately.
+- **Configuration fingerprint:** research-relevant settings including dataset identity where appropriate, request bounds, strategy name and parameters, initial capital, result-affecting slippage/brokerage configuration and other proven result inputs. Presentation, replay display, export destination, random session IDs and similar non-research controls do not change this fingerprint.
+- **Result fingerprint:** stable Backtest result content required for reproducibility, excluding intentionally nondeterministic execution-instance values such as random `session_id`.
+
+Fingerprints must not use unordered Python `repr()`, object identity, process-specific `hash()` or another unstable representation as authoritative evidence.
+
+Historical candle and retrieval-coverage persistence remains separate from research-result/evidence persistence under AD-014. Backtest/WFA result tables must not be added to the historical candle database. The initial evidence store may use a separate SQLite file and should record, as appropriate, a run/evidence ID, creation time, dataset/request identity, all three fingerprints, source/provenance, relevant repository revision, a concise result summary and references to detailed artifacts. Detailed trades, bar records, equity curves and reports may remain in suitable artifact files rather than being duplicated into a large database row. This scope does not build the final research catalog, analytics warehouse, UI or complete M4/M8 reporting system.
+
+#### M3.8d — Integration and repeated-run validation
+
+**Status:** BASELINED.
+
+**Outcome:** Prove the complete accepted M3.8 contract together.
+
+Required evidence:
+
+1. Provider-fresh canonical candles equal warm-local canonical candles.
+2. Repeated local retrieval remains identical.
+3. Identical canonical data and research configuration produce equivalent stable Backtest trades and account/equity records.
+4. The dataset fingerprint remains identical across equivalent source paths.
+5. The configuration fingerprint remains identical for equivalent research-relevant settings.
+6. The result fingerprint remains identical for equivalent stable results.
+7. Changing a research-relevant input changes the appropriate identity or produces an explicit mismatch.
+8. Changing presentation-only settings does not falsely change research identity.
+9. Random session IDs do not break parity.
+10. Persisted reference evidence can be reloaded and inspected.
+11. Failed or incomplete runs are not falsely recorded as accepted reproducible evidence.
+12. Deterministic automated validation requires no real provider or network.
+
+**Validation policy:** Deterministic fake/local parity tests are authoritative automated evidence and run with relevant regressions whenever changes can affect historical retrieval or persistence, canonical candle serialization/identity, dataset identity, Backtest runtime input, strategy/execution result determinism, or fingerprint logic. Major milestone/release validation retains inspectable reference-run evidence. An occasional controlled real-provider fresh-to-local rerun comparison is supplementary because authentication, network behavior, rate limits and provider-side corrections are external variables. Permanent evidence need not be written for every ordinary unit-test execution. Reproducibility and parity remain a mandatory V1 release gate.
+
+**Scope boundary:** M3.8 includes historical source-path and canonical-candle parity, stable Backtest-result parity, deterministic dataset/configuration/result fingerprints, minimal research-evidence persistence, repeat-run validation and a supplementary real-provider smoke policy. It does not establish Backtest timing/fill/stop economics, final account-return semantics, M4 strategy/execution corrections, M5 WFA validity, paper/live validity, DW-015 broker-session lifecycle, UI/API workflow, a complete analytics database, calendar/expected-bar completeness or real-money execution. WFA may support canonical-input delivery evidence only; full WFA result parity and validity remain M5 work.
 
 ## Remaining V1 milestones
 
