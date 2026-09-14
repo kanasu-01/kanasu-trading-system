@@ -155,9 +155,26 @@ The next task may become READY after review. It does not become authorized or IN
 - Keep hard risk controls deterministic.
 - Treat replay as a consumer of recorded candles/signals/trades/journals rather than an alternate owner of strategy state.
 
+### Implementation quality requirements
+
+Every production change must explicitly consider, where relevant:
+
+1. input and state validation at the correct boundary;
+2. expected failure behavior and clear error handling;
+3. protection against partial or corrupt authoritative state;
+4. resource safety, transaction rollback, cleanup, and release of files, connections, and other resources;
+5. useful logging and diagnostics at material operational boundaries and failures;
+6. observability sufficient to diagnose important failures;
+7. configuration of environment- or runtime-specific values instead of inappropriate hard-coding;
+8. security and secrets handling, including preventing credential or sensitive-data leakage through logs and errors;
+9. concise code-level documentation for non-obvious contracts, invariants, and behavior; and
+10. success-path, boundary, expected-failure, and regression tests proportional to the contract and risk.
+
+These are engineering considerations, not mandatory boilerplate. Add only what the task contract and operational risk justify; do not add meaningless logging, exception wrapping, configuration, comments, abstractions, or tests to satisfy a checklist. Record or defer material issues outside the authorized scope rather than implementing them silently.
+
 ## 9. Testing and evidence
 
-Testing is required in proportion to the contract and risk. Behavioral tests should establish observable outcomes rather than private implementation details.
+Testing is required in proportion to the contract and risk. Where applicable, validation covers success, boundaries, expected failures, and regressions. Behavioral tests should establish observable outcomes rather than private implementation details.
 
 Use focused tests during development. Run the required broader suite before closure when authorized and appropriate. Preserve existing tests unless their contract is genuinely wrong; explain a test-contract problem before changing it. Do not weaken tests to obtain a green result.
 
@@ -190,6 +207,8 @@ Synchronize documentation when a change affects a public contract, architecture 
 
 Update only the authoritative documents affected by the change. Avoid copying the same status or contract into every file. Small internal changes need not trigger wholesale documentation rewrites.
 
+For routine documentation-only closure, reuse already accepted implementation and test evidence, update only the authoritative documents actually affected, and do not rerun tests merely because documentation is being synchronized. Do not repeat repository-wide discovery or auditing unless an inconsistency or missing evidence requires it.
+
 Before closure:
 
 1. Check documentation impact.
@@ -200,9 +219,17 @@ Before closure:
 
 ## 13. Progress measurement
 
-Do not publish unsupported whole-project completion percentages. Future accepted scopes may use 1, 2, 3, 5, 8 or 13 effort points at the leaf-task level and report implementation and validation progress separately.
+Show progress summaries only at meaningful major closure points: major step or task closure, major sub-milestone closure, milestone closure, version closure, or when explicitly requested. Ordinary development replies do not require a progress summary.
 
-Do not use lines of code, test count, calendar time or number of headings as completion percentages. Do not invent estimates for historical work merely to construct a progress meter. Record scope rebaselines and avoid parent/child double counting.
+When applicable, report at least current work or step, current milestone, and current version. Near-term progress uses evidence-based lifecycle state or accepted leaf-scope completion. Higher-level milestone or version percentages may be labelled **approximate** when future scope is not completely baselined. Preserve enough of the calculation basis to make a percentage reproducible, avoid speculative precision, and report implementation and validation progress separately where they differ.
+
+Accepted scopes may use 1, 2, 3, 5, 8 or 13 effort points at the leaf-task level. Do not use test count, repository line count, calendar time, or number of headings as the completion percentage itself. Avoid parent/child double counting and rebaseline transparently when accepted scope changes. Do not invent estimates for historical work merely to construct a progress meter.
+
+A progress summary may include supporting engineering metrics such as tests before and after, repository line changes, current commit, and next major work. These support the summary; they are not completion percentages.
+
+### Repository line changes
+
+Call Git line statistics **repository line changes**, rather than treating every changed line as executable lines of code. At a major closure, when useful, separate Production files, Test files, and Documentation files with added, deleted, and net line counts. Comments, imports, blank lines, and docstrings in production files remain production-file line changes. This metric does not measure quality or completion.
 
 ## 14. Journaling, reporting and UI
 
