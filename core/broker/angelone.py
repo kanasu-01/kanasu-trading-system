@@ -253,9 +253,13 @@ class AngelOneBroker(BaseBroker):
         if "data" not in response:
             raise RuntimeError("Missing data in AngelOne historical response")
 
+        data = response["data"]
+        if not isinstance(data, list):
+            raise RuntimeError("Invalid data in AngelOne historical response")
+
         candles: List[Candle] = []
 
-        for row in response["data"]:
+        for row in data:
             ts = datetime.fromisoformat(row[0])
 
             candles.append(
@@ -268,8 +272,5 @@ class AngelOneBroker(BaseBroker):
                     volume=float(row[5]),
                 )
             )
-
-        if not candles:
-            raise RuntimeError("No historical candles returned")
 
         return candles
