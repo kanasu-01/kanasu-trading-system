@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `0a8410ff Validate M3.8a historical input parity` |
-| Latest reported test baseline | `245 passed at 0a8410ff` |
+| Implementation verification baseline | `388b5393 Validate M3.8b backtest result parity` |
+| Latest reported test baseline | `248 passed at 388b5393` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.8 — Historical-path parity and reproducibility |
 | Lifecycle | IN_PROGRESS |
-| Next implementation candidate | M3.8b — Backtest result parity; implementation requires separate explicit authorization |
+| Next implementation candidate | M3.8c — Reproducibility identity and research-evidence persistence; implementation requires separate explicit authorization |
 
-The 245-test full suite was rerun at implementation and validation commit `0a8410ff` and passed.
+The 248-test full suite was rerun at implementation and validation commit `388b5393` and passed.
 
 ## Completed foundation
 
@@ -41,6 +41,7 @@ The 245-test full suite was rerun at implementation and validation commit `0a841
 - M3.7d — Source-policy integration and failure validation
 - M3.7 — Historical source policy/runtime wiring
 - M3.8a — Historical input parity
+- M3.8b — Backtest result parity
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -167,6 +168,26 @@ M3.8a proves that equivalent provider-fresh historical data persists through SQL
 
 M3.8a completion does not validate M3.8b Backtest-result parity, M3.8c fingerprint/evidence persistence or M3.8d full integration.
 
+## M3.8b validation evidence
+
+- Design baseline: `c53c640`
+- Implementation commit: `388b5393 Validate M3.8b backtest result parity`
+- Pre-change full suite: 245 passed
+- Focused M3.8b: 3 passed
+- Parity/Backtest neighborhood: 12 passed
+- All Backtest tests: 4 passed
+- All runtime tests: 31 passed
+- Post-change full suite: 248 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test scope: `tests/runtime/test_backtest_result_parity.py`, +304 / -0
+
+M3.8b proves that equivalent accepted historical data, identical deterministic strategy behavior, identical research-relevant Backtest configuration and identical execution configuration produce exactly equal stable Backtest results through provider-fresh and durable-local paths. The validated paths are provider-backed fresh to `LOCAL_ONLY`, provider-backed fresh to warm `LOCAL_FIRST`, and cold `LOCAL_FIRST` to warm `LOCAL_FIRST`.
+
+Stable parity covers complete `Trade` records, `BarRecord` sequences, strategy/execution events, execution prices and quantities, cash, equity, position size, drawdown and the canonical equity curve. Random `session_id` values deliberately differ and are excluded from stable research-result parity. No production correction was required.
+
+M3.8b does not validate Backtest economic correctness; timing, fill or stop correctness; fingerprinting or canonical serialization; research-evidence persistence; WFA validity; or full M3.8 integration.
+
 ## Current work
 
 M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
@@ -174,13 +195,13 @@ M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical S
 DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path parity and reproducibility is IN_PROGRESS. Its permanent child steps are:
 
 - M3.8a — Historical input parity — DONE
-- M3.8b — Backtest result parity — BASELINED / NOT AUTHORIZED
-- M3.8c — Reproducibility identity and research-evidence persistence — BASELINED
+- M3.8b — Backtest result parity — DONE
+- M3.8c — Reproducibility identity and research-evidence persistence — BASELINED / NOT AUTHORIZED
 - M3.8d — Integration and repeated-run validation — BASELINED
 
 M3.8 will prove that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It will also establish deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval already persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; M3.8 validates that these paths converge without redesigning them unless focused RED evidence proves a defect.
 
-M3.8a is complete at its accepted scope. M3.8b is the next implementation candidate but remains NOT AUTHORIZED; coding requires separate explicit authorization. M3.8c and M3.8d remain baselined and unimplemented.
+M3.8a and M3.8b are complete at their accepted scopes. M3.8c is the next implementation candidate but remains NOT AUTHORIZED; coding requires separate explicit authorization. M3.8d remains baselined and unimplemented.
 
 ## Important V1 blockers
 

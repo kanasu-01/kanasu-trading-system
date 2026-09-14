@@ -55,8 +55,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.7d — DONE** — Source-policy integration and failure validation.
   - **M3.8 — IN_PROGRESS** — Historical-path parity and reproducibility.
     - **M3.8a — DONE** — Historical input parity.
-    - **M3.8b — BASELINED / NOT AUTHORIZED** — Backtest result parity.
-    - **M3.8c — BASELINED** — Reproducibility identity and research-evidence persistence.
+    - **M3.8b — DONE** — Backtest result parity.
+    - **M3.8c — BASELINED / NOT AUTHORIZED** — Reproducibility identity and research-evidence persistence.
     - **M3.8d — BASELINED** — Integration and repeated-run validation.
 
 ### P2 — Trusted Research Engine
@@ -77,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 is IN_PROGRESS and M3.8a is complete at its accepted scope. M3.8b is the next implementation candidate but remains NOT AUTHORIZED and requires separate explicit authorization. M3.8c and M3.8d remain BASELINED. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
+M3.8 is IN_PROGRESS, and M3.8a and M3.8b are complete at their accepted scopes. M3.8c is the next implementation candidate but remains NOT AUTHORIZED and requires separate explicit authorization. M3.8d remains BASELINED. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
 
 ## Near-term detailed work
 
@@ -415,17 +415,33 @@ The evidence proves durable provider-fresh parity through both `LOCAL_ONLY` and 
 
 #### M3.8b — Backtest result parity
 
-**Status:** BASELINED / NOT AUTHORIZED.
-
-M3.8b is the next implementation candidate. Implementation requires separate explicit authorization.
+**Status:** DONE.
 
 **Outcome:** Given the same canonical candles and research-relevant configuration, provider-fresh and warm-local runs produce equivalent stable Backtest outcomes.
 
 Parity compares detailed stable result content where applicable: completed trades; entry and exit timestamps, direction, prices, quantity and exit reason; gross/net P&L and transaction costs; stable bar-level strategy/execution events; execution prices and quantities; cash, equity, position size and drawdown; and the canonical equity curve. `BacktestResult.session_id` is excluded because it identifies an execution instance and may legitimately differ. Any other excluded nondeterministic field must be explicitly justified and documented. Derived summary equality is supporting evidence and is not sufficient by itself.
 
+**Completion evidence:**
+
+- Design baseline: `c53c640`
+- Implementation commit: `388b5393 Validate M3.8b backtest result parity`
+- Pre-change full suite: 245 passed
+- Focused M3.8b: 3 passed
+- Parity/Backtest neighborhood: 12 passed
+- All Backtest tests: 4 passed
+- All runtime tests: 31 passed
+- Post-change full suite: 248 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test scope: `tests/runtime/test_backtest_result_parity.py`, +304 / -0
+
+The accepted evidence proves exact equality of complete `Trade` records, `BarRecord` sequences and canonical equity curves across provider-backed fresh to `LOCAL_ONLY`, provider-backed fresh to warm `LOCAL_FIRST`, and cold to warm `LOCAL_FIRST` Backtests. Strategy/execution events, execution prices and quantities, cash, equity, position size and drawdown are included. Deliberately different random `session_id` values demonstrate that execution-instance identity is excluded while stable research results remain exactly equal. This does not establish financial correctness of Backtest economics, timing, fills, stops, slippage, brokerage or account metrics, and it does not validate M3.8c or M3.8d.
+
 #### M3.8c — Reproducibility identity and research-evidence persistence
 
-**Status:** BASELINED.
+**Status:** BASELINED / NOT AUTHORIZED.
+
+M3.8c is the next implementation candidate. Implementation requires separate explicit authorization.
 
 **Outcome:** Establish deterministic identities for research inputs and stable output, together with a dedicated persistence boundary for inspectable reproducibility evidence.
 

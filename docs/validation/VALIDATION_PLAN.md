@@ -424,7 +424,7 @@ The accepted evidence validates M3.7d through the bounded historical-source/rese
 
 ## 8. M3.8 — Historical-path parity and reproducibility
 
-**Status:** IN_PROGRESS / partially validated through completed M3.8a
+**Status:** IN_PROGRESS / partially validated through completed M3.8a and M3.8b
 
 M3.8 validates that equivalent accepted historical data and the same research-relevant configuration yield equivalent canonical historical inputs and stable deterministic Backtest outputs through provider-fresh and already persisted local-store paths. It also requires deterministic dataset, configuration and result identities plus inspectable research-evidence persistence. It does not validate Backtest economics or WFA validity.
 
@@ -460,11 +460,29 @@ This evidence validates provider-fresh to durable-local parity through `LOCAL_ON
 
 ### M3.8b — Backtest result parity
 
-**Status:** BASELINED / not validated
+**Status:** DONE / validated at accepted scope
 
 With identical canonical candles and research-relevant configuration, provider-fresh and warm-local runs must have equivalent stable detailed Backtest results. Compare applicable trades, entry/exit timestamps, direction, prices, quantity, exit reason, gross/net P&L, transaction costs, stable bar-level strategy/execution events, execution prices/quantities, cash, equity, position size, drawdown and canonical equity curve.
 
 `BacktestResult.session_id` is intentionally excluded because it is execution-instance identity. Any other nondeterministic field excluded from parity requires explicit justification. Performance-summary equality is supporting evidence only and cannot replace detailed stable-result comparison.
+
+Completion evidence:
+
+- Design baseline: `c53c640`
+- Implementation commit: `388b5393 Validate M3.8b backtest result parity`
+- Pre-change full suite: 245 passed
+- Focused M3.8b: 3 passed
+- Parity/Backtest neighborhood: 12 passed
+- All Backtest tests: 4 passed
+- All runtime tests: 31 passed
+- Post-change full suite: 248 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test scope: `tests/runtime/test_backtest_result_parity.py`, +304 / -0
+
+M3.8b validates reproducibility of the current deterministic Backtest result contract across provider-fresh and durable-local historical paths. Complete `Trade` records, `BarRecord` sequences, execution events/prices/quantities, cash, equity, position size, drawdown and equity curves remained exactly equal. Session IDs were deliberately different, confirming that execution-instance identity is excluded from stable-result parity. No production correction was required.
+
+This evidence does not establish whether Backtest economics, timing, fills, stops, slippage, brokerage or account metrics are financially correct. Those remain M4 concerns.
 
 ### M3.8c — Reproducibility identity and research-evidence persistence
 
@@ -503,7 +521,7 @@ Required evidence:
 
 Deterministic fake/local parity is the authoritative automated evidence and belongs in relevant regression suites when changes affect historical retrieval/persistence, candle or dataset identity, Backtest inputs/results, or fingerprint logic. Real AngelOne/provider fresh-to-local smoke validation is optional supplementary milestone/release evidence because authentication, network, rate limits and provider corrections are external variables. Major validation points retain inspectable reference-run evidence; ordinary unit-test runs need not create permanent evidence records.
 
-M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a is validated at its accepted scope; M3.8b, M3.8c and M3.8d remain unvalidated.
+M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a and M3.8b are validated at their accepted scopes; M3.8c and M3.8d remain unvalidated.
 
 ## 9. V1 release gates
 
