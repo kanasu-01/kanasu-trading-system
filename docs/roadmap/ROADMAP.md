@@ -50,7 +50,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.6d — DONE** — Integration and failure validation.
   - **M3.7 — IN_PROGRESS** — Historical source policy/runtime wiring.
     - **M3.7a — DONE** — Historical source policy contract.
-    - **M3.7b — READY / NEXT** — Broker historical provider adapter.
+    - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — PLANNED** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — PLANNED** — Source-policy integration and failure validation.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
@@ -73,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a is complete. M3.7b is READY / NEXT after this baseline is reviewed and committed; implementation is not authorized automatically and requires separate explicit authorization.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a and M3.7b are complete. M3.7c remains PLANNED pending a separate baselining/design review and is not authorized for implementation.
 
 ## Near-term detailed work
 
@@ -198,11 +198,11 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 - No runtime wiring or broker adapter work occurred
 - No destructive provider-backed refresh or replacement semantics were introduced
 
-M3.7b is READY / NEXT after this documentation baseline is reviewed and committed; implementation is not authorized automatically and requires separate explicit authorization.
+M3.7a and M3.7b are complete. M3.7c requires a separate baselining/design review and is not authorized for implementation.
 
 #### M3.7b — Broker historical provider adapter
 
-**Status:** READY / NEXT.
+**Status:** DONE.
 
 **Outcome:** Provide a broker-backed `HistoricalProvider` adapter that collects the canonical `HistoricalFeed` stream, claims complete request coverage only after successful full stream completion, supports confirmed-empty retrieval, adapts the exact request-end boundary to half-open semantics, and preserves explicit timestamp-awareness validation.
 
@@ -221,7 +221,27 @@ M3.7b is READY / NEXT after this documentation baseline is reviewed and committe
 
 **Required evidence:** Successful candles, sparse results, confirmed-empty results, request-start inclusion, exact request-end exclusion, failed streams with no manufactured coverage, explicit awareness mismatch, preserved HistoricalFeed chunk-validation regressions, valid empty AngelOne response, malformed AngelOne response rejection, and non-empty AngelOne parsing regression.
 
-M3.7b adds no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. M3.7c and M3.7d remain PLANNED.
+**Completion evidence:**
+
+- Implementation commit: `b6a4fff Add broker historical provider adapter`
+- Pre-change full suite: 186 passed
+- Focused HistoricalFeedProvider: 10 passed
+- Focused AngelOne historical: 10 passed
+- HistoricalFeed regressions: 15 passed
+- M3.7 neighborhood: 90 passed
+- All market-data: 136 passed
+- Broker neighborhood: 10 passed
+- Full suite: 206 passed
+- `git diff --check`: passed
+- `HistoricalFeedProvider` implements the accepted provider shape by composing HistoricalFeed without duplicating chunk logic
+- Successful complete, sparse and confirmed-empty retrieval produce explicit full-request coverage
+- Request-start inclusion and exact request-end exclusion preserve half-open provider semantics
+- Other out-of-range candles, incompatible awareness and failed streams are rejected without clipping, conversion or manufactured coverage
+- AngelOne valid empty data now returns an empty list; malformed responses remain errors and non-empty parsing remains unchanged
+- BaseBroker, HistoricalFeed, HistoricalSource, AppConfig, main, backtest and WFA runtime remain unchanged
+- No expected-bar, session, calendar or gap-inference logic was added
+
+M3.7b added no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. M3.7c and M3.7d remain PLANNED. M3.7c requires a separate baselining/design review and is not authorized for implementation.
 
 #### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 

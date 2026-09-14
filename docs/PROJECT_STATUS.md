@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `073f3e9 Add historical source policy contract` |
-| Latest reported test baseline | `186 passed at 073f3e9` |
+| Implementation verification baseline | `b6a4fff Add broker historical provider adapter` |
+| Latest reported test baseline | `206 passed at b6a4fff` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
 | Lifecycle | IN_PROGRESS |
-| Next implementation candidate | M3.7b — Broker Historical Provider Adapter |
+| Next planned review | M3.7c — Backtest/WFA Runtime Wiring and Lazy Provider Construction baselining/design review; coding is not yet authorized |
 
-The 186-test full suite was rerun at implementation commit `073f3e9` and passed.
+The 206-test full suite was rerun at implementation commit `b6a4fff` and passed.
 
 ## Completed foundation
 
@@ -36,6 +36,7 @@ The 186-test full suite was rerun at implementation commit `073f3e9` and passed.
 - M3.6d — Integration and failure validation
 - M3.6 — Local historical persistence and retrieval
 - M3.7a — Historical source policy contract
+- M3.7b — Broker historical provider adapter
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -88,11 +89,30 @@ M3.7a establishes explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` pol
 
 Provider-backed persistence remains non-destructive, and no refresh or replacement policy was introduced. `RuntimeMode` remains independent. M3.7a added no broker, AngelOne, HistoricalFeed, main, backtest or WFA wiring, and introduced no timestamp normalization or expected-bar, calendar or session inference.
 
+## M3.7b validation evidence
+
+- Implementation commit: `b6a4fff Add broker historical provider adapter`
+- Pre-change full suite: 186 passed
+- Focused HistoricalFeedProvider: 10 passed
+- Focused AngelOne historical: 10 passed
+- HistoricalFeed regressions: 15 passed
+- M3.7 neighborhood: 90 passed
+- All market-data: 136 passed
+- Broker neighborhood: 10 passed
+- Full suite: 206 passed
+- `git diff --check`: passed
+
+`HistoricalFeedProvider` implements the accepted `HistoricalProvider` shape by composing `HistoricalFeed`; it does not duplicate broker chunking. HistoricalFeed remains authoritative for broker limits, chunk traversal, overlap handling, duplicate and conflict detection, chronology, and stream-awareness validation. A successfully completed retrieval returns explicit `coverage=(request,)` based on operation completion rather than candle count or spacing, so sparse and confirmed-empty results remain valid evidence.
+
+The adapter includes a candle at `request.start`, excludes an exact `request.end` candle under half-open `[start, end)` semantics, and rejects other out-of-range candles rather than clipping them. Failed streams return no result or manufactured coverage, including failures after earlier chunks emitted candles. Request/candle naive-aware incompatibility fails explicitly, with no timestamp normalization or conversion.
+
+AngelOne now returns `[]` for a valid `data=[]` response. Malformed responses remain errors, and non-empty timestamp/OHLCV parsing remains unchanged. BaseBroker, HistoricalFeed, HistoricalSource, AppConfig, main, backtest and WFA runtime were unchanged. No expected-bar, session, calendar or gap-inference logic was added.
+
 ## Current work
 
-M3.7a is complete at its accepted scope.
+M3.7a and M3.7b are complete at their accepted scopes.
 
-M3.7 remains IN_PROGRESS. M3.7b — Broker Historical Provider Adapter is baselined as READY / NEXT, while M3.7c and M3.7d remain PLANNED and unimplemented. M3.7b is READY / NEXT after this baseline is reviewed and committed; implementation still requires separate explicit authorization. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7c and M3.7d remain PLANNED and unimplemented. The next activity is a separate M3.7c baselining/design review; M3.7c implementation is not authorized automatically and requires separate explicit authorization. M3.8 remains RESERVED.
 
 ## Important V1 blockers
 

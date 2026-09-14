@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a is DONE and validated at its accepted isolated policy-contract scope. M3.7b is READY but not yet validated; M3.7c and M3.7d are PLANNED and not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a and M3.7b are DONE and validated at their accepted isolated scopes. M3.7c and M3.7d are PLANNED and not yet validated. M3.7 as a whole is not yet validated.
 
 Cross-step invariants:
 
@@ -260,7 +260,7 @@ Provider-backed cache refresh or replacement semantics remain undefined and pers
 
 ### M3.7b — Broker historical provider adapter
 
-**Status:** READY / not yet validated
+**Status:** DONE / validated
 
 Required acceptance evidence:
 
@@ -279,13 +279,32 @@ Required acceptance evidence:
 13. A valid non-empty AngelOne response retains the existing timestamp and OHLCV parsing behavior.
 14. BaseBroker remains unchanged as a broker capability and does not become a HistoricalProvider or source-policy owner.
 
+Completion evidence:
+
+- Implementation commit: `b6a4fff Add broker historical provider adapter`
+- Pre-change full suite: 186 passed
+- Focused HistoricalFeedProvider: 10 passed
+- Focused AngelOne historical: 10 passed
+- HistoricalFeed regressions: 15 passed
+- M3.7 neighborhood: 90 passed
+- All market-data: 136 passed
+- Broker neighborhood: 10 passed
+- Full suite: 206 passed
+- `git diff --check`: passed
+
+This evidence validates the isolated broker-backed provider capability and the minimal AngelOne confirmed-empty correction. It does not validate runtime construction, login timing, backtest/WFA wiring or M3.7 end-to-end behavior.
+
 Coverage is evidence of successful complete retrieval, not an inference from candle content. No market-calendar, holiday, session, expected-bar, gap-filling or provider-backed destructive refresh behavior belongs to M3.7b. Runtime configuration, provider construction/login timing, main, backtest and WFA wiring remain M3.7c work; end-to-end policy behavior remains M3.7d work.
 
 ### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
+**Status:** PLANNED / not yet validated
+
 Prove that backtest and WFA obtain historical candles through the source-composition boundary. `LOCAL_ONLY` and warm `LOCAL_FIRST` runs require no AngelOne credentials, construction or login; missing `LOCAL_FIRST` coverage constructs external capability only after gaps are known; `PROVIDER_BACKED` requires it. Neither runtime may duplicate policy decisions.
 
 ### M3.7d — Source-policy integration and failure validation
+
+**Status:** PLANNED / not yet validated
 
 Prove fully local offline operation, warm local-first operation without authentication, missing-gap fallback, mandatory provider-backed access, provider-construction/login failure behavior, absence of false coverage after failure, confirmed-empty external behavior, explicit awareness incompatibility, and common backtest/WFA semantics. DW-011 may close only with this accepted runtime evidence.
 

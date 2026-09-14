@@ -20,7 +20,7 @@ This document owns Kanasu's current and target system architecture. It describes
 | Area | Current responsibility |
 |---|---|
 | core/entities | Candle, CandleSeries, signals, positions, trades and other domain entities. |
-| core/market_data | Feed abstractions, historical chunk retrieval/composition, mock live replay, canonical CSV parsing, SQLite candle/coverage persistence, deterministic missing-range planning, validated local-first retrieval, and the isolated historical source-policy boundary. |
+| core/market_data | Feed abstractions, historical chunk retrieval/composition, a broker-backed HistoricalProvider adapter, mock live replay, canonical CSV parsing, SQLite candle/coverage persistence, deterministic missing-range planning, validated local-first retrieval, and the isolated historical source-policy boundary. |
 | core/data_loaders | Compatibility import path delegating CSV parsing to core/market_data. |
 | core/broker | Broad broker abstraction plus current AngelOne and legacy CSV implementations. |
 | core/strategies | Strategy contracts, strategy runner, and strategy implementations. |
@@ -60,7 +60,7 @@ browser → API routes
     → fixed mock backtest response OR paper session metadata
 ~~~
 
-SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. HistoricalSourcePolicy and HistoricalSource implement the `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` selection contract with lazy provider-factory construction. This policy boundary is validated in isolation. It is not yet wired into AppConfig, main, backtest or WFA, which still use broker-backed HistoricalFeed directly.
+SQLite persistence, explicit retrieval coverage, missing-range planning and LocalFirstHistoricalService are implemented and validated together. HistoricalSourcePolicy and HistoricalSource implement the `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` selection contract with lazy provider-factory construction. HistoricalFeedProvider now implements the broker-backed HistoricalProvider capability by composing HistoricalFeed. These policy and provider boundaries are validated in isolation but are not yet wired into AppConfig, main, backtest or WFA, which still use broker-backed HistoricalFeed directly.
 
 ## 5. Simulated execution and accounting
 
@@ -106,6 +106,8 @@ The M3.6 coverage planner deterministically subtracts persisted half-open covera
 
 HistoricalSource owns source-policy selection and accepts a lazy provider factory. `LOCAL_ONLY` and warm `LOCAL_FIRST` retrieval avoid provider construction; missing `LOCAL_FIRST` coverage creates one provider and delegates to LocalFirstHistoricalService; `PROVIDER_BACKED` contacts the provider for the complete request and determines completion from that result's explicit coverage alone. Provider-result validation and half-open local loading are shared with the M3.6 service. Provider-backed persistence is currently non-destructive; refresh and replacement semantics are not established.
 
+HistoricalFeedProvider is the implemented bridge from the HistoricalProvider contract to HistoricalFeed. It collects the canonical completed stream, excludes only an exact request-end candle for half-open provider semantics, validates the resulting provider evidence through the shared M3.6 boundary, and claims full request coverage only after successful stream completion. Sparse and confirmed-empty results remain valid retrieval evidence. HistoricalFeed continues to own broker limits, chunk traversal, overlap reconciliation, duplicate/conflict rejection, chronology and stream-awareness validation. AngelOne accepts a valid empty historical data collection while malformed responses remain errors.
+
 Dataset identity currently contains:
 
 ~~~text
@@ -121,8 +123,7 @@ Timezone identity does not imply timestamp localization or conversion.
 - The M3.6 local persistence/retrieval capabilities are not yet wired into backtest or WFA runtime source selection.
 - Backtest and WFA still construct broker-backed HistoricalFeed directly, and main constructs/authenticates AngelOne before historical-source need is known.
 - The validated HistoricalSource policy boundary is not yet configured through AppConfig or used by main, backtest or WFA. Runtime composition still constructs/authenticates AngelOne before historical-source need is known.
-- No real broker HistoricalProvider adapter exists yet.
-- AngelOne currently rejects an empty historical candle result; the future provider adapter must establish confirmed-empty behavior without inferring expected bars.
+- The broker-backed HistoricalFeedProvider exists and is validated in isolation, but runtime composition does not yet provide it lazily through HistoricalSource.
 - BacktestConfig request boundaries can be naive while external provider timestamps can be aware; the adapter/runtime boundary must make compatibility explicit without silent normalization.
 - Historical CSV export and legacy CSVBroker/replay paths retain stale contracts.
 
@@ -162,7 +163,7 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 
 - local-first persistence and retrieval are not wired into backtest/WFA source selection;
 - main constructs and authenticates AngelOne before historical-source need is known;
-- the source-policy contract exists, but runtime selection, provider adaptation and lazy broker construction remain unimplemented;
+- the source-policy contract and broker-backed provider adapter exist, but runtime selection and lazy broker construction remain unimplemented;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;
@@ -184,7 +185,7 @@ Backtest / WFA historical request
        │                              lazy HistoricalProvider
        └─ PROVIDER_BACKED → required HistoricalProvider
                                               ↓
-                  broker adapter → HistoricalFeed → BaseBroker
+             HistoricalFeedProvider → HistoricalFeed → BaseBroker
                          ↓
            accepted candles and explicit coverage
                          ↓
