@@ -168,6 +168,75 @@ Dataset, research-configuration and stable-result fingerprint contracts use expl
 
 This decision does not prescribe a detailed SQL schema or final database filename. A minimal evidence record may contain fingerprints, run/request identity, provenance, repository revision, summary data and references to detailed artifacts. A complete research catalog, analytics/reporting warehouse and UI remain outside this decision.
 
+### AD-015 — Canonical research identity and evidence-record v1
+
+**Status:** ACCEPTED
+
+**Target:** M3.8c
+
+AD-015 refines AD-014; it does not supersede it. AD-014 owns the separation between historical market-data persistence and research-evidence persistence. AD-015 freezes the v1 canonical identity and logical evidence-record contracts within that separate boundary.
+
+#### Three fingerprint domains
+
+M3.8c defines independent dataset, research-configuration and stable-result fingerprints. Each domain carries an explicit versioned schema identifier conceptually equivalent to `kanasu.dataset.v1`, `kanasu.backtest-config.v1` and `kanasu.backtest-result.v1`, persisted inside its canonical payload. Fingerprint output uses SHA-256 in self-describing form: `sha256:<64 lowercase hexadecimal characters>`.
+
+The implementation must not use Python `hash()`, `repr()`, object identity, memory addresses, arbitrary `str(object)` fallback or insertion-order-dependent mappings as authoritative identity.
+
+#### Canonical serialization v1
+
+Canonical values are explicitly type-tagged so meaningful distinctions survive: `1` differs from `1.0`; list differs from tuple; and `None`, `"None"` and `False` remain distinct. V1 supports only:
+
+- `None`, tagged as a null/none value;
+- `bool`, tagged as Boolean;
+- `int`, tagged with its decimal integer representation;
+- finite `float`, tagged with its exact `float.hex()` representation;
+- `str`, tagged as a Unicode string;
+- `datetime`, tagged with `datetime.isoformat(timespec="microseconds")`;
+- ordered `list` and `tuple`, with distinct tags and recursively canonicalized values; and
+- mappings with string keys sorted lexicographically and recursively supported values.
+
+Unsupported values and non-finite floats fail explicitly and are never stringified. Datetime serialization preserves the supplied representation and UTC offset; it does not normalize to UTC, localize naive values, strip offsets or convert awareness.
+
+The tagged representation is encoded as deterministic UTF-8 JSON using semantics equivalent to `sort_keys=True`, `separators=(",", ":")`, `ensure_ascii=False` and `allow_nan=False`. SHA-256 hashes those exact bytes.
+
+#### Dataset fingerprint v1
+
+Dataset identity contains the `DatasetContext` symbol, timeframe and timezone metadata; requested half-open `TimeRange` start and end; and canonical ordered candles with timestamp and complete OHLCV values. The candle sequence must already satisfy the canonical chronological boundary. Fingerprinting does not sort, deduplicate, repair chronology or normalize timestamps; invalid/noncanonical input fails explicitly.
+
+Source policy and provider provenance are excluded from dataset identity and are recorded separately. Equivalent canonical candles with equivalent context and request therefore yield the same dataset fingerprint through provider-backed, `LOCAL_FIRST` and `LOCAL_ONLY` paths.
+
+#### Research-configuration fingerprint v1
+
+The effective Backtest research configuration contains, at minimum, the applicable dataset identity and request, strategy name and parameters, initial capital, effective risk-per-trade percentage, slippage percentage, slippage-enabled state and brokerage-enabled state. Callers supply effective risk per trade explicitly; fingerprinting does not introduce a second hidden default.
+
+Replay/display controls, visualization, export controls and destinations, UI state, random session IDs, journal paths, source policy and provenance do not change research-configuration identity when canonical data is equal. Strategy-parameter mapping insertion order is irrelevant. Changing any effective result-affecting value changes configuration identity. M3.8c does not change runtime configuration propagation.
+
+#### Stable Backtest-result fingerprint v1
+
+Stable-result identity covers complete current `Trade` records, complete current `BarRecord` records and the canonical equity curve. It excludes `BacktestResult.session_id`. Trade content includes symbol, entry/exit times and prices, stop price, quantity, direction, exit reason, P&L, gross P&L, transaction cost and P&L percentage. Bar content includes timestamp, OHLCV, strategy, state, signal, execution event, execution price/quantity, decision snapshot, equity, cash, position size and drawdown.
+
+Decision snapshots use the same recursive canonical-value contract; unsupported values fail rather than being stringified. Equivalent stable results with different session IDs have the same fingerprint, while changing a stable field changes identity. This fingerprints the current deterministic result contract and does not assert financial correctness, which remains M4 work.
+
+#### Research evidence model and store
+
+The immutable logical record contains an evidence ID, timezone-aware microsecond-precision creation time, explicit status, `DatasetContext`, requested `TimeRange`, dataset/configuration/result fingerprints, provenance, optional repository revision, concise summary and artifact references. Evidence ID identifies the persisted record and is not a reproducibility fingerprint. Evidence ID and creation time are excluded from the three fingerprints. Provenance may describe policy/provider origin without altering dataset identity.
+
+Evidence status is one of `ACCEPTED`, `FAILED` or `INCOMPLETE`. `ACCEPTED` requires all three valid fingerprints. `FAILED` and `INCOMPLETE` may carry partial information but must never persist or reload as `ACCEPTED`. Detailed trades, bars and equity data may remain in referenced artifacts.
+
+Initial persistence uses a dedicated SQLite database/file, logically and physically separate from the historical candle/coverage store. The minimal store saves one record, loads by evidence ID, preserves exact model round trips and supports durable reload through a fresh store instance. Duplicate evidence IDs fail explicitly without overwrite. Invalid `ACCEPTED` evidence fails before authoritative persistence. The logical record contract is frozen; the exact SQL layout and final database filename are not.
+
+#### Ownership and boundary
+
+Proposed M3.8c ownership is:
+
+- `core/research/reproducibility.py` for canonical serialization and three fingerprint builders;
+- `core/research/models/research_evidence.py` for evidence model/status contracts; and
+- `core/research/sqlite_research_evidence_store.py` for dedicated SQLite persistence.
+
+The placeholder `core/research/research_session.py` is not repurposed, and existing `ResearchRequest`/`ResearchResult` are not expanded merely to carry this capability. M3.8c builds independently testable identity and persistence primitives without real network access. It does not wire persistence into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. M3.8d owns the explicitly authorized future fresh/local repeated-run integration.
+
+This decision excludes Backtest economic validity, timing/fill/stop correctness, brokerage tax fidelity, WFA validity, paper/live behavior, the final research catalog, analytics warehouse, UI/API workflow, broker-session lifecycle, market-calendar/expected-bar completeness and real-money execution.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

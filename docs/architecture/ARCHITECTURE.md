@@ -28,6 +28,7 @@ This document owns Kanasu's current and target system architecture. It describes
 | core/portfolio | Authoritative simulated account state and open-position ownership. |
 | core/risk | Position sizing, stops and recorded drawdown controls. |
 | core/backtest | Historical strategy/execution loop, bar reporting, results and replay-related paths. |
+| core/research | Minimal placeholder `ResearchSession`, `ResearchRequest` and `ResearchResult` workflow; deterministic fingerprints and research-evidence persistence are not implemented. |
 | core/walk_forward | Window generation, optimization, out-of-sample evaluation and aggregation. |
 | core/runtime | Backtest, walk-forward and paper runtime orchestration plus dataset identity. |
 | api | Backtest configuration/mock result and paper-session metadata endpoints. |
@@ -126,7 +127,7 @@ Timezone identity does not imply timestamp localization or conversion.
 
 ### KNOWN DIVERGENCES
 
-- M3.7c validates research-runtime dependency wiring and lazy external construction, but the wider M3.7d end-to-end policy/failure matrix remains unvalidated. DW-011 remains OPEN pending that evidence.
+- M3.7d completed the source-policy integration/failure matrix and resolved DW-011 at the accepted M3.7 scope.
 - User-supplied request boundaries can still be naive while external provider timestamps can be aware; the accepted adapter/runtime boundary rejects incompatibility without silent normalization.
 - Historical CSV export and legacy CSVBroker/replay paths retain stale contracts.
 
@@ -134,7 +135,33 @@ Timezone identity does not imply timestamp localization or conversion.
 
 ### CURRENT
 
-BacktestEngine processes candles through the strategy and authoritative simulated portfolio, records bar state, and returns trades, bars and an equity curve. Walk-forward modules provide parameter search, in-sample/out-of-sample evaluation and aggregate results.
+BacktestEngine processes candles through the strategy and authoritative simulated portfolio, records bar state, and returns trades, bars and an equity curve. Walk-forward modules provide parameter search, in-sample/out-of-sample evaluation and aggregate results. `core/research` currently contains only a minimal placeholder `ResearchSession`/`ResearchRequest`/`ResearchResult` workflow; it does not implement M3.8c fingerprints or evidence persistence.
+
+M3.8a and M3.8b are complete at their accepted historical-input and stable Backtest-result parity scopes. M3.8c and M3.8d remain unimplemented and unvalidated.
+
+### TARGET
+
+~~~text
+canonical ordered candles + DatasetContext + requested TimeRange
+                              ↓
+                    dataset fingerprint
+
+effective Backtest research configuration
+                              ↓
+                 configuration fingerprint
+
+stable BacktestResult content (excluding session_id)
+                              ↓
+                     result fingerprint
+
+three fingerprints + provenance + evidence metadata
+                              ↓
+             immutable research evidence record
+                              ↓
+              separate research-evidence SQLite store
+~~~
+
+M3.8c owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8c does not wire evidence persistence into Backtest, HistoricalSource, main, WFA, API or frontend; the complete fresh/local repeated-run flow belongs to M3.8d.
 
 ### KNOWN DIVERGENCES
 
@@ -164,8 +191,7 @@ The backend remains the intended authority for trading and account state. The fr
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
 
-- M3.7d end-to-end source-policy/failure validation and DW-011 closure evidence remain outstanding;
-- historical-path parity and reproducibility remain unvalidated;
+- M3.8a historical-input parity and M3.8b stable Backtest-result parity are validated, while M3.8c identity/evidence persistence and M3.8d full integration remain unimplemented and unvalidated;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;

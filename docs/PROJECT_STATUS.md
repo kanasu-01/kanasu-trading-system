@@ -203,6 +203,8 @@ M3.8 will prove that equivalent accepted historical data and research-relevant c
 
 M3.8a and M3.8b are complete at their accepted scopes. M3.8c is the next implementation candidate but remains NOT AUTHORIZED; coding requires separate explicit authorization. M3.8d remains baselined and unimplemented.
 
+The M3.8c design is approved and baselined under accepted AD-015. It defines three separate versioned SHA-256 fingerprint domains for canonical datasets, effective Backtest research configuration and stable Backtest results; a deterministic type-tagged canonical serialization contract; and a minimal immutable research-evidence model with `ACCEPTED`, `FAILED` and `INCOMPLETE` states. Its dedicated SQLite evidence store remains logically and physically separate from the historical candle/coverage SQLite store. Runtime and end-to-end repeated-run integration remains M3.8d work. Fingerprint and evidence persistence capabilities are not yet implemented, and M3.8c implementation remains NOT AUTHORIZED.
+
 ## Important V1 blockers
 
 - historical-path parity and reproducibility;

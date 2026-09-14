@@ -488,15 +488,47 @@ This evidence does not establish whether Backtest economics, timing, fills, stop
 
 **Status:** BASELINED / not validated
 
-Validation must establish a versioned deterministic canonical serialization contract for:
+M3.8c must validate the AD-015 versioned, type-tagged canonical serialization contract; independent SHA-256 dataset, effective Backtest-configuration and stable-result domains; immutable evidence status/model rules; and dedicated SQLite evidence persistence separate from historical candles and coverage. It remains unimplemented and unvalidated.
 
-- a dataset fingerprint derived from canonical ordered candles and relevant dataset/request identity, equal across equivalent source paths and independent of separately recorded provenance;
-- a configuration fingerprint containing result-affecting dataset, request, strategy, parameter, capital, slippage, brokerage and other research settings while excluding presentation-only controls, export destinations, replay display and random execution IDs; and
-- a result fingerprint derived from stable Backtest result content while excluding random `session_id` and any other explicitly justified execution-instance field.
+Required deterministic evidence:
 
-Unordered Python `repr()`, object identity, process-specific `hash()` and other unstable representations are not acceptable evidence.
+1. Repeated serialization of identical input produces identical canonical bytes and fingerprint.
+2. Mapping insertion order does not alter canonical identity.
+3. Finite float values use exact deterministic `float.hex()` representation.
+4. Non-finite floats fail explicitly.
+5. Unsupported canonical value types fail explicitly rather than being stringified.
+6. Datetime representation is deterministic, uses microsecond precision and preserves supplied timezone/offset semantics without normalization.
+7. Equivalent provider-fresh and durable-local canonical datasets produce equal dataset fingerprints.
+8. Changing `DatasetContext` changes dataset identity.
+9. Changing the requested `TimeRange` changes dataset identity.
+10. Changing canonical candle content changes dataset identity.
+11. Noncanonical candle ordering is rejected rather than silently sorted.
+12. Changing provenance or source policy alone does not change dataset identity.
+13. Equivalent strategy-parameter mappings with different insertion order produce the same configuration fingerprint.
+14. Changing strategy name or research parameters changes configuration identity.
+15. Changing initial capital changes configuration identity.
+16. Changing explicitly supplied effective risk-per-trade changes configuration identity.
+17. Changing slippage percentage or slippage-enabled state changes configuration identity.
+18. Changing brokerage-enabled state changes configuration identity.
+19. Presentation-only replay, visualization and export controls do not alter research-configuration identity.
+20. Equivalent stable Backtest results with different session IDs produce identical result fingerprints.
+21. Changing a stable `Trade` field changes result identity.
+22. Changing a stable `BarRecord` or account-state field changes result identity.
+23. Decision-snapshot mapping order does not alter result identity, while unsupported snapshot values fail explicitly.
+24. An accepted research-evidence record saves and reloads exactly through a fresh store instance.
+25. The research-evidence store uses a separate SQLite file from the historical candle/coverage store.
+26. Evidence persistence does not modify historical candle or coverage storage.
+27. `ACCEPTED` evidence requires valid dataset, configuration and result fingerprints.
+28. `FAILED` and `INCOMPLETE` records cannot persist or reload as `ACCEPTED`.
+29. A duplicate evidence ID is rejected without overwriting the existing record.
+30. Provenance, optional repository revision, summary and artifact references survive persistence and reload.
+31. Deterministic M3.8c validation requires no AngelOne, network, credentials or wall-clock dependency.
 
-Research evidence must persist through a boundary logically and physically separate from the historical candle/coverage store, consistent with AD-014. Tests must prove accepted/reference evidence can be stored, reloaded and inspected with appropriate run/evidence identity, timestamps, dataset/request identity, fingerprints, provenance, repository revision when available, concise summary and artifact references. Failed or incomplete runs must not be falsely recorded as accepted reproducible evidence.
+Canonical tests must also prove domain/version separation, SHA-256 output form and meaningful distinctions between integer/float, list/tuple, and null/string/Boolean values. Dataset generation must reject noncanonical input without sorting, deduplication, chronology repair or timestamp conversion. Configuration identity uses effective research values and requires risk-per-trade to be supplied explicitly. Stable-result identity covers complete current `Trade`/`BarRecord` content and equity curve while excluding `session_id`; it does not assert financial correctness.
+
+The immutable evidence model contains evidence ID, timezone-aware microsecond-precision creation time, explicit status, `DatasetContext`, requested `TimeRange`, three fingerprints, provenance, optional repository revision, concise summary and artifact references. Evidence ID and creation time are not fingerprint inputs. The logical record contract is authoritative; exact SQL layout and final filename are not frozen.
+
+M3.8c does not wire evidence persistence into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. M3.8d remains responsible for the complete fresh/local repeated-run integration. No M3.8c test count or implementation evidence exists yet.
 
 ### M3.8d — Integration and repeated-run validation
 
