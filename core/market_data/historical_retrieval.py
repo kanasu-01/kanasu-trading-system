@@ -39,6 +39,76 @@ class IncompleteHistoricalCoverageError(RuntimeError):
         )
 
 
+def validate_historical_fetch_result(
+    requested_gap: TimeRange,
+    result: HistoricalFetchResult,
+) -> None:
+    if not result.coverage:
+        raise ValueError(
+            "provider result requires explicit coverage evidence"
+        )
+
+    gap_is_aware = _is_timezone_aware(requested_gap.start)
+
+    for interval in result.coverage:
+        if _is_timezone_aware(interval.start) != gap_is_aware:
+            raise ValueError(
+                "provider coverage and requested gap timezone "
+                "awareness must match"
+            )
+
+        if (
+            interval.start < requested_gap.start
+            or interval.end > requested_gap.end
+        ):
+            raise ValueError(
+                "provider coverage must be contained within "
+                "the requested gap"
+            )
+
+    for candle in result.candles:
+        timestamp = candle.timestamp
+        if _is_timezone_aware(timestamp) != gap_is_aware:
+            raise ValueError(
+                "provider candle and requested gap timezone "
+                "awareness must match"
+            )
+
+        if not (requested_gap.start <= timestamp < requested_gap.end):
+            raise ValueError(
+                "provider candle must be within the requested gap"
+            )
+
+        if not any(
+            interval.start <= timestamp < interval.end
+            for interval in result.coverage
+        ):
+            raise ValueError(
+                "provider candle must be within explicit coverage"
+            )
+
+    CandleSeries(list(result.candles))
+
+
+def load_half_open_candles(
+    store: SQLiteCandleStore,
+    context: DatasetContext,
+    request: TimeRange,
+) -> list[Candle]:
+    inclusive_candles = store.load(
+        context,
+        start=request.start,
+        end=request.end,
+    )
+    candles = [
+        candle
+        for candle in inclusive_candles
+        if candle.timestamp < request.end
+    ]
+    CandleSeries(candles)
+    return candles
+
+
 class LocalFirstHistoricalService:
     def __init__(
         self,
@@ -60,7 +130,7 @@ class LocalFirstHistoricalService:
 
         for missing_range in missing_ranges:
             result = self.provider.fetch(context, missing_range)
-            self._validate_result(missing_range, result)
+            validate_historical_fetch_result(missing_range, result)
             self.store.save_retrieval(
                 context,
                 list(result.candles),
@@ -74,77 +144,4 @@ class LocalFirstHistoricalService:
         if remaining:
             raise IncompleteHistoricalCoverageError(remaining)
 
-        return self._load_half_open(context, request)
-
-    @staticmethod
-    def _validate_result(
-        requested_gap: TimeRange,
-        result: HistoricalFetchResult,
-    ) -> None:
-        if not result.coverage:
-            raise ValueError(
-                "provider result requires explicit coverage evidence"
-            )
-
-        gap_is_aware = _is_timezone_aware(requested_gap.start)
-
-        for interval in result.coverage:
-            if _is_timezone_aware(interval.start) != gap_is_aware:
-                raise ValueError(
-                    "provider coverage and requested gap timezone "
-                    "awareness must match"
-                )
-
-            if (
-                interval.start < requested_gap.start
-                or interval.end > requested_gap.end
-            ):
-                raise ValueError(
-                    "provider coverage must be contained within "
-                    "the requested gap"
-                )
-
-        for candle in result.candles:
-            timestamp = candle.timestamp
-            if _is_timezone_aware(timestamp) != gap_is_aware:
-                raise ValueError(
-                    "provider candle and requested gap timezone "
-                    "awareness must match"
-                )
-
-            if not (
-                requested_gap.start
-                <= timestamp
-                < requested_gap.end
-            ):
-                raise ValueError(
-                    "provider candle must be within the requested gap"
-                )
-
-            if not any(
-                interval.start <= timestamp < interval.end
-                for interval in result.coverage
-            ):
-                raise ValueError(
-                    "provider candle must be within explicit coverage"
-                )
-
-        CandleSeries(list(result.candles))
-
-    def _load_half_open(
-        self,
-        context: DatasetContext,
-        request: TimeRange,
-    ) -> list[Candle]:
-        inclusive_candles = self.store.load(
-            context,
-            start=request.start,
-            end=request.end,
-        )
-        candles = [
-            candle
-            for candle in inclusive_candles
-            if candle.timestamp < request.end
-        ]
-        CandleSeries(candles)
-        return candles
+        return load_half_open_candles(self.store, context, request)
