@@ -112,7 +112,7 @@ The broker historical provider adapter must reuse `HistoricalFeed`, which contin
 
 M3.7 preserves M3.6 timestamp fidelity and comparison rules. It does not normalize to UTC, localize timestamps, strip offsets or silently convert naive/aware values. Request/provider awareness compatibility must be explicit. Current `BacktestConfig` boundaries can be naive while provider timestamps can be aware, so this is a required design and validation concern.
 
-Current AngelOne historical retrieval rejects an empty candle result. M3.7b must determine and test the minimal adapter or broker correction needed to support confirmed-empty external evidence; this acceptance does not claim that concern is fixed.
+M3.7b established that a valid successful AngelOne response with an empty data collection returns an empty candle list, while malformed responses remain errors. This supports confirmed-empty external evidence without inferring coverage from candle presence.
 
 Accepted during M3.7 baselining. External provider construction is lazy.
 

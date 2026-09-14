@@ -15,7 +15,7 @@
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
 | Lifecycle | IN_PROGRESS |
-| Next planned review | M3.7d — Source-Policy Integration and Failure Validation baselining/design review; implementation is not authorized |
+| Next implementation candidate | M3.7d — Source-Policy Integration and Failure Validation; READY / NEXT after this baseline is accepted, with separate explicit implementation authorization required |
 
 The 223-test full suite was rerun at implementation commit `2db07c6` and passed.
 
@@ -135,11 +135,11 @@ The default AngelOne-oriented BacktestConfig uses explicit Asia/Kolkata-aware re
 
 M3.7a, M3.7b and M3.7c are complete at their accepted scopes.
 
-M3.7 remains IN_PROGRESS. M3.7d remains PLANNED, unimplemented and not yet validated. The next activity is a separate M3.7d baselining/design review; M3.7d implementation is not authorized automatically and requires separate explicit authorization. M3.8 remains RESERVED.
+M3.7 remains IN_PROGRESS. M3.7d now has a baselined design and is READY / NEXT after this baseline is accepted, but it remains unimplemented and unvalidated. Implementation is not authorized automatically and requires separate explicit authorization after this documentation baseline is reviewed and committed. M3.8 remains RESERVED.
 
-M3.7d retains the wider integration and failure evidence: fully offline end-to-end execution, missing-credential behavior, provider construction/login failures, absence of false coverage after failure, confirmed-empty cross-policy integration, common Backtest/WFA policy semantics and DW-011 closure evidence.
+M3.7d will validate the existing source-composition path through Backtest and WFA without redesigning it. Its bounded matrix covers fully local and warm local-first operation, missing-range fallback and durable reuse, mandatory provider-backed access, credential/construction/login and retrieval failures, false-coverage prevention, confirmed-empty evidence, timestamp-awareness failures, and common historical-source semantics across both research runtimes. Expected production-code changes are none unless focused integration RED evidence proves an existing-contract defect.
 
-DW-011 remains OPEN. M3.7c structurally removed unconditional research-runtime broker construction, but closure requires the accepted M3.7d end-to-end evidence.
+DW-011 remains OPEN. M3.7c structurally moved broker construction and authentication behind the lazy provider boundary, but closure requires accepted M3.7d evidence that both research runtimes remain fully offline when policy and coverage do not require external access.
 
 ## Important V1 blockers
 

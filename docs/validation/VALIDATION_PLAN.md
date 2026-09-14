@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a, M3.7b and M3.7c are DONE and validated at their accepted scopes. M3.7d is PLANNED and not yet validated. M3.7 as a whole is not yet validated.
+M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a, M3.7b and M3.7c are DONE and validated at their accepted scopes. M3.7d is READY / NEXT but not yet validated. M3.7 as a whole is not yet validated.
 
 Cross-step invariants:
 
@@ -338,9 +338,85 @@ M3.7c does not validate fully offline end-to-end execution, missing credential b
 
 ### M3.7d — Source-policy integration and failure validation
 
-**Status:** PLANNED / not yet validated
+**Status:** READY / not yet validated
 
-Prove fully local offline operation, warm local-first operation without authentication, missing-gap fallback, mandatory provider-backed access, provider-construction/login failure behavior, absence of false coverage after failure, confirmed-empty external behavior, explicit awareness incompatibility, and common backtest/WFA semantics. DW-011 may close only with this accepted runtime evidence.
+M3.7d validates the implemented components together through the bounded historical-source/research-runtime path:
+
+~~~text
+main runtime selection
+        ↓
+historical source composition
+        ↓
+HistoricalSource and source policy
+        ↓
+SQLite/local retrieval
+        ↓ only when required
+lazy provider factory
+        ↓
+broker factory/authentication seam
+        ↓
+HistoricalFeed → HistoricalFeedProvider
+        ↓
+canonical candles → Backtest or WFA runtime
+~~~
+
+This is not validation of backtest economics, strategy correctness, WFA optimization validity, paper/live trading, UI, or real broker/network operation. All cases must be deterministic and must not contact AngelOne.
+
+#### A. Fully local offline execution
+
+For both BACKTEST and WALK_FORWARD, pre-populate trusted SQLite candles and coverage, select `LOCAL_ONLY`, execute through actual source composition and runtime boundaries, verify canonical candles reach the runtime, and prove zero credential loading, broker construction, login, and provider access.
+
+#### B. Warm LOCAL_FIRST offline execution
+
+For both runtimes, use complete trusted local coverage and prove successful operation with zero credential loading, broker construction, login, and provider access. This is mandatory DW-011 resolution evidence.
+
+#### C. Missing LOCAL_FIRST coverage
+
+Prove local coverage is examined first, provider construction occurs only after actual missing ranges are known, only those ranges are requested, successful provider evidence becomes durable retrieval coverage, and a later warm retrieval avoids external access. Do not infer expected bars.
+
+#### D. PROVIDER_BACKED mandatory access
+
+Prove complete local coverage does not suppress provider access and completion depends on fresh explicit provider coverage evidence.
+
+#### E. Credential, construction, and login failures
+
+Prove absent credentials do not affect `LOCAL_ONLY` or fully covered `LOCAL_FIRST`. When policy requires a provider, credential loading, construction, or login failure must surface explicitly, manufacture no coverage, preserve valid local state, and disclose no credentials or sensitive values. Use deterministic fakes or monkeypatching at the existing broker-factory seam.
+
+#### F. Retrieval failure and false-coverage prevention
+
+When provider construction succeeds but retrieval fails, the failing request or range gains no coverage. Earlier provider results already committed under M3.6 semantics remain valid; they are not globally rolled back. Retry planning requests only genuinely remaining gaps.
+
+#### G. Confirmed-empty external results
+
+Prove a successful empty response creates explicit durable coverage, later warm `LOCAL_FIRST` and `LOCAL_ONLY` reuse it without provider access, and a later `PROVIDER_BACKED` request still requires provider access. Candle absence is not retrieval failure.
+
+#### H. Timestamp-awareness incompatibility
+
+Prove incompatible persisted/request awareness fails before unnecessary provider access when knowable locally, incompatible request/provider evidence fails explicitly, failed evidence creates no coverage, and no UTC conversion, localization, offset stripping, or silent awareness conversion occurs. DatasetContext timezone remains metadata.
+
+#### I. Common Backtest/WFA semantics
+
+Use shared or parameterized integration cases where clear to prove Backtest and WFA receive equivalent historical-source behavior for the same DatasetContext, TimeRange, policy, local state, and provider outcome. Their trading and research outputs are outside this validation scope.
+
+#### Failure and implementation requirements
+
+Expected production-code changes are none unless focused integration RED evidence proves an existing-contract defect. Any correction must identify the failing contract and exact file, apply Governance implementation-quality requirements, and remain the smallest coherent fix. Validate explicit errors, false/corrupt-state prevention, useful diagnostics, secret-safe failures, SQLite/resource safety, and risk-proportionate success, boundary, failure, and regression behavior without adding boilerplate.
+
+M3.7d must not add real network calls, calendar/session/expected-bar inference, candle-spacing gap inference, timestamp normalization, destructive provider refresh, broker-owned source policy, broker-factory redesign, M3.8/M4/M5 work, PAPER/LIVE historical integration, or frontend/API behavior.
+
+#### Planned validation sequence
+
+Use `.\.venv\Scripts\python.exe` to capture, without inventing counts:
+
+1. the pre-change full-suite baseline;
+2. focused M3.7d integration and failure tests;
+3. relevant HistoricalSource, composition-factory, HistoricalFeedProvider, and M3.6 integration regressions;
+4. relevant Backtest and WFA runtime tests;
+5. all market-data tests where appropriate;
+6. the post-change full suite; and
+7. `git diff --check`.
+
+DW-011 remains OPEN during baselining and may close only after this evidence is implemented, reviewed, and accepted.
 
 ## 8. V1 release gates
 

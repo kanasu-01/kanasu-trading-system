@@ -52,7 +52,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.7a — DONE** — Historical source policy contract.
     - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — DONE** — Backtest/WFA runtime wiring and lazy provider construction.
-    - **M3.7d — PLANNED** — Source-policy integration and failure validation.
+    - **M3.7d — READY / NEXT** — Source-policy integration and failure validation.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
 
 ### P2 — Trusted Research Engine
@@ -73,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a, M3.7b and M3.7c are complete. M3.7d remains PLANNED pending a separate baselining/design review and is not authorized automatically.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a, M3.7b and M3.7c are complete. M3.7d is READY / NEXT after this baseline is accepted, but implementation is not authorized automatically and requires separate explicit authorization.
 
 ## Near-term detailed work
 
@@ -198,7 +198,7 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 - No runtime wiring or broker adapter work occurred
 - No destructive provider-backed refresh or replacement semantics were introduced
 
-M3.7a, M3.7b and M3.7c are complete. M3.7d remains PLANNED pending a separate baselining/design review and is not authorized automatically.
+M3.7a, M3.7b and M3.7c are complete. M3.7d is READY / NEXT after this baseline is accepted, but implementation requires separate explicit authorization.
 
 #### M3.7b — Broker historical provider adapter
 
@@ -241,7 +241,7 @@ M3.7a, M3.7b and M3.7c are complete. M3.7d remains PLANNED pending a separate ba
 - BaseBroker, HistoricalFeed, HistoricalSource, AppConfig, main, backtest and WFA runtime remain unchanged
 - No expected-bar, session, calendar or gap-inference logic was added
 
-M3.7b added no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. Those runtime changes were completed separately in M3.7c. M3.7d remains PLANNED.
+M3.7b added no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. Those runtime changes were completed separately in M3.7c. M3.7d is READY / NEXT after this baseline is accepted and remains unimplemented and unvalidated.
 
 #### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
@@ -314,17 +314,55 @@ M3.7c completed the dependency change from broker-backed runtime retrieval to Hi
 
 The default AngelOne-oriented BacktestConfig now carries explicit Asia/Kolkata-aware request bounds. No timestamp normalization, runtime localization, offset stripping or automatic awareness conversion was added. HistoricalSource, HistoricalFeedProvider, HistoricalFeed, BaseBroker, AngelOne historical parsing, retrieval validation and SQLite coverage semantics retained their accepted behavior; the broker factory remains source-policy unaware and eager only when invoked.
 
-This evidence validates runtime dependency wiring and lazy construction at M3.7c scope. It does not supply M3.7d's fully offline end-to-end evidence, missing-credential or provider construction/login failure matrix, no-false-coverage failure evidence, confirmed-empty cross-policy integration, complete common runtime-semantics evidence or DW-011 closure. M3.7d remains PLANNED pending a separate baselining/design review and requires separate explicit authorization.
+This evidence validates runtime dependency wiring and lazy construction at M3.7c scope. It does not supply M3.7d's fully offline end-to-end evidence, missing-credential or provider construction/login failure matrix, no-false-coverage failure evidence, confirmed-empty cross-policy integration, complete common runtime-semantics evidence or DW-011 closure. M3.7d is READY / NEXT after its baseline is accepted and requires separate explicit implementation authorization.
 
 #### M3.7d — Source-policy integration and failure validation
 
-**Status:** PLANNED.
+**Status:** READY / NEXT after this baseline is accepted. Implementation requires separate explicit authorization.
 
-**Outcome:** Validate complete source-policy and research-runtime behavior under success and failure.
+**Outcome:** Complete M3.7 by validating the existing historical-source composition and research-runtime path under realistic success and failure conditions, without redesigning its accepted architecture.
 
-**Required evidence:** Fully local offline execution; warm `LOCAL_FIRST` operation without broker authentication; missing-gap provider fallback; mandatory `PROVIDER_BACKED` access; provider construction/login failure behavior; no false coverage after failure; confirmed-empty external results; explicit timestamp-awareness incompatibility; identical source-policy semantics in backtest and WFA; and DW-011 resolution evidence.
+**Scope:**
 
-DW-011 remains OPEN until M3.7d closure.
+~~~text
+main runtime selection
+        ↓
+historical source composition
+        ↓
+HistoricalSource and source policy
+        ↓
+SQLite/local retrieval
+        ↓ only when required
+lazy provider factory
+        ↓
+broker factory/authentication seam
+        ↓
+HistoricalFeed → HistoricalFeedProvider
+        ↓
+canonical candles → Backtest or WFA runtime
+~~~
+
+End-to-end means this historical-source/research-runtime boundary. It does not include backtest economics, strategy correctness, WFA optimization validity, paper/live trading, UI, or real broker/network operation. Tests remain deterministic and must not contact AngelOne.
+
+**Required evidence:**
+
+1. Both BACKTEST and WALK_FORWARD use pre-populated trusted SQLite data under `LOCAL_ONLY`, deliver canonical candles to the research runtime, and load no credentials, construct no broker, perform no login, and access no provider.
+2. Both runtimes use fully covered warm `LOCAL_FIRST` data without credentials, broker construction, login, or provider access. This is mandatory DW-011 resolution evidence.
+3. Missing `LOCAL_FIRST` coverage is detected before lazy provider construction; only planned missing ranges are requested; accepted evidence becomes durable coverage; and a later warm retrieval avoids provider access.
+4. `PROVIDER_BACKED` requires fresh provider access despite complete local coverage, and completion depends on that provider result's explicit coverage.
+5. Missing credentials and provider construction/login failures affect only policies that require external access, fail explicitly without leaking secrets or manufacturing coverage, and preserve accepted local state.
+6. Retrieval failure after successful construction creates no coverage for the failing range. Earlier successfully committed provider results remain valid, and retry planning identifies only genuinely missing ranges.
+7. Confirmed-empty external results remain explicit durable coverage: warm `LOCAL_FIRST` and later `LOCAL_ONLY` reuse it without external access, while later `PROVIDER_BACKED` still invokes the provider.
+8. Persisted/request and request/provider timestamp-awareness incompatibilities fail explicitly without false coverage or timestamp conversion; provider access is avoided when the incompatibility is knowable locally.
+9. Backtest and WFA receive equivalent historical-source semantics for the same DatasetContext, TimeRange, policy, local coverage, and provider outcome. Their later trading or research outputs need not be identical.
+
+**Failure semantics:** External construction, authentication, and retrieval failures propagate clearly and create no false coverage. Existing valid local state remains intact. Atomicity remains per accepted provider result: a later failing gap does not roll back earlier accepted gaps, and retries request only actual remaining coverage. Logs and errors must not leak credentials or sensitive data.
+
+**Implementation expectation:** Production-code changes are expected to be none unless focused integration RED evidence proves an implementation defect. Any correction must identify the violated accepted contract, inspect the exact affected file, apply Governance implementation-quality requirements, and remain the smallest coherent fix. This baseline does not authorize a production correction.
+
+**Non-goals:** Real AngelOne/network calls; calendar, holiday, session, expected-bar, or candle-spacing inference; timestamp normalization; destructive provider refresh/replacement; source policy in broker classes; broker-factory redesign; M3.8 parity work; M4/M5 validity work; PAPER/LIVE historical integration; and frontend/API changes.
+
+DW-011 remains OPEN until accepted M3.7d evidence proves fully local and warm local-first execution across both research runtimes without credential loading, broker construction, login, or provider access.
 
 ### M3.8 — Historical-path parity and reproducibility
 

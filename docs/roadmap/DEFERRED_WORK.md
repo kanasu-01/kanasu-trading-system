@@ -103,9 +103,9 @@ This resolution does not claim migration or automatic repair of old invalid data
 **Status:** OPEN
 **Target:** M3.7.
 
-Main constructs/authenticates a broker before selecting a mode, so a request satisfiable from local data is not fully local.
+M3.7c moved research-runtime broker construction and authentication behind the lazy historical-provider factory. Structurally, `LOCAL_ONLY` and fully covered `LOCAL_FIRST` requests should therefore be capable of running without credentials, broker construction, login, or provider access.
 
-Required work: introduce an explicit historical source policy and lazy provider construction after local-first retrieval contracts are complete. See proposed AD-009.
+This structural change alone does not resolve DW-011. M3.7d must prove that both Backtest and WFA execute through the actual runtime/source-composition boundary without credential loading, broker construction, login, or provider access when policy and coverage do not require external capability. After that evidence is accepted, DW-011 may be marked RESOLVED with the exact implementation/validation commit and test evidence. See accepted AD-009.
 
 ## DW-012 — Legacy Replay, Export and CSVBroker Contracts
 
