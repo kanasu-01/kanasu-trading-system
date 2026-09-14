@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m3-offline-foundation-data` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `2db07c6 Wire historical source into research runtimes` |
-| Latest reported test baseline | `223 passed at 2db07c6` |
+| Implementation verification baseline | `7f968843 Validate M3.7d source-policy integration` |
+| Latest reported test baseline | `240 passed at 7f968843` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
 | Step | M3.7 — Historical Source Policy / Runtime Wiring |
-| Lifecycle | IN_PROGRESS |
-| Next implementation candidate | M3.7d — Source-Policy Integration and Failure Validation; READY / NEXT after this baseline is accepted, with separate explicit implementation authorization required |
+| Lifecycle | DONE |
+| Next planned activity | M3.8 — Historical-path parity and reproducibility; baselining/design review only; implementation is not automatically authorized |
 
-The 223-test full suite was rerun at implementation commit `2db07c6` and passed.
+The 240-test full suite was rerun at implementation and validation commit `7f968843` and passed.
 
 ## Completed foundation
 
@@ -38,6 +38,8 @@ The 223-test full suite was rerun at implementation commit `2db07c6` and passed.
 - M3.7a — Historical source policy contract
 - M3.7b — Broker historical provider adapter
 - M3.7c — Backtest/WFA runtime wiring and lazy provider construction
+- M3.7d — Source-policy integration and failure validation
+- M3.7 — Historical source policy/runtime wiring
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -131,19 +133,30 @@ At the M3.7c scope, complete `LOCAL_ONLY` and warm `LOCAL_FIRST` retrieval requi
 
 The default AngelOne-oriented BacktestConfig uses explicit Asia/Kolkata-aware request boundaries. This is explicit configuration rather than runtime localization: DatasetContext timezone remains metadata, timestamp values pass through unchanged, and awareness incompatibility remains an explicit failure. M3.7c did not change HistoricalSource, HistoricalFeedProvider, HistoricalFeed, BaseBroker, AngelOne historical parsing, historical retrieval validation or SQLite coverage semantics. The broker factory remains source-policy unaware and eager only when called.
 
+## M3.7d validation evidence
+
+- Design baseline: `0726b148`
+- Implementation and validation commit: `7f968843 Validate M3.7d source-policy integration`
+- Pre-change full suite: 223 passed
+- Focused M3.7d integration: 17 passed
+- Regression neighborhood: 71 passed
+- All market-data: 147 passed
+- Runtime / Backtest / WFA: 39 passed
+- Post-change full suite: 240 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test changes: +722 / -0 in `tests/runtime/test_historical_source_policy_integration.py`
+
+M3.7d validated the actual Backtest and WFA source-composition paths across fully offline `LOCAL_ONLY`, warm `LOCAL_FIRST`, missing-range durable reuse, mandatory `PROVIDER_BACKED` access, credential/construction/login and retrieval failures, confirmed-empty evidence, timestamp-awareness incompatibility, and common source-policy semantics. External failures create no false retrieval coverage, accepted earlier results remain durable, and errors and captured logs do not expose the exercised secret value. The existing production implementation satisfied the accepted integration matrix without correction.
+
 ## Current work
 
-M3.7a, M3.7b and M3.7c are complete at their accepted scopes.
+M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
 
-M3.7 remains IN_PROGRESS. M3.7d now has a baselined design and is READY / NEXT after this baseline is accepted, but it remains unimplemented and unvalidated. Implementation is not authorized automatically and requires separate explicit authorization after this documentation baseline is reviewed and committed. M3.8 remains RESERVED.
-
-M3.7d will validate the existing source-composition path through Backtest and WFA without redesigning it. Its bounded matrix covers fully local and warm local-first operation, missing-range fallback and durable reuse, mandatory provider-backed access, credential/construction/login and retrieval failures, false-coverage prevention, confirmed-empty evidence, timestamp-awareness failures, and common historical-source semantics across both research runtimes. Expected production-code changes are none unless focused integration RED evidence proves an existing-contract defect.
-
-DW-011 remains OPEN. M3.7c structurally moved broker construction and authentication behind the lazy provider boundary, but closure requires accepted M3.7d evidence that both research runtimes remain fully offline when policy and coverage do not require external access.
+DW-011 is resolved by the accepted M3.7d evidence. The next planned activity is an M3.8 — Historical-path parity and reproducibility baselining/design review only. M3.8 remains RESERVED, and implementation is not automatically authorized.
 
 ## Important V1 blockers
 
-- M3.7 historical source policy/runtime wiring;
 - historical-path parity and reproducibility;
 - backtest validity and reproducible research records;
 - WFA termination, configuration propagation, and account-metric validity;

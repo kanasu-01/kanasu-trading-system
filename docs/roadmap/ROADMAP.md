@@ -48,11 +48,11 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.6b — DONE** — Coverage and missing-range planning.
     - **M3.6c — DONE** — Local-first historical retrieval service.
     - **M3.6d — DONE** — Integration and failure validation.
-  - **M3.7 — IN_PROGRESS** — Historical source policy/runtime wiring.
+  - **M3.7 — DONE** — Historical source policy/runtime wiring.
     - **M3.7a — DONE** — Historical source policy contract.
     - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — DONE** — Backtest/WFA runtime wiring and lazy provider construction.
-    - **M3.7d — READY / NEXT** — Source-policy integration and failure validation.
+    - **M3.7d — DONE** — Source-policy integration and failure validation.
   - **M3.8 — RESERVED** — Historical-path parity/reproducibility.
 
 ### P2 — Trusted Research Engine
@@ -73,7 +73,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a, M3.7b and M3.7c are complete. M3.7d is READY / NEXT after this baseline is accepted, but implementation is not authorized automatically and requires separate explicit authorization.
+M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation prevents accidental identifier collision; it does not claim accepted detailed scope or authorization to implement. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes. M3.8 remains RESERVED; its implementation is not authorized.
 
 ## Near-term detailed work
 
@@ -163,7 +163,7 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 
 ### M3.7 — Historical source policy/runtime wiring
 
-**Status:** IN_PROGRESS.
+**Status:** DONE.
 
 **Outcome:** Put an explicit historical-source composition boundary above local persistence and external-provider capabilities, then wire backtest and WFA to it without moving source policy into broker adapters.
 
@@ -198,7 +198,7 @@ M3.8 and M4–M9 are reserved proposals until formally baselined. Reservation pr
 - No runtime wiring or broker adapter work occurred
 - No destructive provider-backed refresh or replacement semantics were introduced
 
-M3.7a, M3.7b and M3.7c are complete. M3.7d is READY / NEXT after this baseline is accepted, but implementation requires separate explicit authorization.
+M3.7a–M3.7d are complete at their accepted scopes.
 
 #### M3.7b — Broker historical provider adapter
 
@@ -241,7 +241,7 @@ M3.7a, M3.7b and M3.7c are complete. M3.7d is READY / NEXT after this baseline i
 - BaseBroker, HistoricalFeed, HistoricalSource, AppConfig, main, backtest and WFA runtime remain unchanged
 - No expected-bar, session, calendar or gap-inference logic was added
 
-M3.7b added no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. Those runtime changes were completed separately in M3.7c. M3.7d is READY / NEXT after this baseline is accepted and remains unimplemented and unvalidated.
+M3.7b added no AppConfig, main, backtest, WFA, broker-factory, login-timing or source-policy runtime wiring. Those runtime changes were completed separately in M3.7c, and their wider integration/failure behavior was validated in M3.7d.
 
 #### M3.7c — Backtest/WFA runtime wiring and lazy provider construction
 
@@ -314,11 +314,11 @@ M3.7c completed the dependency change from broker-backed runtime retrieval to Hi
 
 The default AngelOne-oriented BacktestConfig now carries explicit Asia/Kolkata-aware request bounds. No timestamp normalization, runtime localization, offset stripping or automatic awareness conversion was added. HistoricalSource, HistoricalFeedProvider, HistoricalFeed, BaseBroker, AngelOne historical parsing, retrieval validation and SQLite coverage semantics retained their accepted behavior; the broker factory remains source-policy unaware and eager only when invoked.
 
-This evidence validates runtime dependency wiring and lazy construction at M3.7c scope. It does not supply M3.7d's fully offline end-to-end evidence, missing-credential or provider construction/login failure matrix, no-false-coverage failure evidence, confirmed-empty cross-policy integration, complete common runtime-semantics evidence or DW-011 closure. M3.7d is READY / NEXT after its baseline is accepted and requires separate explicit implementation authorization.
+This evidence validates runtime dependency wiring and lazy construction at M3.7c scope. The wider integration and failure matrix was validated separately in M3.7d.
 
 #### M3.7d — Source-policy integration and failure validation
 
-**Status:** READY / NEXT after this baseline is accepted. Implementation requires separate explicit authorization.
+**Status:** DONE.
 
 **Outcome:** Complete M3.7 by validating the existing historical-source composition and research-runtime path under realistic success and failure conditions, without redesigning its accepted architecture.
 
@@ -362,7 +362,19 @@ End-to-end means this historical-source/research-runtime boundary. It does not i
 
 **Non-goals:** Real AngelOne/network calls; calendar, holiday, session, expected-bar, or candle-spacing inference; timestamp normalization; destructive provider refresh/replacement; source policy in broker classes; broker-factory redesign; M3.8 parity work; M4/M5 validity work; PAPER/LIVE historical integration; and frontend/API changes.
 
-DW-011 remains OPEN until accepted M3.7d evidence proves fully local and warm local-first execution across both research runtimes without credential loading, broker construction, login, or provider access.
+**Completion evidence:**
+
+- Design baseline: `0726b148`
+- Validation implementation: `7f968843 Validate M3.7d source-policy integration`
+- Focused M3.7d: 17 passed
+- Regression neighborhood: 71 passed
+- All market-data: 147 passed
+- Runtime / Backtest / WFA: 39 passed
+- Full suite: 240 passed
+- `git diff --check`: passed
+- Production corrections: none
+
+This evidence validates the accepted M3.7d matrix through the actual research-runtime/source-composition boundary. M3.7a–M3.7d are complete at their accepted scopes, so M3.7 is DONE. DW-011 is resolved at the M3.7 integration scope. M3.8 remains a separate RESERVED milestone.
 
 ### M3.8 — Historical-path parity and reproducibility
 

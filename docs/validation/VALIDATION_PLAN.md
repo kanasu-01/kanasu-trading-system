@@ -212,7 +212,7 @@ Atomicity is per accepted provider result, not one transaction spanning the enti
 
 ## 7. M3.7 — Historical source policy/runtime wiring
 
-M3.7 must establish explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a, M3.7b and M3.7c are DONE and validated at their accepted scopes. M3.7d is READY / NEXT but not yet validated. M3.7 as a whole is not yet validated.
+M3.7 establishes explicit `LOCAL_ONLY`, `LOCAL_FIRST` and `PROVIDER_BACKED` source-policy behavior while preserving the accepted M3.6 storage, coverage, retrieval and timestamp contracts. M3.7a, M3.7b, M3.7c and M3.7d are DONE and validated at their accepted scopes; M3.7 is complete.
 
 Cross-step invariants:
 
@@ -338,7 +338,7 @@ M3.7c does not validate fully offline end-to-end execution, missing credential b
 
 ### M3.7d — Source-policy integration and failure validation
 
-**Status:** READY / not yet validated
+**Status:** DONE / validated
 
 M3.7d validates the implemented components together through the bounded historical-source/research-runtime path:
 
@@ -404,19 +404,21 @@ Expected production-code changes are none unless focused integration RED evidenc
 
 M3.7d must not add real network calls, calendar/session/expected-bar inference, candle-spacing gap inference, timestamp normalization, destructive provider refresh, broker-owned source policy, broker-factory redesign, M3.8/M4/M5 work, PAPER/LIVE historical integration, or frontend/API behavior.
 
-#### Planned validation sequence
+#### Completion evidence
 
-Use `.\.venv\Scripts\python.exe` to capture, without inventing counts:
+- Design baseline: `0726b148`
+- Implementation and validation commit: `7f968843 Validate M3.7d source-policy integration`
+- Pre-change full suite: 223 passed
+- Focused M3.7d integration: 17 passed
+- Regression neighborhood: 71 passed
+- All market-data: 147 passed
+- Runtime / Backtest / WFA: 39 passed
+- Post-change full suite: 240 passed
+- `git diff --check`: passed
+- Production corrections: none
+- Test changes: +722 / -0 in `tests/runtime/test_historical_source_policy_integration.py`
 
-1. the pre-change full-suite baseline;
-2. focused M3.7d integration and failure tests;
-3. relevant HistoricalSource, composition-factory, HistoricalFeedProvider, and M3.6 integration regressions;
-4. relevant Backtest and WFA runtime tests;
-5. all market-data tests where appropriate;
-6. the post-change full suite; and
-7. `git diff --check`.
-
-DW-011 remains OPEN during baselining and may close only after this evidence is implemented, reviewed, and accepted.
+The accepted evidence validates M3.7d through the bounded historical-source/research-runtime path. No production correction was required. M3.7a, M3.7b, M3.7c and M3.7d are validated at their accepted scopes, so M3.7 is complete and DW-011 is resolved at that scope. These validation claims do not extend into M3.8 historical-path parity, M4 backtest validity or M5 WFA validity.
 
 ## 8. V1 release gates
 

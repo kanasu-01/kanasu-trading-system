@@ -100,12 +100,16 @@ This resolution does not claim migration or automatic repair of old invalid data
 
 ## DW-011 — Offline Runtime Requires Broker Login
 
-**Status:** OPEN
+**Status:** RESOLVED
 **Target:** M3.7.
 
 M3.7c moved research-runtime broker construction and authentication behind the lazy historical-provider factory. Structurally, `LOCAL_ONLY` and fully covered `LOCAL_FIRST` requests should therefore be capable of running without credentials, broker construction, login, or provider access.
 
-This structural change alone does not resolve DW-011. M3.7d must prove that both Backtest and WFA execute through the actual runtime/source-composition boundary without credential loading, broker construction, login, or provider access when policy and coverage do not require external capability. After that evidence is accepted, DW-011 may be marked RESOLVED with the exact implementation/validation commit and test evidence. See accepted AD-009.
+That structural change alone did not resolve DW-011. M3.7d subsequently proved that both Backtest and WFA execute through the actual runtime/source-composition boundary without credential loading, broker construction, login, or provider access when `LOCAL_ONLY` or fully covered `LOCAL_FIRST` does not require external capability.
+
+**Resolution scope:** M3.7 historical source policy/runtime integration.
+
+**Evidence:** M3.7d design baseline `0726b148`; M3.7d implementation and validation `7f968843`; focused integration 17 passed; full suite 240 passed. See accepted AD-009.
 
 ## DW-012 — Legacy Replay, Export and CSVBroker Contracts
 
@@ -143,6 +147,28 @@ Future work, if required, should define:
 - performance evidence.
 
 This is not a current M3.6 correctness blocker.
+
+## DW-015 — Broker Session and Authentication Lifecycle
+
+**Status:** OPEN
+**Target:** M6/M7 broker/live-data and paper-session work; required before V1 real-market-data paper acceptance. Reassess and extend for V2 live execution.
+
+Current broker authentication is not yet a reusable session lifecycle. When `create_angelone_broker()` is invoked it constructs a new broker and calls `login()` eagerly. `AngelOneBroker` tracks `_logged_in` only within the current broker object/process, but `login()` does not first determine whether an existing authenticated session is still usable. Separate program runs also do not currently reuse or validate a previously created broker session.
+
+Required future behavior:
+
+- when broker capability is required, first determine whether a usable authenticated broker session already exists;
+- if the existing session is valid, reuse it and do not perform another login;
+- if no usable session exists, perform authentication;
+- if a session exists but is expired or invalid, refresh it when the broker supports safe refresh, otherwise re-authenticate explicitly;
+- historical data, live market data, account queries and eventually order execution should reuse the appropriate shared authenticated broker lifecycle rather than independently creating unnecessary sessions;
+- distinguish process-local broker reuse from any optional persistence or reuse across application restarts;
+- define safe token/session storage, expiry handling, refresh ownership, logout/cleanup, concurrency and failure semantics;
+- do not log credentials, TOTP secrets, access tokens, refresh tokens or other sensitive authentication material;
+- keep the lifecycle broker-agnostic so AngelOne is the first adapter, not the architectural owner of the policy; and
+- add deterministic tests for already-authenticated reuse, initial login, expired/invalid-session recovery, authentication failure and concurrent or repeated capability requests.
+
+Do not implement this behavior now.
 
 ## Maintenance
 
