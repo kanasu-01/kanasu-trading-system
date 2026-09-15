@@ -53,11 +53,11 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
     - **M3.7b — DONE** — Broker historical provider adapter.
     - **M3.7c — DONE** — Backtest/WFA runtime wiring and lazy provider construction.
     - **M3.7d — DONE** — Source-policy integration and failure validation.
-  - **M3.8 — IN_PROGRESS** — Historical-path parity and reproducibility.
+  - **M3.8 — DONE** — Historical-path parity and reproducibility.
     - **M3.8a — DONE** — Historical input parity.
     - **M3.8b — DONE** — Backtest result parity.
     - **M3.8c — DONE** — Reproducibility identity and research-evidence persistence.
-    - **M3.8d — BASELINED / NOT AUTHORIZED** — Integration and repeated-run validation.
+    - **M3.8d — DONE** — Integration and repeated-run validation.
 
 ### P2 — Trusted Research Engine
 
@@ -77,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8 is IN_PROGRESS, and M3.8a, M3.8b and M3.8c are complete at their accepted scopes. M3.8d is the next implementation candidate but remains BASELINED / NOT AUTHORIZED and requires separate explicit authorization. M4–M9 remain reserved proposals until formally baselined; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M3.7a–M3.7d and their M3.7 parent are complete at their accepted scopes.
+M3.8a through M3.8d and their M3.8 parent are complete at their accepted scopes. M3 remains IN_PROGRESS pending a separate parent-milestone closure review. M4–M9 remain RESERVED proposals; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M4 is not authorized or started.
 
 ## Near-term detailed work
 
@@ -480,11 +480,11 @@ The accepted evidence covers deterministic type-tagged serialization, versioned 
 
 #### M3.8d — Integration and repeated-run validation
 
-**Status:** BASELINED / NOT AUTHORIZED.
+**Status:** DONE.
 
 **Outcome:** Prove the complete accepted M3.8 contract together.
 
-M3.8d is the next implementation candidate. Implementation requires separate explicit authorization and is not authorized automatically by M3.8c completion.
+The accepted deterministic integration evidence completes the bounded M3.8 parity and reproducibility contract without adding automatic production runtime wiring.
 
 Required evidence:
 
@@ -500,6 +500,28 @@ Required evidence:
 10. Persisted reference evidence can be reloaded and inspected.
 11. Failed or incomplete runs are not falsely recorded as accepted reproducible evidence.
 12. Deterministic automated validation requires no real provider or network.
+
+Completion evidence:
+
+- Implementation and validation commit: `f86b1c05609912a15bf4ec87ed7ef1c7e7ef4c10 Validate M3.8d reproducibility integration`
+- Parent: `49edbfc0791eab57b0e1357cba4834f55a13d89a`
+- Pre-change full suite: 306 passed
+- Focused M3.8d: 3 passed
+- M3.8a regression: 5 passed
+- M3.8b regression: 3 passed
+- M3.8c/research regression: 58 passed
+- Post-change full suite: 309 passed
+- `git diff --check`: passed
+- Production changes and defects: none
+- Test scope: `tests/runtime/test_research_reproducibility_integration.py`, +445 / -0
+- Runtime/main/WFA/API/frontend production wiring: none
+- Real provider/network/credentials: none
+
+Provider-backed deterministic fresh retrieval persists accepted candles and coverage, and fresh durable `LOCAL_ONLY` and warm `LOCAL_FIRST` instances reproduce the same canonical input. Equivalent inputs and research configuration produce identical stable trades, `BarRecord` and account/equity state, equity curves, and all three fingerprints despite different session IDs and provenance. Accepted evidence reloads exactly from the separate evidence SQLite store, duplicate IDs cannot overwrite it, and repeated local retrieval remains identical.
+
+Research-relevant configuration changes alter identity while replay, visualization and export controls do not. Provider failure creates no false retrieval coverage or false `ACCEPTED` evidence, and explicit `INCOMPLETE` evidence reloads with its true status. The configuration fingerprint supplies effective risk `1.0`, matching current Backtest execution for this validated path.
+
+M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DONE. This completion does not establish Backtest financial or economic validity, which remains M4 scope. It does not authorize M4 or close parent M3.
 
 **Validation policy:** Deterministic fake/local parity tests are authoritative automated evidence and run with relevant regressions whenever changes can affect historical retrieval or persistence, canonical candle serialization/identity, dataset identity, Backtest runtime input, strategy/execution result determinism, or fingerprint logic. Major milestone/release validation retains inspectable reference-run evidence. An occasional controlled real-provider fresh-to-local rerun comparison is supplementary because authentication, network behavior, rate limits and provider-side corrections are external variables. Permanent evidence need not be written for every ordinary unit-test execution. Reproducibility and parity remain a mandatory V1 release gate.
 

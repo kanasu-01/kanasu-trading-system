@@ -137,9 +137,11 @@ Timezone identity does not imply timestamp localization or conversion.
 
 BacktestEngine processes candles through the strategy and authoritative simulated portfolio, records bar state, and returns trades, bars and an equity curve. Walk-forward modules provide parameter search, in-sample/out-of-sample evaluation and aggregate results. `core/research` retains the minimal placeholder `ResearchSession`/`ResearchRequest`/`ResearchResult` workflow and now also implements the standalone M3.8c reproducibility primitives: deterministic canonical serialization, versioned dataset/configuration/stable-result fingerprints, immutable research-evidence records, and dedicated SQLite evidence persistence.
 
-M3.8a, M3.8b and M3.8c are complete and validated at their accepted scopes. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence uses a physically separate SQLite store, and provenance remains separate from canonical dataset identity.
+M3.8a through M3.8d and M3.8 are complete and validated at their accepted scopes. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence uses a physically separate SQLite store, and provenance remains separate from canonical dataset identity.
 
-The M3.8c primitives are not automatically wired into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. The complete provider-fresh → Backtest → fingerprints → evidence persistence → durable-local rerun integration remains unimplemented and unvalidated M3.8d work.
+Deterministic M3.8d integration tests validate the complete provider-fresh → historical persistence → canonical candles → Backtest → fingerprints → separate evidence persistence → durable-local rerun composition. Equivalent fresh and local paths produce identical canonical candles, stable Backtest content and reproducibility identities; accepted evidence reloads durably, while provider failure creates no false coverage or accepted evidence.
+
+This validated composition is not automatic production wiring. `run_backtest()`, HistoricalSource, main, WFA, API and frontend still do not create or persist research evidence as part of their normal runtime paths.
 
 ### TARGET
 
@@ -163,7 +165,7 @@ three fingerprints + provenance + evidence metadata
               separate research-evidence SQLite store
 ~~~
 
-The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. These capabilities remain intentionally outside Backtest, HistoricalSource, main, WFA, API and frontend composition; the complete fresh/local repeated-run flow belongs to M3.8d.
+The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8d validates the complete fresh/local repeated-run composition through deterministic integration tests without changing the production runtime boundaries. Automatic evidence creation remains outside Backtest, HistoricalSource, main, WFA, API and frontend composition.
 
 ### KNOWN DIVERGENCES
 
@@ -193,7 +195,7 @@ The backend remains the intended authority for trading and account state. The fr
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
 
-- M3.8a historical-input parity, M3.8b stable Backtest-result parity and M3.8c identity/evidence persistence are validated at their accepted scopes, while M3.8d full repeated-run integration remains unimplemented and unvalidated;
+- M3.8a–M3.8d and M3.8 historical-path parity/reproducibility are validated at their accepted scopes, while authoritative research runtimes still do not automatically create and persist complete reproducibility evidence;
 - backtest and WFA validity work remains;
 - real live-market-data paper ingestion is absent;
 - paper API sessions and the actual runtime are disconnected;

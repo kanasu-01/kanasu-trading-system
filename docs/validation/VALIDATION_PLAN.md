@@ -424,7 +424,7 @@ The accepted evidence validates M3.7d through the bounded historical-source/rese
 
 ## 8. M3.8 — Historical-path parity and reproducibility
 
-**Status:** IN_PROGRESS / partially validated through completed M3.8a, M3.8b and M3.8c
+**Status:** DONE / validated at accepted scope through completed M3.8a–M3.8d
 
 M3.8 validates that equivalent accepted historical data and the same research-relevant configuration yield equivalent canonical historical inputs and stable deterministic Backtest outputs through provider-fresh and already persisted local-store paths. It also requires deterministic dataset, configuration and result identities plus inspectable research-evidence persistence. It does not validate Backtest economics or WFA validity.
 
@@ -553,7 +553,7 @@ M3.8c does not wire evidence persistence into `run_backtest()`, HistoricalSource
 
 ### M3.8d — Integration and repeated-run validation
 
-**Status:** BASELINED / not validated / NOT AUTHORIZED
+**Status:** DONE / validated at accepted scope
 
 Required evidence:
 
@@ -570,11 +570,33 @@ Required evidence:
 11. Failed or incomplete runs do not become accepted evidence.
 12. Deterministic validation completes without a real provider or network.
 
+Completion evidence:
+
+- Implementation and validation commit: `f86b1c05609912a15bf4ec87ed7ef1c7e7ef4c10 Validate M3.8d reproducibility integration`
+- Parent: `49edbfc0791eab57b0e1357cba4834f55a13d89a`
+- Pre-change full suite: 306 passed
+- Focused M3.8d: 3 passed
+- M3.8a regression: 5 passed
+- M3.8b regression: 3 passed
+- M3.8c/research regression: 58 passed
+- Post-change full suite: 309 passed
+- `git diff --check`: passed
+- Production changes and defects: none
+- Test scope: `tests/runtime/test_research_reproducibility_integration.py`, +445 / -0
+- Runtime/main/WFA/API/frontend production wiring: none
+- Real provider/network/credentials: none
+
+The deterministic integration evidence satisfies the required matrix. Provider-backed fresh retrieval and new durable `LOCAL_ONLY` or warm `LOCAL_FIRST` instances return identical canonical candles, including repeated fresh-store reads. Equivalent inputs and research configuration produce equal stable trades, `BarRecord` and account/equity state, equity curves, and dataset/configuration/result fingerprints. Deliberately different session IDs and provenance leave the reproducibility identities unchanged.
+
+Accepted evidence round-trips exactly through fresh `SQLiteResearchEvidenceStore` instances in a database physically and logically separate from historical candle/coverage storage. Research-relevant configuration changes are detected, while replay, visualization and export controls do not change configuration identity. Duplicate IDs cannot overwrite accepted evidence. Provider failure creates no false retrieval coverage or false `ACCEPTED` record, and explicit `INCOMPLETE` evidence reloads as `INCOMPLETE`. The configuration fingerprint explicitly uses effective risk `1.0`, matching current Backtest execution for this validated path.
+
+M3.8d validates the complete fresh → persistence → Backtest → fingerprints → evidence → durable-local rerun composition through deterministic tests. It adds no automatic evidence wiring to runtime, main, WFA, API or frontend production paths.
+
 ### Evidence policy and boundaries
 
 Deterministic fake/local parity is the authoritative automated evidence and belongs in relevant regression suites when changes affect historical retrieval/persistence, candle or dataset identity, Backtest inputs/results, or fingerprint logic. Real AngelOne/provider fresh-to-local smoke validation is optional supplementary milestone/release evidence because authentication, network, rate limits and provider corrections are external variables. Major validation points retain inspectable reference-run evidence; ordinary unit-test runs need not create permanent evidence records.
 
-M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a, M3.8b and M3.8c are validated at their accepted scopes; M3.8d remains unvalidated and requires separate explicit implementation authorization.
+M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a through M3.8d are validated at their accepted scopes, so M3.8 is DONE. Parent M3 closure and any M4 authorization remain separate governance actions.
 
 ## 9. V1 release gates
 
