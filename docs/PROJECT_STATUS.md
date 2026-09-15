@@ -13,9 +13,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P1 — Trusted Historical Data Foundation |
 | Milestone | M3 — Offline / Historical Market-Data Foundation |
-| Step | M3.8 — Historical-path parity and reproducibility |
-| Lifecycle | DONE at M3.8 accepted scope; M3 parent remains IN_PROGRESS |
-| Next planned review | M3 parent-milestone closure review; M4 remains RESERVED and not authorized |
+| Step | M3 parent milestone closure |
+| Lifecycle | DONE at accepted M3 scope |
+| Next planned review | Separate M4 baselining/design review only; M4 remains RESERVED and NOT AUTHORIZED |
 
 The 309-test full suite was rerun at implementation and validation commit `f86b1c0` and passed.
 
@@ -45,6 +45,7 @@ The 309-test full suite was rerun at implementation and validation commit `f86b1
 - M3.8c — Reproducibility identity and research-evidence persistence
 - M3.8d — Integration and repeated-run validation
 - M3.8 — Historical-path parity and reproducibility
+- M3 — Offline / Historical Market-Data Foundation
 
 Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
 
@@ -248,9 +249,11 @@ DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path pari
 
 M3.8 proves that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It also establishes deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; the accepted M3.8 evidence validates that these paths converge.
 
-M3.8a through M3.8d are complete at their accepted scopes, so M3.8 is DONE. The parent M3 milestone remains IN_PROGRESS pending a separate parent-milestone closure review. M4 remains RESERVED and is neither authorized nor started.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 — Offline / Historical Market-Data Foundation is DONE. This closes the accepted V1 historical-data foundation scope without extending its evidence into later milestones.
 
 The accepted AD-015 capability provides three separate versioned SHA-256 fingerprint domains, deterministic type-tagged canonical serialization, immutable evidence records, and a dedicated SQLite evidence store that remains logically and physically separate from historical candle/coverage storage. M3.8d validates their end-to-end composition through deterministic tests without adding automatic evidence creation to runtime entry points. M4 continues to own Backtest financial and economic validity.
+
+The next governance action is a separate M4 baselining/design review only. M4 remains RESERVED, is not authorized or started, and does not become ready automatically because M3 is closed. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

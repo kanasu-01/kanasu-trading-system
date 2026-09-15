@@ -36,7 +36,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 ### P1 — Trusted Historical Data Foundation
 
-- **M3 — IN_PROGRESS** — Offline / historical market-data foundation.
+- **M3 — DONE** — Offline / historical market-data foundation.
   - **M3.1 — DONE** — Candle finite-value validation.
   - **M3.2 — DONE** — Canonical CSV candle loader and compatibility wrapper.
   - **M3.3a — DONE** — Dataset symbol/timeframe identity propagation.
@@ -77,7 +77,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.8a through M3.8d and their M3.8 parent are complete at their accepted scopes. M3 remains IN_PROGRESS pending a separate parent-milestone closure review. M4–M9 remain RESERVED proposals; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M4 is not authorized or started.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4–M9 remain RESERVED proposals; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M4 is not authorized or started and requires a separate baselining/design review before any implementation authorization.
 
 ## Near-term detailed work
 

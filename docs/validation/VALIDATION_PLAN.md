@@ -598,6 +598,14 @@ Deterministic fake/local parity is the authoritative automated evidence and belo
 
 M3.8 parity compares stable detailed outputs rather than summary metrics alone. It does not validate Backtest economic correctness, WFA optimization/window/equity validity, paper/live behavior, market-calendar or expected-bar completeness, broker-session lifecycle, or real-money execution. Those remain M4, M5 and later milestone concerns. M3.8a through M3.8d are validated at their accepted scopes, so M3.8 is DONE. Parent M3 closure and any M4 authorization remain separate governance actions.
 
+### M3 parent milestone closure
+
+M3.1 through M3.8 are complete and validated at their individually accepted scopes. Their existing evidence is aggregated for parent closure, so M3 — Offline / Historical Market-Data Foundation is DONE at its accepted scope.
+
+No new validation run was performed for this documentation-only parent closure. The latest accepted full-suite evidence remains 309 passed at `f86b1c0 Validate M3.8d reproducibility integration`, and the M3.8 documentation closure is `d792fae6f4601be3651cf88de6382ae1bb95bc8b`.
+
+This parent status change creates no new technical acceptance claim. M4 owns Backtest financial and economic validity, M5 owns WFA validity, and later milestones own real market-data paper operation, paper-session lifecycle, application workflows and V1 release acceptance. M4 remains RESERVED and NOT AUTHORIZED.
+
 ## 9. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
