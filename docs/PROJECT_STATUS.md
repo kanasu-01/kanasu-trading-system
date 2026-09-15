@@ -6,16 +6,16 @@
 |---|---|
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
-| Branch | `m3-offline-foundation-data` |
+| Branch | `m4-backtest-validity` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
 | Implementation verification baseline | `f86b1c0 Validate M3.8d reproducibility integration` |
 | Latest reported test baseline | `309 passed at f86b1c0` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
-| Phase | P1 — Trusted Historical Data Foundation |
-| Milestone | M3 — Offline / Historical Market-Data Foundation |
-| Step | M3 parent milestone closure |
-| Lifecycle | DONE at accepted M3 scope |
-| Next planned review | Separate M4 baselining/design review only; M4 remains RESERVED and NOT AUTHORIZED |
+| Phase | P2 — Trusted Research Engine |
+| Milestone | M4 — Backtest Validity |
+| Step | M4.1 — Backtest economic contract |
+| Lifecycle | M4 READY; M4.1 DONE at accepted design-contract scope; production implementation NOT AUTHORIZED |
+| Next planned review | M4.2 — Signal/execution state-agreement design review; M4.2 remains PLANNED |
 
 The 309-test full suite was rerun at implementation and validation commit `f86b1c0` and passed.
 
@@ -238,22 +238,21 @@ M3.8d validates deterministic composition and integration; it does not automatic
 
 ## Current work
 
-M3.7a through M3.7d are complete at their accepted scopes. M3.7 — Historical Source Policy / Runtime Wiring is DONE.
+M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence remains `f86b1c0 Validate M3.8d reproducibility integration` with 309 passing tests.
 
-DW-011 is resolved by the accepted M3.7d evidence. M3.8 — Historical-path parity and reproducibility is DONE at its accepted scope. Its permanent child steps are:
+The M4 design audit used source baseline `6a0ab9a`. It confirmed that M4 owns the remaining Backtest validity contracts: completed-bar decisions and next-bar execution, protective-stop and gap behavior, deterministic event priority, strategy/execution state agreement, account-based returns and drawdown, current-equity risk sizing and affordability, simplified brokerage application, end-of-data handling, and versioned economic-policy research identity.
 
-- M3.8a — Historical input parity — DONE
-- M3.8b — Backtest result parity — DONE
-- M3.8c — Reproducibility identity and research-evidence persistence — DONE
-- M3.8d — Integration and repeated-run validation — DONE
+M4 — Backtest Validity is READY because its milestone design is baselined. M4 is not IN_PROGRESS, and production implementation is not authorized. Its permanent child steps are:
 
-M3.8 proves that equivalent accepted historical data and research-relevant configuration produce equivalent canonical input and stable Backtest output through provider-fresh and warm local-store paths. It also establishes deterministic dataset, configuration and result fingerprints plus a separate research-evidence persistence boundary. Provider-fresh and missing-range retrieval persist accepted data before reloading canonical candles from SQLite, while `LOCAL_ONLY` and warm `LOCAL_FIRST` read from that same store; the accepted M3.8 evidence validates that these paths converge.
+- M4.1 — Backtest economic contract — DONE at accepted design-contract scope
+- M4.2 — Signal/execution state agreement — PLANNED
+- M4.3 — Execution timing and stop/fill validity — PLANNED
+- M4.4 — Account returns and performance metrics — PLANNED
+- M4.5 — Risk sizing and drawdown validity — PLANNED
+- M4.6 — Research manifest and deterministic references — PLANNED
+- M4.7 — Backtest validity integration — PLANNED
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 — Offline / Historical Market-Data Foundation is DONE. This closes the accepted V1 historical-data foundation scope without extending its evidence into later milestones.
-
-The accepted AD-015 capability provides three separate versioned SHA-256 fingerprint domains, deterministic type-tagged canonical serialization, immutable evidence records, and a dedicated SQLite evidence store that remains logically and physically separate from historical candle/coverage storage. M3.8d validates their end-to-end composition through deterministic tests without adding automatic evidence creation to runtime entry points. M4 continues to own Backtest financial and economic validity.
-
-The next governance action is a separate M4 baselining/design review only. M4 remains RESERVED, is not authorized or started, and does not become ready automatically because M3 is closed. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.1 records target behavior only; it adds no implementation or validation evidence. The next planned activity is a separate M4.2 signal/execution state-agreement design review. M4.2 does not become authorized, READY or IN_PROGRESS automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

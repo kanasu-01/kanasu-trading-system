@@ -81,6 +81,22 @@ total_pnl = realized_pnl + unrealized_pnl
 
 A BUY decided at a completed candle's close cannot be stopped by that candle's earlier low. A subsequent candle can trigger the stop.
 
+### M4 TARGET — BAR-BASED BACKTEST ECONOMIC CONTRACT
+
+M4 targets completed-bar decisions with market-style actions queued to the next bar open. A completed bar cannot receive its own retrospective fill. If no next bar exists, the queued action remains unfilled; end of data does not implicitly create a liquidation.
+
+For a queued long entry, the next open is the reference price and BUY slippage is applied exactly once when enabled. The protective stop must remain strictly below the actual entry fill or the entry is rejected. Once an entry is accepted at the open, the position exists for that bar and its later low may trigger the stop.
+
+For an existing long, a bar opening at or below the stop uses the open as the gap-through-stop reference. Otherwise a low reaching the stop uses the stop as the ordinary-stop reference. SELL slippage is applied exactly once. A protective gap-stop exit has priority over a queued discretionary SELL; absent a gap stop, the queued SELL executes at the open, followed by ordinary intrabar stop evaluation only if the position remains open.
+
+Execution and portfolio state are authoritative. Strategy-local position belief must receive explicit feedback for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must enforce available-cash affordability including entry transaction costs.
+
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct. Account performance and drawdown derive from the authoritative equity curve, including unrealized P&L where the accepted risk contract requires it, rather than synthetic compounding of `Trade.pnl_pct`. Detailed daily/weekly session and reset semantics remain M4.5 work.
+
+An open position at the dataset boundary remains open, is marked to the final available close and contributes unrealized P&L to final equity. Forced end liquidation requires an explicit configured research policy. The simplified `BrokerageModel` must apply exactly once when enabled and flow consistently through cash, trade P&L and equity; M4 does not claim exact AngelOne, exchange, product or tax fidelity.
+
+M4.6 must introduce a versioned successor research-configuration identity containing the Backtest economic/execution policy version and all effective result-affecting M4 settings. It must not modify the frozen AD-015 v1 identity contract.
+
 ### KNOWN DIVERGENCES
 
 - Strategy-local position state does not receive a complete execution-acceptance/rejection/forced-exit feedback contract.
@@ -167,11 +183,14 @@ three fingerprints + provenance + evidence metadata
 
 The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8d validates the complete fresh/local repeated-run composition through deterministic integration tests without changing the production runtime boundaries. Automatic evidence creation remains outside Backtest, HistoricalSource, main, WFA, API and frontend composition.
 
+M4.6 must version the research-configuration identity for the accepted Backtest economic policy and its effective settings. AD-015 v1 remains an immutable historical contract and is not reinterpreted in place.
+
 ### KNOWN DIVERGENCES
 
 - Expanding-window generation can fail to terminate.
 - WFA creates backtests with hardcoded capital/fresh runtime settings instead of preserving all effective economics.
 - Some performance calculations use instrument Trade.pnl_pct or a synthetic compounded trade-return curve where account equity is required.
+- The current AD-015 Backtest-configuration v1 identity does not encode the future M4 economic-policy semantics; M4.6 owns a versioned successor rather than changing v1.
 - Research runtimes do not yet compose the implemented fingerprints and evidence store into a complete persisted reproducibility record.
 - The PivotBoss implementation has unvalidated state/signal-contract issues and must not be treated as a validated research strategy.
 

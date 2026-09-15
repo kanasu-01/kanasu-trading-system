@@ -604,9 +604,98 @@ M3.1 through M3.8 are complete and validated at their individually accepted scop
 
 No new validation run was performed for this documentation-only parent closure. The latest accepted full-suite evidence remains 309 passed at `f86b1c0 Validate M3.8d reproducibility integration`, and the M3.8 documentation closure is `d792fae6f4601be3651cf88de6382ae1bb95bc8b`.
 
-This parent status change creates no new technical acceptance claim. M4 owns Backtest financial and economic validity, M5 owns WFA validity, and later milestones own real market-data paper operation, paper-session lifecycle, application workflows and V1 release acceptance. M4 remains RESERVED and NOT AUTHORIZED.
+This parent status change created no new technical acceptance claim. M4 owns Backtest financial and economic validity, M5 owns WFA validity, and later milestones own real market-data paper operation, paper-session lifecycle, application workflows and V1 release acceptance. At M3 parent closure M4 remained RESERVED and NOT AUTHORIZED; the later M4 design baseline changes its roadmap status to READY without authorizing implementation.
 
-## 9. V1 release gates
+## 9. M4 — Backtest Validity
+
+**Status:** READY at design scope / not implemented / not validated
+
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4 being READY means the design is baselined; it does not authorize implementation or make the milestone IN_PROGRESS. The latest accepted suite remains 309 passed at `f86b1c0`.
+
+### M4.1 — Backtest economic contract
+
+**Status:** DONE at documentation/design-contract scope only
+
+M4.1 freezes the intended completed-bar/next-open, protective-stop, state-authority, sizing, return, drawdown, end-of-data, brokerage and economic-policy-version contracts. No test run was performed for this documentation-only design baseline, and no production behavior is claimed validated.
+
+### M4.2 — Signal/execution state agreement
+
+**Status:** PLANNED / not validated
+
+Future evidence must cover:
+
+1. strategy state after an accepted BUY;
+2. strategy state after a rejected BUY;
+3. agreement after a strategy SELL;
+4. agreement after a forced or protective-stop exit; and
+5. deterministic convergence between strategy-local belief and authoritative execution/portfolio state.
+
+### M4.3 — Execution timing and stop/fill validity
+
+**Status:** PLANNED / not validated
+
+Future evidence must prove:
+
+1. a completed-bar decision cannot receive a same-close fill;
+2. queued BUY and discretionary SELL actions use the next bar open;
+3. an ordinary long stop uses the stop price as reference when the bar does not gap through it;
+4. a gap-through long stop uses the bar open as reference;
+5. slippage is applied exactly once to the selected reference price;
+6. a gap-stop has deterministic priority over a queued discretionary SELL;
+7. a long entry is rejected when its stop is not strictly below the actual fill;
+8. a position accepted at the next open may be stopped by that same bar's later low;
+9. without a next bar, a queued action remains unfilled; and
+10. end of data does not trigger automatic liquidation.
+
+### M4.4 — Account returns and performance metrics
+
+**Status:** PLANNED / not validated
+
+Future evidence must keep instrument price return distinct from gross monetary trade P&L, net monetary trade P&L and account/equity return. Account return must derive from authoritative equity, drawdown must derive from the authoritative equity curve, and performance metrics must not compound `Trade.pnl_pct` as if it were account equity.
+
+### M4.5 — Risk sizing and drawdown validity
+
+**Status:** PLANNED / not validated
+
+Future evidence must cover current-pre-entry-equity risk sizing, available-cash affordability, transaction-cost-aware purchase limits, daily/weekly equity-risk behavior, unrealized-P&L treatment, and explicit trading-session/reset semantics.
+
+### M4.6 — Research manifest and deterministic references
+
+**Status:** PLANNED / not validated
+
+Future evidence must include hand-calculated deterministic reference scenarios, a complete manifest of effective result-affecting run inputs, and a versioned successor research identity for M4 economic semantics. AD-015 v1, including `kanasu.backtest-config.v1`, remains unchanged.
+
+Canonical acceptance reference specification:
+
+~~~text
+initial capital: 100000
+slippage: OFF
+brokerage: OFF
+
+completed Bar A → BUY decision
+Bar B open 100 → BUY quantity 100
+completed Bar C → SELL decision
+Bar D open 110 → SELL quantity 100
+
+gross P&L: 1000
+net P&L: 1000
+final cash: 101000
+final equity: 101000
+instrument return: 10%
+account return: 1%
+~~~
+
+This is an acceptance reference specification, not newly executed evidence.
+
+### M4.7 — Backtest validity integration
+
+**Status:** PLANNED / not validated
+
+M4 closure requires integrated deterministic reference runs, focused and regression neighborhoods, the full suite, explicit boundary and expected-failure cases, exact evidence reporting, and synchronization of affected authoritative documentation. The integration claim must remain bounded to Backtest validity and must not imply WFA, paper/live, application or V1 release acceptance.
+
+M4 validation does not establish exact brokerage or tax fidelity. M5 owns WFA validity; M6/M7 own real-data paper and paper-session work; M8 owns authoritative API/frontend workflow; and M9 owns V1 release acceptance.
+
+## 10. V1 release gates
 
 V1 is release-ready only when all mandatory gates pass:
 

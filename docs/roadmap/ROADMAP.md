@@ -61,7 +61,14 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 ### P2 — Trusted Research Engine
 
-- **M4 — RESERVED** — Backtest validity.
+- **M4 — READY** — Backtest validity; design baselined, implementation not authorized.
+  - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
+  - **M4.2 — PLANNED** — Signal/execution state agreement.
+  - **M4.3 — PLANNED** — Execution timing and stop/fill validity.
+  - **M4.4 — PLANNED** — Account returns and performance metrics.
+  - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
+  - **M4.6 — PLANNED** — Research manifest and deterministic references.
+  - **M4.7 — PLANNED** — Backtest validity integration.
 - **M5 — RESERVED** — WFA validity.
 
 ### P3 — Real-Market-Data Paper Runtime
@@ -77,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4–M9 remain RESERVED proposals; reservation prevents accidental identifier collision and does not claim accepted detailed scope or implementation authority. M4 is not authorized or started and requires a separate baselining/design review before any implementation authorization.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is READY because its design is baselined; this does not authorize implementation or make M4 IN_PROGRESS. M4.1 is complete only at design-contract scope, and M4.2–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -521,7 +528,7 @@ Provider-backed deterministic fresh retrieval persists accepted candles and cove
 
 Research-relevant configuration changes alter identity while replay, visualization and export controls do not. Provider failure creates no false retrieval coverage or false `ACCEPTED` evidence, and explicit `INCOMPLETE` evidence reloads with its true status. The configuration fingerprint supplies effective risk `1.0`, matching current Backtest execution for this validated path.
 
-M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DONE. This completion does not establish Backtest financial or economic validity, which remains M4 scope. It does not authorize M4 or close parent M3.
+M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DONE. This completion did not itself establish Backtest financial or economic validity, authorize M4, or close parent M3; those remained separate governance actions.
 
 **Validation policy:** Deterministic fake/local parity tests are authoritative automated evidence and run with relevant regressions whenever changes can affect historical retrieval or persistence, canonical candle serialization/identity, dataset identity, Backtest runtime input, strategy/execution result determinism, or fingerprint logic. Major milestone/release validation retains inspectable reference-run evidence. An occasional controlled real-provider fresh-to-local rerun comparison is supplementary because authentication, network behavior, rate limits and provider-side corrections are external variables. Permanent evidence need not be written for every ordinary unit-test execution. Reproducibility and parity remain a mandatory V1 release gate.
 
@@ -531,7 +538,46 @@ M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DON
 
 ### M4 — Backtest validity
 
-Reserved scope includes declared timing/fill/stop assumptions, strategy/execution state agreement, account-based reporting, reproducible run manifests, deterministic reference scenarios, and removal of placeholder research results from authoritative workflows.
+**Status:** READY — design baselined; implementation NOT AUTHORIZED and not IN_PROGRESS.
+
+**Outcome:** Establish deterministic and economically coherent bar-based Backtest semantics, authoritative strategy/execution state agreement, account-based reporting and risk controls, versioned research identity for the new economic policy, and integrated reference evidence.
+
+**Scope boundary:** M4 owns Backtest validity. It does not establish WFA validity, real market-data paper ingestion, paper-session operation, API/frontend authority, V1 release readiness, real-money execution, exact broker/product/tax fidelity, multi-symbol portfolio validity, or market-calendar/expected-bar completeness.
+
+#### M4.1 — Backtest economic contract
+
+**Status:** DONE at accepted design-contract scope. This is a target contract, not evidence that current production behavior satisfies it.
+
+The accepted target is:
+
+1. A strategy decision made from completed bar N cannot execute retrospectively on bar N. A queued market-style BUY or discretionary SELL may execute no earlier than bar N+1 open. Without a next candle, it remains unfilled; the engine does not manufacture an end-of-data execution.
+2. A queued long BUY uses the next candle open as its reference. BUY slippage, when enabled, is applied exactly once. The protective stop must be strictly below the actual fill or the entry is rejected explicitly. Once accepted at the open, the position exists for that candle and may be stopped by its later low.
+3. For an existing long, `candle.open <= stop_price` uses the candle open as the gap-through-stop reference. Otherwise `candle.low <= stop_price` uses the stop as the ordinary-stop reference. SELL slippage, when enabled, is applied exactly once to the chosen reference.
+4. At a new candle open, a protective gap stop has priority over a queued discretionary SELL. Otherwise the queued SELL executes at the open. If the position remains open, ordinary intrabar stop evaluation may then use the candle low.
+5. Execution and portfolio state are authoritative. A BUY signal alone does not prove acceptance. The state-agreement contract must report accepted entry, rejected entry, strategy exit and forced/protective exit so strategy-local state converges with the portfolio.
+6. Position risk uses current pre-entry account equity. Quantity must also be affordable from available cash including applicable entry transaction cost, and accepted sizing must not create negative authoritative cash.
+7. Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return.
+8. Authoritative drawdown and performance derive from the account equity curve rather than synthetic compounding of `Trade.pnl_pct`. Daily/weekly equity-risk treatment, including unrealized P&L and session/reset semantics, belongs to M4.5.
+9. End of data does not imply a SELL. An open position remains open, is marked to the final available close, and contributes unrealized P&L to final equity. Forced end liquidation requires an explicit configured research policy.
+10. The configured simplified `BrokerageModel` is applied exactly once where applicable, can be enabled or disabled, and flows consistently into cash, trade P&L and equity. M4 does not assert exact AngelOne, NSE, product or tax fidelity.
+11. AD-015 and `kanasu.backtest-config.v1` remain frozen. M4.6 must introduce a versioned successor research-configuration identity containing an explicit Backtest economic/execution policy version and every effective M4 result-affecting setting. This baseline does not freeze the successor schema identifier.
+
+#### Child-step responsibilities
+
+- **M4.2 — Signal/execution state agreement:** define and validate feedback for accepted and rejected entries, strategy exits and forced/protective exits.
+- **M4.3 — Execution timing and stop/fill validity:** implement and validate next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity and end-of-data behavior.
+- **M4.4 — Account returns and performance metrics:** preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state.
+- **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
+- **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
+- **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
+
+**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics. Open deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
+
+**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. Current test count remains 309 passed at `f86b1c0`; M4.1 is documentation/design evidence only and adds no executed validation.
+
+**Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
+
+M4 READY means its design is baselined. It does not authorize production implementation, make M4 IN_PROGRESS, or automatically promote M4.2. The next planned activity is a separate M4.2 signal/execution state-agreement design review.
 
 ### M5 — WFA validity
 

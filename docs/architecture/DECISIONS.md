@@ -128,11 +128,13 @@ Target milestones: M6 and M7.
 
 ### AD-011 — Instrument and account returns remain distinct
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 Instrument price return, gross/net trade outcome and account/equity return are different measures. Research and risk reporting choose the measure matching the question and must not use Trade.pnl_pct as a substitute for account return.
 
 Target milestones: M4 and M5.
+
+Accepted during M4 baselining. This acceptance defines the durable reporting distinction; it does not claim that M4 or M5 implementation is complete.
 
 ### AD-012 — API and UI use authoritative workflows
 
@@ -236,6 +238,28 @@ Proposed M3.8c ownership is:
 The placeholder `core/research/research_session.py` is not repurposed, and existing `ResearchRequest`/`ResearchResult` are not expanded merely to carry this capability. M3.8c builds independently testable identity and persistence primitives without real network access. It does not wire persistence into `run_backtest()`, HistoricalSource, main, WFA, API or frontend. M3.8d owns the explicitly authorized future fresh/local repeated-run integration.
 
 This decision excludes Backtest economic validity, timing/fill/stop correctness, brokerage tax fidelity, WFA validity, paper/live behavior, the final research catalog, analytics warehouse, UI/API workflow, broker-session lifecycle, market-calendar/expected-bar completeness and real-money execution.
+
+### AD-016 — Bar-based Backtest economic semantics v1
+
+**Status:** ACCEPTED
+
+**Target:** M4
+
+AD-016 defines intended M4 Backtest semantics. It does not claim that current production implementation already satisfies them.
+
+A strategy decision made after observing completed bar N cannot execute retrospectively on that bar. A queued market-style BUY or discretionary SELL may execute no earlier than bar N+1 open. If no next bar exists, the action remains unfilled, and end of data does not implicitly liquidate an open position. An open terminal position is marked to the final available close and its unrealized P&L remains part of final equity unless a separately configured research policy requires liquidation.
+
+A queued long BUY uses the next open as its reference price, with BUY slippage applied exactly once when enabled. Its protective stop must be strictly below the actual entry fill or the entry is rejected explicitly. Once accepted at the open, the position exists for that bar and may be stopped by its later low.
+
+For an existing long, a candle opening at or below the stop uses the open as the gap-through-stop reference. Otherwise a low reaching the stop uses the stop as the ordinary-stop reference. SELL slippage is applied exactly once to the selected reference. At the candle open, a protective gap stop has priority over a queued discretionary SELL; otherwise the queued SELL executes at the open, and ordinary intrabar stop evaluation follows only if the position remains open.
+
+Execution and portfolio state are authoritative over strategy-local position belief. M4 must provide explicit agreement for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must also enforce available-cash affordability including entry transaction costs.
+
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. Detailed daily/weekly equity-risk, unrealized-P&L and session/reset semantics remain M4.5 work.
+
+The configured simplified `BrokerageModel` must be applied exactly once where applicable, be independently enabled or disabled, and flow consistently into cash, trade P&L and account equity. This decision does not claim exact AngelOne, exchange, product or tax fidelity.
+
+AD-015 v1, including `kanasu.backtest-config.v1`, remains frozen. M4 requires a versioned successor research-configuration identity containing an explicit Backtest economic/execution policy version and all effective result-affecting M4 settings. The successor schema identifier is intentionally not fixed by this decision.
 
 ## Decision workflow
 

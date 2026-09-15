@@ -9,7 +9,7 @@ Existing identifiers are permanent.
 ## DW-001 — Equity-Based Drawdown
 
 **Status:** OPEN
-**Target:** M4/M5 risk and research validity; required before V2.
+**Target:** M4.5 / M5 risk and research validity; required before V2.
 
 Account-level net realized trade contribution was corrected in M2.3. Daily and weekly drawdown controls still aggregate recorded closed-trade percentages rather than being defined from actual account equity through time, including unrealized P&L where appropriate.
 
@@ -18,11 +18,11 @@ Required work: define the intended daily/weekly denominator, treatment of realiz
 ## DW-002 — P&L Percentage Accounting
 
 **Status:** PARTIALLY ADDRESSED
-**Target:** M4/M5.
+**Target:** M4.4 / M5.
 
 M2 established explicit fill/cost ownership, monetary gross/net P&L, and account-level net P&L input to DrawdownRiskManager. Trade.pnl_pct remains an instrument-price percentage return.
 
-Required work: preserve the instrument meaning where useful while defining gross trade return, net trade return and account/equity return for reporting and research. Instrument pnl_pct must not substitute for an account-return metric.
+Required work under accepted AD-011: preserve the instrument meaning where useful while defining gross trade return, net trade return and account/equity return for reporting and research. Instrument pnl_pct must not substitute for an account-return metric.
 
 ## DW-003 — Portfolio Accounting Consistency
 
@@ -81,7 +81,7 @@ Required work: propagate the effective capital, execution/risk configuration and
 ## DW-009 — Strategy and Execution Position-State Agreement
 
 **Status:** OPEN
-**Target:** M4 before strategy conclusions; M7 before paper acceptance.
+**Target:** M4.2 before strategy conclusions; M7 before paper acceptance.
 
 A strategy can change its local position-open state after emitting BUY without a complete response for risk rejection, affordability rejection or forced stop exit. Strategy state can then disagree with the execution portfolio.
 
