@@ -65,7 +65,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
   - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
   - **M4.3 — DONE** — Execution timing and stop/fill validity at accepted implementation/validation scope.
-  - **M4.4 — READY** — Account returns and performance metrics at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED.
+  - **M4.4 — DONE** — Account returns and performance metrics at accepted implementation/validation scope.
   - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
   - **M4.6 — PLANNED** — Research manifest and deterministic references.
   - **M4.7 — PLANNED** — Backtest validity integration.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 and M4.3 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 and M4.3 are DONE at their accepted scopes, M4.4 is READY at accepted design scope with implementation NOT_STARTED / NOT AUTHORIZED, and M4.5–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.4 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.4 are DONE at their accepted scopes, and M4.5–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -538,7 +538,7 @@ M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DON
 
 ### M4 — Backtest validity
 
-**Status:** IN_PROGRESS through completed M4.2 and M4.3 implementation and validation.
+**Status:** IN_PROGRESS through completed M4.2, M4.3 and M4.4 implementation and validation.
 
 **Outcome:** Establish deterministic and economically coherent bar-based Backtest semantics, authoritative strategy/execution state agreement, account-based reporting and risk controls, versioned research identity for the new economic policy, and integrated reference evidence.
 
@@ -609,9 +609,9 @@ The accepted behavior is implemented for Backtest. The legacy immediate `on_sign
 
 #### M4.4 — Account returns and performance metrics
 
-**Status:** READY at accepted design scope. Implementation and validation are NOT_STARTED / NOT AUTHORIZED.
+**Status:** DONE/CLOSED at accepted implementation/validation scope.
 
-Authoritative Backtest reporting will use `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains temporarily as an explicitly legacy trade-only compatibility path for current WFA callers. After M4.4, Backtest reporting must not use that legacy path. M4.4 does not redesign WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or keys; their migration and validity remain M5 work.
+Authoritative Backtest reporting now uses `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains unchanged as an explicitly legacy trade-only compatibility path for current WFA callers. M4.4 did not redesign WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or keys; their migration and validity remain M5 work.
 
 The accepted metric design preserves instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return as distinct concepts. `Trade.pnl_pct` remains instrument-price return. For a normal non-empty canonical Backtest, starting equity is the first `BarRecord.equity` under the current M4.3 lifecycle, ending equity is the last, account P&L is ending minus starting equity, and account return percentage is account P&L divided by starting equity and multiplied by 100. The first-record rule does not generalize automatically to future seeded-position or preloaded-state Backtests.
 
@@ -621,22 +621,26 @@ Maximum equity drawdown examines every recorded equity point from an initial pea
 
 The authoritative names are `completed_trade_count`, `net_profitable_trade_count`, `net_losing_trade_count`, `net_breakeven_trade_count`, `net_profitable_trade_rate_pct`, `mean_positive_instrument_return_pct`, `mean_negative_instrument_return_pct`, `mean_instrument_return_pct`, `gross_realized_pnl`, `net_realized_pnl`, `mean_net_pnl_per_completed_trade`, `completed_trade_transaction_cost_total`, `account_pnl`, `account_return_pct` and `max_equity_drawdown_pct`. Mean instrument return is not account expectancy; mean net P&L per completed trade is monetary expectancy. Zero-trade trade statistics are zero while account metrics still derive from equity. Programmatic calculations remain full precision and presentation owns rounding. Ambiguous `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` remain, if needed, only in the temporary WFA compatibility path.
 
+**Completion evidence:** design baseline `259145c0e743156f5b217773fe2b1df34ac93579`; implementation commit `7102859ecb80bf932a780825f10634fd36cb0a9d`; focused validation 32 M4.4/reporting/WFA-compatibility tests, 38 Backtest/execution/portfolio regressions, all 8 WFA tests and 29 runtime/parity/reproducibility tests passed; independent full suite 364 passed in 6.86s with exit code 0; 30 tests added over the previous 334-test baseline; implementation/test repository line changes +588 / -3, comprising production +134 / -3 and tests +454 / -0; independent `git diff --check` clean.
+
+The accepted evidence covers the authoritative 15-key result contract, instrument/account separation, equity-derived account P&L and return, equity-derived historical maximum drawdown, transaction costs, final unrealized equity, zero-trade and open-position behavior, explicit invalid-equity/result failures, unrounded programmatic values, console presentation and unchanged WFA production compatibility. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and AD-015 v1 remain unchanged. No M4.5, M4.6 or M5 implementation occurred.
+
 #### Child-step responsibilities
 
 - **M4.2 — Signal/execution state agreement:** DONE at accepted implementation/validation scope under AD-017.
 - **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
-- **M4.4 — Account returns and performance metrics:** READY at accepted design scope; preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API. Implementation remains NOT_STARTED / NOT AUTHORIZED.
+- **M4.4 — Account returns and performance metrics:** DONE/CLOSED at accepted implementation/validation scope; preserves instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API.
 - **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
 - **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
 - **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
 
 **Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
 
-**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 334 passed at `bc9409c`; M4.1 remains documentation/design evidence only.
+**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 364 passed at `7102859`; M4.1 remains documentation/design evidence only.
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.3 is DONE at its accepted scope. M4.4 is READY at accepted design scope, but implementation remains NOT_STARTED / NOT AUTHORIZED. The next action requires a separate implementation authorization/review; M4.5–M4.7 remain PLANNED and M5 remains RESERVED.
+M4 is IN_PROGRESS and is not complete. M4.2 through M4.4 are DONE/CLOSED at their accepted scopes. M4.5–M4.7 remain PLANNED and M5 remains RESERVED. The next planned action is a separate M4.5 design/review; M4.5 may become READY only after review and is not automatically authorized or IN_PROGRESS.
 
 ### M5 — WFA validity
 

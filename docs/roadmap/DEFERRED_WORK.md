@@ -22,9 +22,11 @@ Required work: define the intended daily/weekly denominator, treatment of realiz
 
 M2 established explicit fill/cost ownership, gross and net monetary trade P&L, and account-level net P&L input to DrawdownRiskManager. `Trade.pnl_pct` remains instrument-price return; it is not gross or net monetary P&L and must not substitute for account/equity return.
 
-The accepted M4.4 design defines Backtest account P&L, account return and maximum drawdown from authoritative recorded equity through a result-aware metric path while preserving completed-trade gross/net monetary P&L and instrument-return statistics as separate measures. M4.4 implementation and validation remain NOT_STARTED / NOT AUTHORIZED, so this item is not resolved by the design baseline.
+M4.4 implements and validates the Backtest account-performance/reporting portion through a result-aware metric path. `Trade.pnl_pct` retains instrument fill-to-fill return meaning; completed-trade gross and net outcomes remain monetary P&L; and authoritative Backtest account P&L, account return and maximum drawdown derive from recorded equity, including transaction-cost and final unrealized effects.
 
-Remaining work: implement and validate the accepted M4.4 Backtest reporting contract. M5 must then migrate the bounded legacy WFA trade-only metric path and establish WFA account-metric validity. No unnecessary gross-trade-return or net-trade-return percentage concepts are required.
+**M4.4 evidence:** implementation commit `7102859ecb80bf932a780825f10634fd36cb0a9d Implement M4.4 account performance metrics`; focused metric/reporting, compatibility and regression validation passed; independent full suite 364 passed in 6.86s.
+
+Remaining work: M5 must migrate the bounded legacy WFA trade-only metric path and establish WFA account-metric validity. No unnecessary gross-trade-return or net-trade-return percentage concepts are required. DW-002 therefore remains PARTIALLY ADDRESSED rather than resolved.
 
 ## DW-003 — Portfolio Accounting Consistency
 

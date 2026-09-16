@@ -99,9 +99,9 @@ An open position at the dataset boundary remains open, is marked to the final av
 
 M4.6 must introduce a versioned successor research-configuration identity containing the Backtest economic/execution policy version and all effective result-affecting M4 settings. It must not modify the frozen AD-015 v1 identity contract.
 
-### M4.4 ACCEPTED DESIGN — ACCOUNT RETURNS AND PERFORMANCE METRICS
+### M4.4 CURRENT — ACCOUNT RETURNS AND PERFORMANCE METRICS
 
-Authoritative Backtest reporting uses a distinct result-aware boundary: `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains temporarily as an explicitly legacy trade-only compatibility path for current WFA callers. After M4.4 implementation, Backtest reporting must not use that legacy path. M4.4 does not redesign WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or metric keys; their migration and economic validity remain M5 work.
+Authoritative Backtest reporting uses the distinct result-aware boundary `PerformanceMetrics.summarize_backtest(result: BacktestResult)` and no longer uses the legacy trade-only path. The existing `PerformanceMetrics.summarize(trades)` remains unchanged as an explicitly legacy compatibility path for current WFA callers. M4.4 did not redesign WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or metric keys; their migration and economic validity remain M5 work.
 
 For a normal non-empty canonical Backtest under the current M4.3 lifecycle, the first `BarRecord.equity` is authoritative starting equity because no prior-bar execution can exist before that record, and the last `BarRecord.equity` is authoritative ending equity. Account P&L is ending equity minus starting equity; account return percentage is that difference divided by finite, strictly positive starting equity and multiplied by 100. This first-record rule is the current canonical Backtest contract, not a universal assumption for possible future seeded-position or preloaded-state Backtests. M4.4 adds no `initial_capital` field to `BacktestResult` and does not change frozen AD-015 v1.
 
@@ -112,6 +112,8 @@ Authoritative maximum drawdown is calculated over every recorded equity point. T
 The authoritative Backtest metric contract uses `completed_trade_count`, `net_profitable_trade_count`, `net_losing_trade_count`, `net_breakeven_trade_count`, `net_profitable_trade_rate_pct`, `mean_positive_instrument_return_pct`, `mean_negative_instrument_return_pct`, `mean_instrument_return_pct`, `gross_realized_pnl`, `net_realized_pnl`, `mean_net_pnl_per_completed_trade`, `completed_trade_transaction_cost_total`, `account_pnl`, `account_return_pct` and `max_equity_drawdown_pct`. `mean_instrument_return_pct` is explicitly not account expectancy; `mean_net_pnl_per_completed_trade` is monetary expectancy per completed trade. The completed-trade cost total does not claim to include an entry cost belonging to an open terminal position.
 
 For zero completed trades, trade counts, rates, means, realized totals and per-trade expectancy are zero while account metrics still derive from equity and may be nonzero. Calculations remain full precision programmatically; console/export presentation owns rounding. Ambiguous `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` names are not authoritative Backtest metrics, although they may remain temporarily inside the bounded legacy WFA path until M5.
+
+This behavior is implemented and validated at `7102859`. Focused evidence covers the complete metric contract, reporting ownership, equity/account separation, transaction costs, final unrealized equity, drawdown history, zero-trade and failure boundaries, WFA compatibility, and M4.2/M4.3 accounting regressions. An independent full suite passed 364 tests in 6.86s. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and frozen AD-015 v1 remain unchanged. M4.5 equity-risk sizing, affordability and daily/weekly reset semantics remain incomplete.
 
 ### M4.2 CURRENT — EXECUTION FEEDBACK AND STRATEGY-STATE AUTHORITY
 
@@ -266,7 +268,6 @@ M4.6 must version the research-configuration identity for the accepted Backtest 
 
 - Expanding-window generation can fail to terminate.
 - WFA creates backtests with hardcoded capital/fresh runtime settings instead of preserving all effective economics.
-- Current Backtest reporting still uses the legacy trade-only metric path and synthetic compounded trade-return drawdown; the accepted M4.4 result-aware design is not yet implemented.
 - Current WFA performance calculations remain on the explicitly bounded legacy trade-only metric path and are economically unvalidated pending M5.
 - The current AD-015 Backtest-configuration v1 identity does not encode the future M4 economic-policy semantics; M4.6 owns a versioned successor rather than changing v1.
 - Research runtimes do not yet compose the implemented fingerprints and evidence store into a complete persisted reproducibility record.

@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m4-backtest-validity` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `bc9409c Implement M4.3 execution timing validity` |
-| Latest reported test baseline | `334 passed at bc9409c` |
+| Implementation verification baseline | `7102859 Implement M4.4 account performance metrics` |
+| Latest reported test baseline | `364 passed at 7102859` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.4 — Account returns and performance metrics — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED |
-| Lifecycle | M4 IN_PROGRESS; M4.1, M4.2 and M4.3 DONE at accepted scopes; M4.4 READY at design scope; M4.5–M4.7 PLANNED |
-| Next planned review | Separate M4.4 implementation authorization/review; implementation remains NOT AUTHORIZED |
+| Step | M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope |
+| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.4 DONE at accepted scopes; M4.5–M4.7 PLANNED |
+| Next planned review | Separate M4.5 risk sizing and drawdown validity design/review; M4.5 is not automatically authorized |
 
-The independently rerun 334-test full suite passed at implementation commit `bc9409c`.
+The independently rerun 364-test full suite passed in 6.86s at implementation commit `7102859`.
 
 ## Completed foundation
 
@@ -265,26 +265,34 @@ M4.3 implements a Backtest-owned immutable pending intent so completed-bar BUY a
 
 Open-time actions precede current-close marking. Final-bar intents remain unfilled, open positions are not automatically liquidated, and surviving positions are marked to the final close. M4.2 contradiction and feedback-handler behavior remain intact. The legacy immediate `on_signal()` path remains available to non-Backtest callers, and PaperRuntime was not migrated. PivotBoss, M4.4+ economics, WFA and later runtime scopes are not part of this validation.
 
-## M4.4 accepted design baseline
+## M4.4 implementation and validation evidence
 
-M4.4 is READY at accepted design scope only. Its production implementation and validation remain NOT_STARTED and NOT AUTHORIZED. The accepted Backtest reporting boundary is `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains temporarily as an explicitly legacy trade-only compatibility path for current WFA callers; Backtest reporting must stop using that path when M4.4 is implemented, while WFA migration and validity remain M5 work.
+M4.4 is DONE/CLOSED at its accepted implementation/validation scope. Backtest reporting now uses `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains unchanged as an explicitly legacy trade-only compatibility path for current WFA callers; WFA migration and validity remain M5 work.
 
-The design preserves instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return as distinct measures. `Trade.pnl_pct` remains instrument-price return. For a normal non-empty canonical Backtest, the first `BarRecord.equity` is starting equity under the current M4.3 lifecycle, the last is ending equity, account P&L is their difference and account return is that difference divided by starting equity. Account metrics include transaction costs and realized or final unrealized outcomes through authoritative equity. Maximum drawdown is the greatest non-negative peak-to-subsequent-equity decline across every recorded authoritative equity point; it is not derived from compounded trade percentages.
+The implementation preserves instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return as distinct measures. `Trade.pnl_pct` remains instrument fill-to-fill return. For a normal non-empty canonical Backtest, the first `BarRecord.equity` is starting equity under the current M4.3 lifecycle and the last is ending equity. Account P&L, account return and maximum drawdown derive from authoritative equity, so transaction costs and final unrealized marked P&L participate even with zero completed trades. Result-aware programmatic metrics remain unrounded, while Backtest console presentation formats floating-point values to two decimals.
 
-The design adds no `initial_capital` field to `BacktestResult` and does not change frozen AD-015 v1. Empty no-bar/no-trade results report zero account P&L, return and drawdown; non-empty trades without equity records are inconsistent; a non-empty curve requires finite equity throughout and a finite, strictly positive starting equity. The first-record rule is the current canonical Backtest contract, not a universal assumption for future seeded-position or preloaded-state Backtests.
+Empty no-bar/no-trade results return the complete zero-valued contract. Trades without equity records, non-finite equity and non-positive starting equity fail explicitly. Negative equity can produce greater than 100% drawdown without clipping. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and frozen AD-015 v1 remain unchanged. No M4.5, M4.6 or M5 implementation occurred.
+
+- Design baseline: `259145c0e743156f5b217773fe2b1df34ac93579 Baseline M4.4 account performance design`
+- Implementation commit: `7102859ecb80bf932a780825f10634fd36cb0a9d Implement M4.4 account performance metrics`
+- Focused validation: 32 M4.4/reporting/WFA-compatibility tests passed; 38 Backtest/execution/portfolio regressions passed; all 8 WFA tests passed; 29 runtime/parity/reproducibility tests passed
+- Independent full regression: 364 passed in 6.86s, exit code 0
+- Previous accepted full-suite baseline: 334 passed; increase: 30 tests
+- Implementation files: production +134 / -3; tests +454 / -0; total +588 / -3
+- Independent `git diff --check`: clean
 
 ## Current work
 
-M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `bc9409c Implement M4.3 execution timing validity` with 334 passing tests.
+M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `7102859 Implement M4.4 account performance metrics` with an independently passing 364-test full suite.
 
 The M4 design audit used source baseline `6a0ab9a`. It confirmed that M4 owns the remaining Backtest validity contracts: completed-bar decisions and next-bar execution, protective-stop and gap behavior, deterministic event priority, strategy/execution state agreement, account-based returns and drawdown, current-equity risk sizing and affordability, simplified brokerage application, end-of-data handling, and versioned economic-policy research identity.
 
-M4 — Backtest Validity remains IN_PROGRESS. M4.2 and M4.3 are implemented and validated at their accepted scopes. Its permanent child steps are:
+M4 — Backtest Validity remains IN_PROGRESS. M4.2, M4.3 and M4.4 are implemented and validated at their accepted scopes. Its permanent child steps are:
 
 - M4.1 — Backtest economic contract — DONE at accepted design-contract scope
 - M4.2 — Signal/execution state agreement — DONE at accepted implementation/validation scope
 - M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope
-- M4.4 — Account returns and performance metrics — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED
+- M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope
 - M4.5 — Risk sizing and drawdown validity — PLANNED
 - M4.6 — Research manifest and deterministic references — PLANNED
 - M4.7 — Backtest validity integration — PLANNED
@@ -293,7 +301,9 @@ M4.1 records target behavior only; it adds no implementation or validation evide
 
 M4.3 now implements and validates completed-bar decisions, one pending intent, next-open BUY/SELL execution, decision-time stop context, gap-stop/queued-SELL/ordinary-stop priority, exact single slippage, same-bar post-entry protection, execution-before-close-mark ordering, and end-of-data handling for Backtest.
 
-The next planned action is a separate M4.4 implementation authorization/review. This documentation baseline does not authorize production or test changes. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.4 now implements and validates result-aware authoritative Backtest metrics, equity-derived account return and maximum drawdown, explicit completed-trade monetary and instrument-return statistics, zero-trade/open-position behavior, failure boundaries and full-precision programmatic results while preserving the legacy WFA compatibility path.
+
+The next planned action is a separate M4.5 risk sizing and drawdown validity design/review. M4.5 may become READY only after review; it is not automatically authorized or IN_PROGRESS. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 
