@@ -85,7 +85,7 @@ Required work: propagate the effective capital, execution/risk configuration and
 
 A strategy can change its local position-open state after emitting BUY without a complete response for risk rejection, affordability rejection or forced stop exit. Strategy state can then disagree with the execution portfolio.
 
-Required work: define a small execution-feedback/state-authority contract and test accepted entry, rejected entry, strategy exit and forced exit.
+Accepted AD-017 now defines the intended typed, ordered execution-feedback and strategy-state-authority contract. DW-009 remains OPEN until M4.2 implementation and validation prove accepted entry, rejected entry, strategy exit, protective exit, explicit rejection reasons, contradictory-state failure and authoritative state convergence.
 
 ## DW-010 — SQLite Timestamp and Range-Bound Compatibility
 

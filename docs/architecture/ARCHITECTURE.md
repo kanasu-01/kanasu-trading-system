@@ -97,6 +97,27 @@ An open position at the dataset boundary remains open, is marked to the final av
 
 M4.6 must introduce a versioned successor research-configuration identity containing the Backtest economic/execution policy version and all effective result-affecting M4 settings. It must not modify the frozen AD-015 v1 identity contract.
 
+### M4.2 TARGET — EXECUTION FEEDBACK AND STRATEGY-STATE AUTHORITY
+
+Strategy signals are execution intents, not proof that a portfolio transition occurred. `TradeExecutionEngine` and `PortfolioManager` remain authoritative for actual position state. Strategy-local position belief changes only from authoritative execution feedback.
+
+The target boundary is:
+
+~~~text
+TradeExecutionEngine
+    → BacktestEngine
+        → StrategyRunner
+            → optional BaseStrategy execution-feedback hook
+~~~
+
+`TradeExecutionEngine` does not directly mutate a strategy. The strategy hook is optional and defaults to a no-op so existing strategy implementations remain compatible. If feedback handling fails, the Backtest fails explicitly rather than continuing with divergent strategy and portfolio state.
+
+The feedback contract is typed, immutable and ordered. It supports `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`, carrying the symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Rejections cover current drawdown-limit, invalid-quantity/entry and portfolio-risk classes. Later M4.3/M4.5 reasons may extend the same contract without being implemented by M4.2.
+
+Feedback is an ordered collection rather than a one-event-per-candle slot. This preserves a future same-bar sequence such as `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT`. Contradictory validated-research states fail explicitly when they reveal disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
+
+`SMACrossOverStrategy` is the reference M4.2 strategy: intent emission alone does not change its local position flag; accepted entry opens it, rejected entry leaves it flat, and strategy or protective exit closes it. PivotBoss remains unvalidated and outside M4.2 scope.
+
 ### KNOWN DIVERGENCES
 
 - Strategy-local position state does not receive a complete execution-acceptance/rejection/forced-exit feedback contract.

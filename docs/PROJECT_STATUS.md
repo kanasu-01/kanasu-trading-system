@@ -13,9 +13,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.1 — Backtest economic contract |
-| Lifecycle | M4 READY; M4.1 DONE at accepted design-contract scope; production implementation NOT AUTHORIZED |
-| Next planned review | M4.2 — Signal/execution state-agreement design review; M4.2 remains PLANNED |
+| Step | M4.2 — Signal/execution state agreement design baseline |
+| Lifecycle | M4 READY; M4.1 DONE at design-contract scope; M4.2 READY with implementation and validation NOT_STARTED |
+| Next planned review | Separate M4.2 implementation authorization/review; implementation is NOT AUTHORIZED automatically |
 
 The 309-test full suite was rerun at implementation and validation commit `f86b1c0` and passed.
 
@@ -245,14 +245,16 @@ The M4 design audit used source baseline `6a0ab9a`. It confirmed that M4 owns th
 M4 — Backtest Validity is READY because its milestone design is baselined. M4 is not IN_PROGRESS, and production implementation is not authorized. Its permanent child steps are:
 
 - M4.1 — Backtest economic contract — DONE at accepted design-contract scope
-- M4.2 — Signal/execution state agreement — PLANNED
+- M4.2 — Signal/execution state agreement — READY; design baselined, implementation NOT AUTHORIZED / NOT_STARTED, validation NOT_STARTED
 - M4.3 — Execution timing and stop/fill validity — PLANNED
 - M4.4 — Account returns and performance metrics — PLANNED
 - M4.5 — Risk sizing and drawdown validity — PLANNED
 - M4.6 — Research manifest and deterministic references — PLANNED
 - M4.7 — Backtest validity integration — PLANNED
 
-M4.1 records target behavior only; it adds no implementation or validation evidence. The next planned activity is a separate M4.2 signal/execution state-agreement design review. M4.2 does not become authorized, READY or IN_PROGRESS automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 now has an accepted design for typed, immutable, ordered execution feedback between authoritative execution/portfolio state and strategy-local state. The contract covers accepted and rejected entries, strategy and protective exits, explicit rejection reasons, contradictory-state failures, multiple events per candle, and failure propagation from strategy feedback handling. `SMACrossOverStrategy` is the reference validation strategy; PivotBoss remains outside the validated M4.2 strategy scope.
+
+The next planned action is a separate M4.2 implementation authorization/review. READY records design maturity only: M4.2 implementation and validation remain NOT_STARTED and are not automatically authorized. M4 remains READY rather than IN_PROGRESS. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

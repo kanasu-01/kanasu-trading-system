@@ -63,7 +63,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M4 — READY** — Backtest validity; design baselined, implementation not authorized.
   - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
-  - **M4.2 — PLANNED** — Signal/execution state agreement.
+  - **M4.2 — READY** — Signal/execution state agreement; design baselined, implementation not authorized.
   - **M4.3 — PLANNED** — Execution timing and stop/fill validity.
   - **M4.4 — PLANNED** — Account returns and performance metrics.
   - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is READY because its design is baselined; this does not authorize implementation or make M4 IN_PROGRESS. M4.1 is complete only at design-contract scope, and M4.2–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is READY because its design is baselined; this does not authorize implementation or make M4 IN_PROGRESS. M4.1 is complete only at design-contract scope, M4.2 is READY with implementation and validation NOT_STARTED, and M4.3–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -562,9 +562,34 @@ The accepted target is:
 10. The configured simplified `BrokerageModel` is applied exactly once where applicable, can be enabled or disabled, and flows consistently into cash, trade P&L and equity. M4 does not assert exact AngelOne, NSE, product or tax fidelity.
 11. AD-015 and `kanasu.backtest-config.v1` remain frozen. M4.6 must introduce a versioned successor research-configuration identity containing an explicit Backtest economic/execution policy version and every effective M4 result-affecting setting. This baseline does not freeze the successor schema identifier.
 
+#### M4.2 — Signal/execution state agreement
+
+**Status:** READY — design baselined; implementation NOT AUTHORIZED / NOT_STARTED; validation NOT_STARTED.
+
+Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth, and strategy-local belief changes only after authoritative execution feedback.
+
+M4.2 defines a typed, immutable feedback contract that supports an ordered sequence of events. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. Each event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. M4.3/M4.5 may extend the same contract for later accepted reasons such as invalid post-gap stop or insufficient cash; those later semantics are outside M4.2.
+
+The target feedback flow is:
+
+~~~text
+TradeExecutionEngine
+    → BacktestEngine
+        → StrategyRunner
+            → optional BaseStrategy execution-feedback hook
+~~~
+
+The strategy hook defaults to a no-op for compatibility. `TradeExecutionEngine` does not mutate strategy-local state directly. Feedback handling failure makes the Backtest fail explicitly rather than allowing potentially divergent strategy and portfolio state.
+
+`SMACrossOverStrategy` is the M4.2 reference strategy. Emitting BUY does not open its local position; `ENTRY_ACCEPTED` opens it and `ENTRY_REJECTED` leaves or sets it flat. Emitting SELL does not close it before execution; `STRATEGY_EXIT` and `PROTECTIVE_EXIT` close it. Contradictory validated-research states, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT, fail explicitly when they represent state disagreement.
+
+The contract is ordered and does not impose a one-event-per-candle limit. It must support a future M4.3 sequence such as `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT` on the same bar. PivotBoss remains unvalidated and outside the M4.2 reference-strategy scope.
+
+Acceptance of this design does not claim implementation or validation. A separate explicit authorization is required before coding.
+
 #### Child-step responsibilities
 
-- **M4.2 — Signal/execution state agreement:** define and validate feedback for accepted and rejected entries, strategy exits and forced/protective exits.
+- **M4.2 — Signal/execution state agreement:** implement and validate the accepted AD-017 feedback/state-authority contract after separate authorization.
 - **M4.3 — Execution timing and stop/fill validity:** implement and validate next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity and end-of-data behavior.
 - **M4.4 — Account returns and performance metrics:** preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state.
 - **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
@@ -577,7 +602,7 @@ The accepted target is:
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 READY means its design is baselined. It does not authorize production implementation, make M4 IN_PROGRESS, or automatically promote M4.2. The next planned activity is a separate M4.2 signal/execution state-agreement design review.
+M4 READY means its design is baselined. It does not authorize production implementation or make M4 IN_PROGRESS. M4.2 is READY because its design is accepted, but implementation and validation remain NOT_STARTED and require separate explicit authorization.
 
 ### M5 — WFA validity
 

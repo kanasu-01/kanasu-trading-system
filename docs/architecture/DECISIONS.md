@@ -261,6 +261,24 @@ The configured simplified `BrokerageModel` must be applied exactly once where ap
 
 AD-015 v1, including `kanasu.backtest-config.v1`, remains frozen. M4 requires a versioned successor research-configuration identity containing an explicit Backtest economic/execution policy version and all effective result-affecting M4 settings. The successor schema identifier is intentionally not fixed by this decision.
 
+### AD-017 — Execution feedback and strategy-state authority v1
+
+**Status:** ACCEPTED
+
+**Target:** M4.2
+
+AD-017 defines intended M4.2 design authority. It does not claim that the contract is implemented or validated.
+
+Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth. Strategy-local state changes from execution feedback after the authoritative outcome, not merely because BUY or SELL was emitted.
+
+Execution feedback is typed, immutable and ordered. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. An event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. Later M4.3/M4.5 work may extend the same reason contract for its own accepted failure semantics.
+
+The feedback path is `TradeExecutionEngine` → `BacktestEngine` → `StrategyRunner` → an optional BaseStrategy execution-feedback hook. The hook defaults to a no-op for compatibility. `TradeExecutionEngine` does not directly mutate strategy-local state. A feedback-handler failure fails the Backtest explicitly rather than allowing execution and strategy state to diverge silently.
+
+The contract supports multiple ordered events within one candle and must not impose a one-event-per-candle limitation. In particular, future M4.3 timing may produce `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT` on the same bar. Contradictory validated-research states fail explicitly when they indicate disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
+
+`SMACrossOverStrategy` is the M4.2 reference strategy. Emitting BUY does not set its local position open; `ENTRY_ACCEPTED` does, while `ENTRY_REJECTED` leaves or sets it flat. Emitting SELL does not set it flat before execution; `STRATEGY_EXIT` and `PROTECTIVE_EXIT` do. PivotBoss remains unvalidated and outside M4.2 validated strategy scope.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

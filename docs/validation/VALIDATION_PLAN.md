@@ -620,15 +620,24 @@ M4.1 freezes the intended completed-bar/next-open, protective-stop, state-author
 
 ### M4.2 — Signal/execution state agreement
 
-**Status:** PLANNED / not validated
+**Status:** READY at design scope / implementation NOT_STARTED / validation NOT_STARTED
 
-Future evidence must cover:
+M4.2 validation must exercise the typed, immutable, ordered AD-017 feedback contract through the authoritative execution → Backtest → strategy-runner → strategy-hook boundary. Strategy signals remain intents, and feedback must be emitted only after the portfolio/execution outcome is authoritative. The optional BaseStrategy hook remains compatible through a default no-op; `SMACrossOverStrategy` is the validated reference strategy, while PivotBoss remains outside M4.2 validated scope.
 
-1. strategy state after an accepted BUY;
-2. strategy state after a rejected BUY;
-3. agreement after a strategy SELL;
-4. agreement after a forced or protective-stop exit; and
-5. deterministic convergence between strategy-local belief and authoritative execution/portfolio state.
+Future evidence must cover at least:
+
+1. accepted BUY convergence: a BUY intent does not open strategy-local state, and `ENTRY_ACCEPTED` does;
+2. rejected BUY convergence: `ENTRY_REJECTED` leaves or returns strategy-local state to flat;
+3. strategy SELL convergence: a SELL intent does not close local state before execution, and `STRATEGY_EXIT` does;
+4. protective-stop convergence: `PROTECTIVE_EXIT` closes local state after the authoritative forced exit;
+5. a machine-readable rejection reason for drawdown-limit, invalid-quantity/entry or portfolio-risk rejection as applicable;
+6. feedback is delivered only after the authoritative portfolio outcome and contains symbol, timestamp, resulting authoritative position state, and applicable fill price/quantity/rejection reason;
+7. a strategy execution-feedback handler failure propagates and fails the Backtest explicitly;
+8. contradictory validated-research states fail explicitly, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT when these indicate disagreement;
+9. ordered multiple-event capability without a one-event-per-candle restriction, including support for the later M4.3 sequence `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`; and
+10. no regression to authoritative PortfolioManager/TradeExecutionEngine accounting or ownership.
+
+The design baseline adds no executed evidence. No tests were run, implementation remains unauthorized, and validation remains NOT_STARTED.
 
 ### M4.3 — Execution timing and stop/fill validity
 
