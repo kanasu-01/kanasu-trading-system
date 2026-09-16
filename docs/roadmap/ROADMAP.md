@@ -65,7 +65,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
   - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
   - **M4.3 — DONE** — Execution timing and stop/fill validity at accepted implementation/validation scope.
-  - **M4.4 — PLANNED** — Account returns and performance metrics.
+  - **M4.4 — READY** — Account returns and performance metrics at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED.
   - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
   - **M4.6 — PLANNED** — Research manifest and deterministic references.
   - **M4.7 — PLANNED** — Backtest validity integration.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 and M4.3 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 and M4.3 are DONE at their accepted scopes, and M4.4–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 and M4.3 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 and M4.3 are DONE at their accepted scopes, M4.4 is READY at accepted design scope with implementation NOT_STARTED / NOT AUTHORIZED, and M4.5–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -607,11 +607,25 @@ A final-bar decision remains pending and unfilled. No final-close execution or a
 
 The accepted behavior is implemented for Backtest. The legacy immediate `on_signal()` path remains for non-Backtest callers, PaperRuntime was not migrated, and this completion does not validate PivotBoss, M4.4+ economics, WFA or later runtime/application scopes.
 
+#### M4.4 — Account returns and performance metrics
+
+**Status:** READY at accepted design scope. Implementation and validation are NOT_STARTED / NOT AUTHORIZED.
+
+Authoritative Backtest reporting will use `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. The existing `PerformanceMetrics.summarize(trades)` remains temporarily as an explicitly legacy trade-only compatibility path for current WFA callers. After M4.4, Backtest reporting must not use that legacy path. M4.4 does not redesign WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or keys; their migration and validity remain M5 work.
+
+The accepted metric design preserves instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return as distinct concepts. `Trade.pnl_pct` remains instrument-price return. For a normal non-empty canonical Backtest, starting equity is the first `BarRecord.equity` under the current M4.3 lifecycle, ending equity is the last, account P&L is ending minus starting equity, and account return percentage is account P&L divided by starting equity and multiplied by 100. The first-record rule does not generalize automatically to future seeded-position or preloaded-state Backtests.
+
+Transaction costs, realized P&L and final unrealized marked P&L participate through authoritative equity. Zero completed trades do not suppress account metrics. Empty no-bar/no-trade results report zero account P&L, return and drawdown; trades without equity records fail as inconsistent; a non-empty curve requires finite equity points and finite, strictly positive starting equity. M4.4 adds no `initial_capital` field to `BacktestResult` and does not change AD-015 v1.
+
+Maximum equity drawdown examines every recorded equity point from an initial peak equal to starting equity and reports the greatest `(peak - equity) / peak * 100` as a non-negative magnitude. Empty and single-point curves report zero, recovery preserves the historical maximum, negative equity may produce more than 100% drawdown without clipping, and authoritative Backtest drawdown never compounds trade percentages.
+
+The authoritative names are `completed_trade_count`, `net_profitable_trade_count`, `net_losing_trade_count`, `net_breakeven_trade_count`, `net_profitable_trade_rate_pct`, `mean_positive_instrument_return_pct`, `mean_negative_instrument_return_pct`, `mean_instrument_return_pct`, `gross_realized_pnl`, `net_realized_pnl`, `mean_net_pnl_per_completed_trade`, `completed_trade_transaction_cost_total`, `account_pnl`, `account_return_pct` and `max_equity_drawdown_pct`. Mean instrument return is not account expectancy; mean net P&L per completed trade is monetary expectancy. Zero-trade trade statistics are zero while account metrics still derive from equity. Programmatic calculations remain full precision and presentation owns rounding. Ambiguous `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` remain, if needed, only in the temporary WFA compatibility path.
+
 #### Child-step responsibilities
 
 - **M4.2 — Signal/execution state agreement:** DONE at accepted implementation/validation scope under AD-017.
 - **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
-- **M4.4 — Account returns and performance metrics:** preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state.
+- **M4.4 — Account returns and performance metrics:** READY at accepted design scope; preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API. Implementation remains NOT_STARTED / NOT AUTHORIZED.
 - **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
 - **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
 - **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
@@ -622,7 +636,7 @@ The accepted behavior is implemented for Backtest. The legacy immediate `on_sign
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.3 is DONE at its accepted scope. M4.4 remains PLANNED, and its design or implementation is not automatically authorized.
+M4 is IN_PROGRESS and is not complete. M4.3 is DONE at its accepted scope. M4.4 is READY at accepted design scope, but implementation remains NOT_STARTED / NOT AUTHORIZED. The next action requires a separate implementation authorization/review; M4.5–M4.7 remain PLANNED and M5 remains RESERVED.
 
 ### M5 — WFA validity
 

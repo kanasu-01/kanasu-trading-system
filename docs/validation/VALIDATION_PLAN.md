@@ -610,7 +610,7 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 **Status:** IN_PROGRESS / partially validated through completed M4.2 and M4.3
 
-M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2 and M4.3 are validated at their accepted scopes, while M4.4–M4.7 remain unvalidated. The latest accepted full suite is 334 passed at `bc9409c`.
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2 and M4.3 are validated at their accepted scopes. M4.4 is READY at accepted design scope but remains unimplemented and unvalidated; M4.5–M4.7 also remain unvalidated. The latest accepted full suite is 334 passed at `bc9409c`.
 
 ### M4.1 — Backtest economic contract
 
@@ -687,9 +687,53 @@ The evidence preserves M4.2 contradiction detection, ordered feedback, handler-f
 
 ### M4.4 — Account returns and performance metrics
 
-**Status:** PLANNED / not validated
+**Status:** READY at accepted design scope / implementation NOT_STARTED / not validated
 
-Future evidence must keep instrument price return distinct from gross monetary trade P&L, net monetary trade P&L and account/equity return. Account return must derive from authoritative equity, drawdown must derive from the authoritative equity curve, and performance metrics must not compound `Trade.pnl_pct` as if it were account equity.
+Authoritative Backtest reporting must use `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. After M4.4 it must not use the existing `PerformanceMetrics.summarize(trades)`, which remains temporarily as an explicitly legacy trade-only compatibility path for current WFA callers. M4.4 validation must not silently migrate WFA optimizer scoring, window metrics, capital/configuration propagation, stitching, verdicts or metric keys; WFA account-metric validity remains M5 work.
+
+The implementation must preserve instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return as distinct measures. `Trade.pnl_pct` retains instrument-price-return meaning. For a normal non-empty canonical Backtest, starting equity is the first `BarRecord.equity` under the current M4.3 lifecycle and ending equity is the last. Account P&L is ending minus starting equity, and account return percentage is account P&L divided by starting equity and multiplied by 100. This first-record policy is not a universal assumption for future seeded-position or preloaded-state Backtests.
+
+Transaction costs, realized P&L and final unrealized marked P&L participate through authoritative equity. Zero completed trades do not suppress account metrics. Empty no-bar/no-trade results report zero account P&L, account return and drawdown. Trades without equity records fail explicitly as inconsistent. Every equity point on a non-empty curve must be finite, and starting equity must be finite and strictly positive. M4.4 adds no `initial_capital` field to `BacktestResult` and does not modify frozen AD-015 v1.
+
+Maximum equity drawdown must evaluate every recorded authoritative equity point. Starting equity is the initial peak; each point updates the peak and contributes `(peak - equity) / peak * 100`; the greatest result is reported as a non-negative loss magnitude. Empty and single-point curves report zero. Recovery does not erase an earlier maximum, unrealized P&L and transaction costs participate through equity, negative equity may produce a result greater than 100% without clipping, and authoritative Backtest drawdown never compounds `Trade.pnl_pct`.
+
+The authoritative metric keys and meanings are:
+
+- `completed_trade_count`: number of completed `Trade` records;
+- `net_profitable_trade_count`: completed trades with net monetary `pnl > 0`;
+- `net_losing_trade_count`: completed trades with net monetary `pnl < 0`;
+- `net_breakeven_trade_count`: completed trades with net monetary `pnl == 0`;
+- `net_profitable_trade_rate_pct`: net-profitable completed trades divided by all completed trades, multiplied by 100;
+- `mean_positive_instrument_return_pct`: mean `Trade.pnl_pct` among strictly positive instrument returns;
+- `mean_negative_instrument_return_pct`: mean `Trade.pnl_pct` among strictly negative instrument returns;
+- `mean_instrument_return_pct`: arithmetic mean of all completed `Trade.pnl_pct` values, explicitly not account expectancy;
+- `gross_realized_pnl`: sum of completed-trade gross monetary P&L;
+- `net_realized_pnl`: sum of completed-trade net monetary P&L;
+- `mean_net_pnl_per_completed_trade`: net realized P&L divided by completed-trade count, representing monetary expectancy per completed trade;
+- `completed_trade_transaction_cost_total`: sum of transaction costs attached to completed trades, without claiming to include an entry cost belonging to an open terminal position;
+- `account_pnl`: ending authoritative equity minus starting authoritative equity;
+- `account_return_pct`: account P&L divided by starting authoritative equity, multiplied by 100; and
+- `max_equity_drawdown_pct`: greatest authoritative-equity peak-to-subsequent-equity decline.
+
+For zero completed trades, trade counts, rates, means, realized totals and per-trade expectancy are zero, while account metrics remain equity-derived and may be nonzero. Calculations remain full precision programmatically; console/export presentation owns rounding. `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` must not be presented as authoritative Backtest metrics, although they may remain temporarily inside the legacy WFA compatibility path until M5.
+
+Future deterministic implementation evidence must prove:
+
+1. `Trade.pnl_pct` remains instrument return;
+2. authoritative equity moving from 100000 to 101000 reports +1% account return even when instrument return is +10%;
+3. transaction costs affect account return through authoritative equity;
+4. maximum drawdown uses authoritative equity rather than compounded trade returns;
+5. final unrealized marked equity affects account return and drawdown;
+6. unchanged equity with no completed trades reports zero account return and zero drawdown;
+7. losing account equity produces negative account return;
+8. recovery does not erase historical maximum drawdown;
+9. different quantities cannot distort account return through instrument percentages;
+10. gross/net/cost monetary semantics remain correct;
+11. Backtest reporting uses `summarize_backtest(result)`;
+12. legacy WFA behavior is not silently changed; and
+13. existing M4.2/M4.3 execution and accounting behavior remains green.
+
+Boundary and expected-failure evidence must include an empty no-bar/no-trade result; non-empty trades with no equity records; non-finite equity; non-positive starting equity; a single-point curve; all-win, all-loss and all-breakeven trade populations; positive instrument return with negative net monetary P&L due to cost; an open terminal position with entry cost; and negative equity producing greater than 100% drawdown.
 
 ### M4.5 — Risk sizing and drawdown validity
 

@@ -130,7 +130,11 @@ Target milestones: M6 and M7.
 
 **Status:** ACCEPTED
 
-Instrument price return, gross/net trade outcome and account/equity return are different measures. Research and risk reporting choose the measure matching the question and must not use Trade.pnl_pct as a substitute for account return.
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return are different measures. `Trade.pnl_pct` retains instrument-price-return meaning. Research and risk reporting choose the measure matching the question and must not use `Trade.pnl_pct` as a substitute for account return. No separate gross-trade-return or net-trade-return percentage concept is required by this decision.
+
+Authoritative Backtest reporting uses `PerformanceMetrics.summarize_backtest(result: BacktestResult)`. Its trade-level terminology distinguishes net-profitable, net-losing and net-breakeven completed trades; positive, negative and mean instrument return; gross and net realized monetary P&L; monetary mean net P&L per completed trade; and completed-trade transaction-cost total. Account P&L, account return and maximum equity drawdown are derived separately from authoritative equity. `mean_instrument_return_pct` is not account expectancy, while `mean_net_pnl_per_completed_trade` is monetary expectancy per completed trade.
+
+The existing `PerformanceMetrics.summarize(trades)` is a bounded legacy trade-only compatibility path for current WFA callers. After M4.4, Backtest reporting must not use it. WFA metric migration and validity remain M5 work, so this compatibility decision does not validate WFA economics.
 
 Target milestones: M4 and M5.
 
@@ -266,6 +270,16 @@ For an already-open long, the deterministic priority is gap protective stop at t
 Current candle close, high and low cannot influence open-time execution. The low is used only for later intrabar stop evaluation. Close marking occurs only after execution/protective processing and only if a position remains open. A final-bar decision remains pending and unfilled; no final-close execution or automatic liquidation is manufactured, while any still-open position is marked to the final close.
 
 Ordered AD-017 feedback remains authoritative when multiple events occur. Singular execution-event, price and quantity fields remain final-event diagnostics, and M4.3 does not change `BarRecord` or `BacktestResult` schemas.
+
+#### M4.4 account-performance refinement
+
+This refinement is accepted target design and does not claim implemented behavior. Authoritative Backtest metrics receive the complete `BacktestResult` rather than completed trades alone. For a normal non-empty canonical Backtest under the M4.3 lifecycle, starting equity is the first `BarRecord.equity` because no prior-bar execution can exist before that record, and ending equity is the last `BarRecord.equity`. Account P&L is ending minus starting equity; account return percentage is account P&L divided by starting equity and multiplied by 100. This is the current canonical Backtest contract, not a universal assumption for future seeded-position or preloaded-state Backtests.
+
+Transaction costs, realized P&L and final unrealized marked P&L participate through authoritative equity, and zero completed trades do not suppress account metrics. Empty no-bar/no-trade results report zero account P&L, return and drawdown. Trades without equity records are inconsistent and fail explicitly. A non-empty curve requires finite equity throughout and finite, strictly positive starting equity. M4.4 adds no `initial_capital` field to `BacktestResult` and leaves frozen AD-015 v1 unchanged.
+
+Maximum equity drawdown evaluates every authoritative equity point from an initial peak equal to starting equity. Each point contributes `(peak - equity) / peak * 100` after updating the peak; the greatest result is reported as a non-negative loss magnitude. Empty and single-point curves report zero, recovery does not erase an earlier maximum, and negative equity may produce drawdown greater than 100% without clipping. Authoritative Backtest drawdown never uses compounded `Trade.pnl_pct`.
+
+The authoritative metric names are `completed_trade_count`, `net_profitable_trade_count`, `net_losing_trade_count`, `net_breakeven_trade_count`, `net_profitable_trade_rate_pct`, `mean_positive_instrument_return_pct`, `mean_negative_instrument_return_pct`, `mean_instrument_return_pct`, `gross_realized_pnl`, `net_realized_pnl`, `mean_net_pnl_per_completed_trade`, `completed_trade_transaction_cost_total`, `account_pnl`, `account_return_pct` and `max_equity_drawdown_pct`. For zero completed trades, the trade counts, rates, means, realized totals and per-trade expectancy are zero, while account metrics still derive from equity. Calculations remain full precision programmatically and presentation owns rounding. Ambiguous `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` do not represent authoritative Backtest metrics; they may remain temporarily only within the legacy WFA compatibility path until M5.
 
 Execution and portfolio state are authoritative over strategy-local position belief. M4 must provide explicit agreement for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must also enforce available-cash affordability including entry transaction costs.
 
