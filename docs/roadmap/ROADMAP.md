@@ -64,7 +64,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 - **M4 — IN_PROGRESS** — Backtest validity.
   - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
   - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
-  - **M4.3 — PLANNED** — Execution timing and stop/fill validity.
+  - **M4.3 — READY** — Execution timing and stop/fill validity; design baselined, implementation not authorized.
   - **M4.4 — PLANNED** — Account returns and performance metrics.
   - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
   - **M4.6 — PLANNED** — Research manifest and deterministic references.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 is DONE at its accepted scope, and M4.3–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 is DONE at its accepted scope, M4.3 is READY with implementation and validation NOT_STARTED, and M4.4–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -589,10 +589,26 @@ The contract is ordered and does not impose a one-event-per-candle limit. It sup
 
 M4.2 preserves PortfolioManager/execution accounting ownership and leaves M4.3 next-open timing and stop/fill semantics unchanged.
 
+#### M4.3 — Execution timing and stop/fill validity
+
+**Status:** READY at design scope — implementation NOT AUTHORIZED / NOT_STARTED; validation NOT_STARTED.
+
+Backtest orchestration owns one pending BUY or discretionary SELL intent between completed bars. The intent retains decision-time context, including the strategy rejection midpoint or fallback signal-bar close needed for stop construction, and executes no earlier than the next candle.
+
+For each candle, pending open-time execution and protective logic run before strategy evaluation. Resulting ordered feedback is delivered before any remaining open position is marked to the current close. StrategyRunner then consumes the completed candle and its decision becomes the next pending intent. A bar record may therefore contain execution from the previous bar's decision and a new signal from the current bar without lookahead.
+
+A queued BUY uses the next open with BUY slippage exactly once. Its decision-time stop must be strictly below the actual fill or the entry is rejected as `INVALID_ENTRY`. After acceptance, the same execution bar may trigger an ordinary protective stop at the stop reference with SELL slippage once, producing `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`.
+
+For an existing long, priority is gap protective stop at the candle open, then queued SELL at the open, then ordinary intrabar stop at the stop price. A gap exit consumes any queued SELL without a second close. M4.2 contradictory-state validation remains in force, and ordered feedback remains authoritative when multiple events occur; singular execution fields remain final-event diagnostics.
+
+A final-bar decision remains pending and unfilled. No final-close execution or automatic liquidation is manufactured; any position still open after final-bar execution/protection is marked to the final close. M4.3 does not own equity-based sizing, affordability, final drawdown policy, performance metrics, successor identity, PivotBoss, paper/live, WFA, application or release work.
+
+This accepted design does not authorize implementation or claim validation. A separate explicit authorization/review is required.
+
 #### Child-step responsibilities
 
 - **M4.2 — Signal/execution state agreement:** DONE at accepted implementation/validation scope under AD-017.
-- **M4.3 — Execution timing and stop/fill validity:** implement and validate next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity and end-of-data behavior.
+- **M4.3 — Execution timing and stop/fill validity:** READY at design scope; future implementation must validate next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior.
 - **M4.4 — Account returns and performance metrics:** preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state.
 - **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
 - **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
@@ -604,7 +620,7 @@ M4.2 preserves PortfolioManager/execution accounting ownership and leaves M4.3 n
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.3 remains PLANNED and is not authorized automatically; it requires a separate design/authorization step.
+M4 is IN_PROGRESS and is not complete. M4.3 is READY because its design is baselined, but implementation and validation remain NOT_STARTED and require separate explicit authorization.
 
 ### M5 — WFA validity
 

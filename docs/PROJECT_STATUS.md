@@ -13,9 +13,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.2 — Signal/execution state agreement |
-| Lifecycle | M4 IN_PROGRESS; M4.1 DONE at design-contract scope; M4.2 DONE at accepted implementation/validation scope |
-| Next planned review | Separate M4.3 design review; M4.3 remains PLANNED and is NOT automatically authorized |
+| Step | M4.3 — Execution timing and stop/fill validity design baseline |
+| Lifecycle | M4 IN_PROGRESS; M4.1 and M4.2 DONE at accepted scopes; M4.3 READY at design scope with implementation/validation NOT_STARTED |
+| Next planned review | Separate M4.3 implementation authorization/review; implementation is NOT AUTHORIZED automatically |
 
 The independently rerun 323-test full suite passed at implementation commit `770d3a5`.
 
@@ -260,15 +260,17 @@ M4 — Backtest Validity is IN_PROGRESS because authorized production implementa
 
 - M4.1 — Backtest economic contract — DONE at accepted design-contract scope
 - M4.2 — Signal/execution state agreement — DONE at accepted implementation/validation scope
-- M4.3 — Execution timing and stop/fill validity — PLANNED
+- M4.3 — Execution timing and stop/fill validity — READY at design scope; implementation NOT AUTHORIZED / NOT_STARTED, validation NOT_STARTED
 - M4.4 — Account returns and performance metrics — PLANNED
 - M4.5 — Risk sizing and drawdown validity — PLANNED
 - M4.6 — Research manifest and deterministic references — PLANNED
 - M4.7 — Backtest validity integration — PLANNED
 
-M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 is implemented and validated for the Backtest/`SMACrossOverStrategy` scope under AD-017. PivotBoss, paper-runtime integration and M4.3+ economic behavior remain outside that claim.
+M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 is implemented and validated for the Backtest/`SMACrossOverStrategy` scope under AD-017. PivotBoss and paper-runtime integration remain outside that claim.
 
-The next planned action is a separate M4.3 design review. M4.3 remains PLANNED and does not become authorized or IN_PROGRESS automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.3 now has an accepted design for completed-bar decisions, one pending intent, next-open BUY/SELL execution, decision-time stop context, gap-stop/queued-SELL/ordinary-stop priority, exact single slippage, same-bar post-entry protection, execution-before-close-mark ordering, and end-of-data handling. This is design authority only; no M4.3 implementation or validation evidence exists.
+
+The next planned action is a separate M4.3 implementation authorization/review. M4.3 does not become authorized or implemented automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

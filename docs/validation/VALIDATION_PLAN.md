@@ -651,20 +651,28 @@ M4.2 does not validate PivotBoss or paper-runtime feedback integration. It also 
 
 ### M4.3 — Execution timing and stop/fill validity
 
-**Status:** PLANNED / not validated
+**Status:** READY at design scope / implementation NOT_STARTED / validation NOT_STARTED
+
+Future evidence must exercise the accepted phased Backtest contract with one pending intent carrying decision-time context. No M4.3 test has been run, and the latest accepted full suite remains 323 passed at `770d3a5`.
 
 Future evidence must prove:
 
-1. a completed-bar decision cannot receive a same-close fill;
-2. queued BUY and discretionary SELL actions use the next bar open;
-3. an ordinary long stop uses the stop price as reference when the bar does not gap through it;
-4. a gap-through long stop uses the bar open as reference;
-5. slippage is applied exactly once to the selected reference price;
-6. a gap-stop has deterministic priority over a queued discretionary SELL;
-7. a long entry is rejected when its stop is not strictly below the actual fill;
-8. a position accepted at the next open may be stopped by that same bar's later low;
-9. without a next bar, a queued action remains unfilled; and
-10. end of data does not trigger automatic liquidation.
+1. a completed signal-bar decision cannot receive a same-close fill and is executed, if possible, only on the next execution bar;
+2. a queued BUY uses the next bar open, while its stop uses only the decision-time rejection midpoint or the existing 2% fallback from the signal-bar close;
+3. a queued discretionary SELL uses the next bar open;
+4. an ordinary long stop uses the stop price as reference when the bar does not gap through it;
+5. a gap-through long stop uses the bar open as reference;
+6. BUY or SELL slippage is applied exactly once to the selected reference price;
+7. deterministic priority is gap protective stop → queued discretionary SELL → ordinary protective stop, with a gap exit consuming the queued SELL without a second exit;
+8. a long entry is rejected with `INVALID_ENTRY` when its decision-time stop is not strictly below the actual post-slippage fill;
+9. a position accepted at the next open may be stopped by that same bar's later low, producing ordered `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT` feedback;
+10. open-time execution and gap protection occur before any mark to the current close, and only a position remaining open is marked to that close;
+11. a decision generated from the final available bar remains pending and unfilled without a synthetic candle or final-close fill;
+12. an open final position is retained without automatic liquidation and marked to the final close so final equity includes unrealized P&L;
+13. `BarRecord` may report execution from the previous decision and the current completed-bar signal while its singular execution diagnostics represent the final event on a multi-event bar; and
+14. M4.2 feedback ordering, state convergence, contradiction detection, handler-failure propagation and authoritative accounting remain green.
+
+These requirements do not validate M4.4/M4.5 metrics, equity-based sizing, affordability, final drawdown policy, M4.6 identity, PivotBoss, paper/live, WFA, API/frontend or release behavior.
 
 ### M4.4 — Account returns and performance metrics
 

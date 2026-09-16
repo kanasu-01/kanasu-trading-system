@@ -122,6 +122,43 @@ Feedback is an ordered immutable collection rather than a one-event-per-candle s
 
 This flow is implemented and validated for the Backtest/`SMACrossOverStrategy` boundary at `770d3a5`. It does not claim PivotBoss or paper-runtime feedback integration, and it does not implement M4.3 next-open timing, gap-stop or fill semantics.
 
+### M4.3 TARGET — PHASED NEXT-BAR EXECUTION
+
+Backtest orchestration owns one pending market-style intent between bars. A decision produced after completed bar N retains the signal and decision-time context needed for execution without reading bar N+1 data. It cannot execute until bar N+1.
+
+Each new candle follows this target order:
+
+~~~text
+pending intent + authoritative position at candle open
+    → open-time gap protection or queued intent execution
+    → permitted intrabar protective-stop evaluation
+    → ordered ExecutionFeedback delivery and strategy-state convergence
+    → mark any remaining open position to the candle close
+    → StrategyRunner consumes the completed candle
+    → current-bar decision becomes the next pending intent
+    → BarRecord captures previous-decision execution and current decision
+~~~
+
+Open-time execution cannot use the current candle close, high or low. The later candle low participates only in the explicitly permitted intrabar protective-stop test. A position closed at the open or intrabar is not marked to that candle's later close.
+
+A pending BUY uses the execution candle open as reference and applies BUY slippage exactly once. Its stop is derived only from decision-time information: the strategy rejection midpoint when supplied, otherwise the existing 2% fallback from the completed signal-bar close. The stop must be strictly below the actual entry fill after slippage or the entry is rejected with `INVALID_ENTRY`. An accepted entry opens the authoritative position and emits `ENTRY_ACCEPTED`; the execution bar's later low may then stop it at the stop reference with one SELL-slippage application, producing ordered feedback `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`. A newly opened position does not use gap-stop semantics on its entry open.
+
+For a position already open at the start of the bar, execution priority is deterministic:
+
+~~~text
+gap protective stop at candle.open
+    > queued discretionary SELL at candle.open
+    > ordinary protective stop at stop_price
+~~~
+
+When `candle.open <= stop_price`, the gap stop uses the open as reference, applies SELL slippage once, emits `PROTECTIVE_EXIT`, and consumes any queued SELL without a second exit. Otherwise a queued SELL uses the open, applies SELL slippage once and emits `STRATEGY_EXIT`. Only when neither has closed the position may `candle.low <= stop_price` trigger an ordinary protective exit at the stop reference.
+
+M4.2 contradictory-state validation remains authoritative: queued BUY while LONG and queued SELL while FLAT fail explicitly, except that a valid queued SELL superseded by a gap protective exit is consumed rather than treated as a contradiction. Ordered `ExecutionFeedback` is authoritative for multiple intra-bar outcomes; existing singular execution-event/price/quantity fields remain diagnostics for the final event and `BarRecord`/`BacktestResult` schemas do not change.
+
+A decision from the final available candle remains pending and unfilled. No synthetic candle or final-close fill is created, and an existing position is not automatically liquidated. Any position still open after final-bar execution/protection is marked to the final close so final equity includes unrealized P&L.
+
+M4.3 does not own current-equity sizing, affordability, final daily/weekly drawdown semantics, performance metrics, successor fingerprinting, PivotBoss, paper/live, WFA, API/frontend or release acceptance. This section records target design only and does not claim implementation.
+
 ### KNOWN DIVERGENCES
 
 - Execution feedback is validated for Backtest with `SMACrossOverStrategy`; PivotBoss and paper-runtime state convergence remain unvalidated.

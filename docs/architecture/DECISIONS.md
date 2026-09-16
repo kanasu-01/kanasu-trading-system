@@ -253,6 +253,20 @@ A queued long BUY uses the next open as its reference price, with BUY slippage a
 
 For an existing long, a candle opening at or below the stop uses the open as the gap-through-stop reference. Otherwise a low reaching the stop uses the stop as the ordinary-stop reference. SELL slippage is applied exactly once to the selected reference. At the candle open, a protective gap stop has priority over a queued discretionary SELL; otherwise the queued SELL executes at the open, and ordinary intrabar stop evaluation follows only if the position remains open.
 
+#### M4.3 execution-phase and ownership refinement
+
+This refinement is accepted target design and does not claim implemented behavior. Backtest orchestration owns one pending market-style intent between candles. The intent retains the signal and decision-time context required to execute on the next candle without using future information from that candle.
+
+For each candle, the Backtest first processes the pending intent and protective execution against authoritative portfolio state, then delivers ordered execution feedback, marks any remaining open position to the completed candle close, lets the strategy evaluate that completed candle, and stores any resulting intent for the next candle. Bar recording follows feedback/state convergence and may contain an execution caused by the previous bar together with a new signal from the current bar.
+
+A queued BUY uses the execution-bar open and applies BUY slippage exactly once. Its stop is derived from decision-time information: a supplied rejection midpoint or the existing 2% fallback based on the signal-bar close. A stop at or above the actual entry fill rejects the entry with `INVALID_ENTRY`. After an accepted open-time entry, the same bar's later low may cause an ordinary protective exit at the stop reference, yielding ordered `ENTRY_ACCEPTED` then `PROTECTIVE_EXIT` feedback. The new entry does not receive gap-stop treatment at its entry open.
+
+For an already-open long, the deterministic priority is gap protective stop at the candle open, then queued discretionary SELL at the open, then ordinary intrabar protective stop at the stop price. A gap protective exit consumes a queued SELL without producing a second exit. BUY while authoritative LONG and SELL while authoritative FLAT remain explicit state violations, except that the superseded valid SELL is not contradictory.
+
+Current candle close, high and low cannot influence open-time execution. The low is used only for later intrabar stop evaluation. Close marking occurs only after execution/protective processing and only if a position remains open. A final-bar decision remains pending and unfilled; no final-close execution or automatic liquidation is manufactured, while any still-open position is marked to the final close.
+
+Ordered AD-017 feedback remains authoritative when multiple events occur. Singular execution-event, price and quantity fields remain final-event diagnostics, and M4.3 does not change `BarRecord` or `BacktestResult` schemas.
+
 Execution and portfolio state are authoritative over strategy-local position belief. M4 must provide explicit agreement for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must also enforce available-cash affordability including entry transaction costs.
 
 Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. Detailed daily/weekly equity-risk, unrealized-P&L and session/reset semantics remain M4.5 work.
