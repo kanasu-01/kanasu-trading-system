@@ -15,5 +15,6 @@ Before changing the repository:
 11. Perform the documentation-impact check before task closure.
 12. During production implementation, apply the relevant [Governance](docs/governance/GOVERNANCE.md) quality requirements for validation, failure/error behavior, logging and diagnostics, resource safety, configuration, security and secrets, code documentation, and risk-proportionate success, boundary, failure, and regression testing.
 13. At major task, milestone, or version closure, use Governance's progress-summary convention when applicable.
+14. Use the lean execution policy in Governance: run focused tests needed for implementation and debugging; leave routine full-suite regression and mechanical Git verification to independent review when practical; run broader validation yourself when correct implementation, diagnosis, integration, or explicit task instructions require it. Resource saving never overrides required validation or engineering quality.
 
 Follow [Governance](docs/governance/GOVERNANCE.md) for detailed workflow, status, identifier, source-of-truth, and documentation-synchronization rules. Destructive actions, Git publication, external communication, live/broker actions, and material scope expansion require explicit authorization. Routine work already clearly authorized by the user does not require repeated confirmation.

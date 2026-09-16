@@ -180,6 +180,25 @@ Use focused tests during development. Run the required broader suite before clos
 
 Test count is evidence about suite size, not project progress, economic validity, profitability or release readiness.
 
+### Lean agent execution policy
+
+Coding-agent reasoning should focus on work that benefits from implementation context: exact-current-file inspection; relevant contract, architecture and validation reading; authorized implementation and refactoring; focused test creation and execution; debugging failures caused by the change; and acceptance-criteria self-checks.
+
+Mechanical repository verification normally belongs to independent review rather than the coding agent. This includes Git status, log, diff, diff-check, stat and numstat; repository line counting; staging, commit and push; remote commit verification; routine documentation closure; and repository-wide mechanical checks that do not help diagnose the implementation.
+
+During implementation, the coding agent normally runs the focused tests needed to develop and debug the authorized change. Broader or full regression validation remains required whenever task validation or closure rules require it, but it may be run independently in the local repository and reviewed before commit or closure. This policy refines who normally runs broader validation; it does not weaken when that validation is required.
+
+The coding agent should run broader or full validation itself when the result materially supports correct implementation, diagnosis or integration. Examples include unclear cross-module impact, failures outside focused scope, shared or foundational infrastructure changes, repeated correction rounds, major integration work, release or validation tasks whose outcome is needed to finish correctly, and an explicit user request or authorization.
+
+The normal responsibility split is:
+
+- **Coding agent:** authorized implementation, focused validation and implementation-time debugging.
+- **Independent review:** exact diff and scope review, broader regression validation, Git/repository verification and commit approval.
+
+If broader validation exposes a failure that requires implementation reasoning, return the exact failure evidence to the coding agent, correct the scoped implementation, and rerun the appropriate focused and broader validation.
+
+Resource or credit conservation never overrides required validation or engineering quality. It must not reduce test coverage, suppress failures, weaken tests, replace necessary reasoning or become a blanket rule that the full suite is never run. Validation ownership remains risk- and task-dependent.
+
 ## 10. Architecture-decision triggers
 
 Create or update an AD when a change affects:
