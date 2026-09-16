@@ -100,6 +100,274 @@ class TradeExecutionEngine:
 
         return self.portfolio_manager.position_book.get_position(symbol)
 
+    def _reset_execution_diagnostics(self) -> None:
+        self.last_execution_event = None
+        self.last_execution_price = None
+        self.last_execution_quantity = None
+
+    def _entry_rejected(
+        self,
+        *,
+        symbol: str,
+        timestamp,
+        reason: ExecutionRejectionReason,
+    ) -> tuple[ExecutionFeedback, ...]:
+        return (
+            ExecutionFeedback(
+                event_type=ExecutionFeedbackType.ENTRY_REJECTED,
+                symbol=symbol,
+                timestamp=timestamp,
+                position_state=ExecutionPositionState.FLAT,
+                rejection_reason=reason,
+            ),
+        )
+
+    def _open_long(
+        self,
+        *,
+        symbol: str,
+        candle: Candle,
+        reference_price: float,
+        stop_price: Optional[float],
+        entry_index: int,
+        require_stop_below_fill: bool,
+    ) -> tuple[ExecutionFeedback, ...]:
+        """Attempt one authoritative long entry at the supplied reference."""
+
+        if not self.drawdown_manager.can_trade():
+            self.logger.info("TRADE REJECTED | Drawdown limit reached")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.DRAWDOWN_LIMIT,
+            )
+
+        if stop_price is None:
+            self.logger.info("TRADE REJECTED | Invalid entry")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.INVALID_ENTRY,
+            )
+
+        if self.runtime_context.execution_config.slippage_enabled:
+            entry_price = self.slippage_model.apply_buy_slippage(reference_price)
+        else:
+            entry_price = reference_price
+
+        if require_stop_below_fill and stop_price >= entry_price:
+            self.logger.info("TRADE REJECTED | Stop is not below actual entry fill")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.INVALID_ENTRY,
+            )
+
+        qty = self.risk_manager.calculate_position_size(
+            entry_price=entry_price,
+            stop_price=stop_price,
+        )
+        if qty is None:
+            self.logger.info("TRADE REJECTED | Invalid quantity")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.INVALID_QUANTITY,
+            )
+
+        entry_transaction_cost = 0.0
+        if self.runtime_context.execution_config.brokerage_enabled:
+            turnover = entry_price * qty
+            entry_transaction_cost = self.brokerage_model.calculate(
+                turnover=turnover,
+            ).total_cost
+        self.last_transaction_cost = entry_transaction_cost
+
+        if not self.portfolio_risk_manager.can_open_new_trade(
+            open_trade_risks_pct=[],
+            new_trade_risk_pct=self.risk_manager.risk_per_trade_pct,
+        ):
+            self.logger.info("TRADE REJECTED | Portfolio risk limit")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.PORTFOLIO_RISK_LIMIT,
+            )
+
+        position = Position(
+            symbol=symbol,
+            entry_price=entry_price,
+            entry_transaction_cost=entry_transaction_cost,
+            entry_time=candle.timestamp,
+            entry_index=entry_index,
+            quantity=qty,
+            stop_price=stop_price,
+            direction="LONG",
+        )
+        self.portfolio_manager.open_position(position)
+        self.last_execution_event = "BUY"
+        self.last_execution_price = entry_price
+        self.last_execution_quantity = qty
+        self.logger.info(
+            f"LONG ENTRY | Price={entry_price:.2f} | "
+            f"Qty={qty} | Stop={stop_price:.2f}"
+        )
+        return (
+            ExecutionFeedback(
+                event_type=ExecutionFeedbackType.ENTRY_ACCEPTED,
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                position_state=ExecutionPositionState.LONG,
+                fill_price=entry_price,
+                quantity=qty,
+            ),
+        )
+
+    def _exit_long(
+        self,
+        *,
+        symbol: str,
+        candle: Candle,
+        reference_price: float,
+        exit_reason: str,
+        event_type: ExecutionFeedbackType,
+        diagnostic_event: str,
+    ) -> ExecutionFeedback:
+        open_position = self._get_open_position(symbol)
+        if open_position is None:
+            raise RuntimeError(f"Cannot close absent position for {symbol}")
+
+        if self.runtime_context.execution_config.slippage_enabled:
+            exit_price = self.slippage_model.apply_sell_slippage(reference_price)
+        else:
+            exit_price = reference_price
+        exit_quantity = open_position.quantity
+        self._close_position(
+            symbol=symbol,
+            exit_price=exit_price,
+            exit_reason=exit_reason,
+            candle=candle,
+        )
+        self.last_execution_event = diagnostic_event
+        self.last_execution_price = exit_price
+        self.last_execution_quantity = exit_quantity
+        return ExecutionFeedback(
+            event_type=event_type,
+            symbol=symbol,
+            timestamp=candle.timestamp,
+            position_state=ExecutionPositionState.FLAT,
+            fill_price=exit_price,
+            quantity=exit_quantity,
+        )
+
+    def process_backtest_candle(
+        self,
+        *,
+        pending_signal: Optional[SignalType],
+        decision_close: Optional[float],
+        rejection_midpoint: Optional[float],
+        candle: Candle,
+        execution_index: int,
+        symbol: str,
+    ) -> tuple[ExecutionFeedback, ...]:
+        """Execute prior-bar intent and protection before current-bar decisions."""
+
+        self._reset_execution_diagnostics()
+        self.drawdown_manager.update_period(candle.timestamp)
+        open_position = self._get_open_position(symbol)
+
+        if pending_signal == SignalType.SELL and open_position is None:
+            raise RuntimeError(
+                f"SELL signal received while authoritative position state is FLAT "
+                f"for {symbol}"
+            )
+        if pending_signal == SignalType.BUY and open_position is not None:
+            raise RuntimeError(
+                f"BUY signal received while authoritative position state is LONG "
+                f"for {symbol}"
+            )
+
+        if open_position is not None:
+            if candle.open <= open_position.stop_price:
+                return (
+                    self._exit_long(
+                        symbol=symbol,
+                        candle=candle,
+                        reference_price=candle.open,
+                        exit_reason="STOP_LOSS",
+                        event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                        diagnostic_event="STOP_EXIT",
+                    ),
+                )
+            if pending_signal == SignalType.SELL:
+                return (
+                    self._exit_long(
+                        symbol=symbol,
+                        candle=candle,
+                        reference_price=candle.open,
+                        exit_reason="STRATEGY_EXIT",
+                        event_type=ExecutionFeedbackType.STRATEGY_EXIT,
+                        diagnostic_event="SELL",
+                    ),
+                )
+            if candle.low <= open_position.stop_price:
+                return (
+                    self._exit_long(
+                        symbol=symbol,
+                        candle=candle,
+                        reference_price=open_position.stop_price,
+                        exit_reason="STOP_LOSS",
+                        event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                        diagnostic_event="STOP_EXIT",
+                    ),
+                )
+            return ()
+
+        if pending_signal != SignalType.BUY:
+            return ()
+
+        if decision_close is None:
+            raise ValueError("Pending BUY requires its decision candle close")
+
+        if rejection_midpoint is not None:
+            stop_price = self.stop_manager.compute_long_stop(
+                rejection_midpoint
+            )
+        else:
+            stop_price = decision_close * 0.98
+
+        entry_feedback = self._open_long(
+            symbol=symbol,
+            candle=candle,
+            reference_price=candle.open,
+            stop_price=stop_price,
+            entry_index=execution_index,
+            require_stop_below_fill=True,
+        )
+        if entry_feedback[0].event_type is not ExecutionFeedbackType.ENTRY_ACCEPTED:
+            return entry_feedback
+
+        accepted_position = self._get_open_position(symbol)
+        if accepted_position is None:
+            raise RuntimeError("Accepted entry did not create authoritative position")
+        if candle.low <= accepted_position.stop_price:
+            protective_feedback = self._exit_long(
+                symbol=symbol,
+                candle=candle,
+                reference_price=accepted_position.stop_price,
+                exit_reason="STOP_LOSS",
+                event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                diagnostic_event="STOP_EXIT",
+            )
+            return entry_feedback + (protective_feedback,)
+        return entry_feedback
+
+    def mark_open_position_to_market(self, *, symbol: str, price: float) -> None:
+        """Mark an existing position after current-bar execution processing."""
+
+        if self._get_open_position(symbol) is not None:
+            self.portfolio_manager.mark_to_market({symbol: price})
+
     def on_signal(
         self,
         signal: Optional[SignalType],
@@ -108,11 +376,7 @@ class TradeExecutionEngine:
         symbol: str,
     ) -> tuple[ExecutionFeedback, ...]:
 
-        self.last_execution_event = None
-
-        self.last_execution_price = None
-
-        self.last_execution_quantity = None
+        self._reset_execution_diagnostics()
 
         open_position = self._get_open_position(symbol)
 
@@ -137,20 +401,6 @@ class TradeExecutionEngine:
             if signal != SignalType.BUY:
                 return ()
 
-            if not self.drawdown_manager.can_trade():
-                self.logger.info("TRADE REJECTED | Drawdown limit reached")
-                return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
-                        symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        rejection_reason=(
-                            ExecutionRejectionReason.DRAWDOWN_LIMIT
-                        ),
-                    ),
-                )
-
             rejection_midpoint = getattr(
                 self.strategy,
                 "rejection_midpoint",
@@ -165,119 +415,17 @@ class TradeExecutionEngine:
 
                 stop_price = candle.close * 0.98
 
-            if stop_price is None:
-                self.logger.info("TRADE REJECTED | Invalid entry")
-                return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
-                        symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        rejection_reason=(
-                            ExecutionRejectionReason.INVALID_ENTRY
-                        ),
-                    ),
-                )
-
-            if self.runtime_context.execution_config.slippage_enabled:
-
-                entry_price = self.slippage_model.apply_buy_slippage(
-                    candle.close
-                )
-
-            else:
-
-                entry_price = candle.close
-
-            qty = self.risk_manager.calculate_position_size(
-                entry_price=entry_price,
-                stop_price=stop_price,
-            )
-
-            if qty is None:
-
-                self.logger.info("TRADE REJECTED | Invalid quantity")
-
-                return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
-                        symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        rejection_reason=(
-                            ExecutionRejectionReason.INVALID_QUANTITY
-                        ),
-                    ),
-                )
-
-            entry_transaction_cost = 0.0
-
-            if self.runtime_context.execution_config.brokerage_enabled:
-                turnover = entry_price * qty
-                entry_transaction_cost = self.brokerage_model.calculate(
-                    turnover=turnover,
-                ).total_cost
-
-            self.last_transaction_cost = entry_transaction_cost
-
-            if not self.portfolio_risk_manager.can_open_new_trade(
-                open_trade_risks_pct=[],
-                new_trade_risk_pct=(self.risk_manager.risk_per_trade_pct),
-            ):
-                self.logger.info("TRADE REJECTED | Portfolio risk limit")
-                return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
-                        symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        rejection_reason=(
-                            ExecutionRejectionReason.PORTFOLIO_RISK_LIMIT
-                        ),
-                    ),
-                )
-
-            position = Position(
+            feedback = self._open_long(
                 symbol=symbol,
-                entry_price=entry_price,
-                entry_transaction_cost=entry_transaction_cost,
-                entry_time=candle.timestamp,
-                entry_index=len(series) - 1,
-                quantity=qty,
+                candle=candle,
+                reference_price=candle.close,
                 stop_price=stop_price,
-                direction="LONG",
+                entry_index=len(series) - 1,
+                require_stop_below_fill=False,
             )
-
-            self.portfolio_manager.open_position(position)
-            self.portfolio_manager.mark_to_market(
-                {
-                    symbol: candle.close,
-                }
-            )
-
-            self.last_execution_event = "BUY"
-
-            self.last_execution_price = entry_price
-
-            self.last_execution_quantity = qty
-
-            self.logger.info(
-                f"LONG ENTRY | "
-                f"Price={entry_price:.2f} | "
-                f"Qty={qty} | "
-                f"Stop={stop_price:.2f}"
-            )
-
-            return (
-                ExecutionFeedback(
-                    event_type=ExecutionFeedbackType.ENTRY_ACCEPTED,
-                    symbol=symbol,
-                    timestamp=candle.timestamp,
-                    position_state=ExecutionPositionState.LONG,
-                    fill_price=entry_price,
-                    quantity=qty,
-                ),
-            )
+            if feedback[0].event_type is ExecutionFeedbackType.ENTRY_ACCEPTED:
+                self.portfolio_manager.mark_to_market({symbol: candle.close})
+            return feedback
 
         # ---------------- POSITION OPEN ----------------
         open_position = self._get_open_position(symbol)
@@ -292,72 +440,27 @@ class TradeExecutionEngine:
 
             if candle.low <= open_position.stop_price:
 
-                if self.runtime_context.execution_config.slippage_enabled:
-
-                    exit_price = self.slippage_model.apply_sell_slippage(
-                        open_position.stop_price
-                    )
-
-                else:
-
-                    exit_price = open_position.stop_price
-
-                exit_quantity = open_position.quantity
-
-                self._close_position(
-                    symbol=symbol,
-                    exit_price=exit_price,
-                    exit_reason="STOP_LOSS",
-                    candle=candle,
-                )
-                self.last_execution_event = "STOP_EXIT"
-
-                self.last_execution_price = exit_price
-
-                self.last_execution_quantity = exit_quantity
-
                 return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                    self._exit_long(
                         symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        fill_price=exit_price,
-                        quantity=exit_quantity,
+                        candle=candle,
+                        reference_price=open_position.stop_price,
+                        exit_reason="STOP_LOSS",
+                        event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                        diagnostic_event="STOP_EXIT",
                     ),
                 )
 
             if signal == SignalType.SELL:
 
-                if self.runtime_context.execution_config.slippage_enabled:
-
-                    exit_price = self.slippage_model.apply_sell_slippage(
-                        candle.close
-                    )
-                else:
-                    exit_price = candle.close
-
-                exit_quantity = open_position.quantity
-
-                self._close_position(
-                    symbol=symbol,
-                    exit_price=exit_price,
-                    exit_reason="STRATEGY_EXIT",
-                    candle=candle,
-                )
-
-                self.last_execution_event = "SELL"
-                self.last_execution_price = exit_price
-                self.last_execution_quantity = exit_quantity
-
                 return (
-                    ExecutionFeedback(
-                        event_type=ExecutionFeedbackType.STRATEGY_EXIT,
+                    self._exit_long(
                         symbol=symbol,
-                        timestamp=candle.timestamp,
-                        position_state=ExecutionPositionState.FLAT,
-                        fill_price=exit_price,
-                        quantity=exit_quantity,
+                        candle=candle,
+                        reference_price=candle.close,
+                        exit_reason="STRATEGY_EXIT",
+                        event_type=ExecutionFeedbackType.STRATEGY_EXIT,
+                        diagnostic_event="SELL",
                     ),
                 )
 

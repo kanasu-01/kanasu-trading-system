@@ -156,7 +156,7 @@ def test_backtest_engine_executes_successfully():
 
 
 def test_backtest_reports_authoritative_execution_portfolio_state():
-    candles = build_dummy_candles(2)
+    candles = build_dummy_candles(3)
     engine = BacktestEngine(
         strategy=DeterministicRoundTripStrategy(),
         initial_capital=100000,
@@ -168,6 +168,7 @@ def test_backtest_reports_authoritative_execution_portfolio_state():
 
     assert len(result.trades) == 1
     assert [record.execution_event for record in result.bar_records] == [
+        None,
         "BUY",
         "SELL",
     ]
@@ -193,10 +194,10 @@ def test_backtest_delivers_feedback_after_portfolio_transition_before_snapshot()
         engine.execution_engine.get_runtime_position("TEST")
     )
 
-    result = engine.run(build_dummy_candles(1))
+    result = engine.run(build_dummy_candles(2))
 
     assert strategy.feedback_received is True
-    assert result.bar_records[0].decision_snapshot == {
+    assert result.bar_records[1].decision_snapshot == {
         "feedback_received": True,
     }
 
@@ -210,4 +211,4 @@ def test_feedback_handler_failure_aborts_backtest():
     )
 
     with pytest.raises(RuntimeError, match="feedback handler failed"):
-        engine.run(build_dummy_candles(1))
+        engine.run(build_dummy_candles(2))

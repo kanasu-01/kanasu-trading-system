@@ -104,9 +104,9 @@ class DeterministicParityStrategy(BaseStrategy):
         self._bar_number = len(series)
         signal = {
             1: SignalType.BUY,
-            3: SignalType.SELL,
-            4: SignalType.BUY,
-            6: SignalType.SELL,
+            2: SignalType.SELL,
+            3: SignalType.BUY,
+            5: SignalType.SELL,
         }.get(self._bar_number)
         self._decision = signal.value if signal is not None else "HOLD"
         return signal
@@ -194,8 +194,8 @@ def assert_stable_backtest_parity(
 
     assert len(fresh.trades) == 2
     assert [record.execution_event for record in fresh.bar_records] == [
-        "BUY",
         None,
+        "BUY",
         "SELL",
         "BUY",
         None,

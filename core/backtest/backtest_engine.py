@@ -16,6 +16,7 @@ from core.runtime.dataset_context import (
 from core.entities.trade import Trade
 from core.logging.logger import get_logger
 from core.backtest.backtest_result import BacktestResult
+from core.backtest.pending_intent import PendingIntent
 
 
 class BacktestEngine:
@@ -60,20 +61,49 @@ class BacktestEngine:
         )
         series = CandleSeries([])
         self.runner.start(series)
+        pending_intent = None
 
         for candle in candles:
 
             try:
 
-                signal = self.runner.on_new_candle(candle)
-
-                feedback_events = self.execution_engine.on_signal(
-                    signal=signal,
+                feedback_events = self.execution_engine.process_backtest_candle(
+                    pending_signal=(
+                        pending_intent.signal if pending_intent else None
+                    ),
+                    decision_close=(
+                        pending_intent.decision_close if pending_intent else None
+                    ),
+                    rejection_midpoint=(
+                        pending_intent.rejection_midpoint
+                        if pending_intent
+                        else None
+                    ),
                     candle=candle,
-                    series=series,
+                    execution_index=len(series),
                     symbol=self.dataset_context.symbol,
                 )
                 self.runner.deliver_execution_feedback(feedback_events)
+                self.execution_engine.mark_open_position_to_market(
+                    symbol=self.dataset_context.symbol,
+                    price=candle.close,
+                )
+
+                signal = self.runner.on_new_candle(candle)
+                pending_intent = (
+                    PendingIntent(
+                        signal=signal,
+                        decision_timestamp=candle.timestamp,
+                        decision_close=candle.close,
+                        rejection_midpoint=getattr(
+                            self.strategy,
+                            "rejection_midpoint",
+                            None,
+                        ),
+                    )
+                    if signal is not None
+                    else None
+                )
 
                 state = self.execution_engine.portfolio_manager.snapshot()
 
