@@ -608,9 +608,9 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 ## 9. M4 — Backtest Validity
 
-**Status:** READY at design scope / not implemented / not validated
+**Status:** IN_PROGRESS / partially validated through completed M4.2
 
-M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4 being READY means the design is baselined; it does not authorize implementation or make the milestone IN_PROGRESS. The latest accepted suite remains 309 passed at `f86b1c0`.
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2 is validated at its accepted scope, while M4.3–M4.7 remain unvalidated. The latest accepted full suite is 323 passed at `770d3a5`.
 
 ### M4.1 — Backtest economic contract
 
@@ -620,11 +620,11 @@ M4.1 freezes the intended completed-bar/next-open, protective-stop, state-author
 
 ### M4.2 — Signal/execution state agreement
 
-**Status:** READY at design scope / implementation NOT_STARTED / validation NOT_STARTED
+**Status:** DONE / validated at accepted scope
 
-M4.2 validation must exercise the typed, immutable, ordered AD-017 feedback contract through the authoritative execution → Backtest → strategy-runner → strategy-hook boundary. Strategy signals remain intents, and feedback must be emitted only after the portfolio/execution outcome is authoritative. The optional BaseStrategy hook remains compatible through a default no-op; `SMACrossOverStrategy` is the validated reference strategy, while PivotBoss remains outside M4.2 validated scope.
+M4.2 validates the typed, immutable, ordered AD-017 feedback contract through the authoritative execution → Backtest → strategy-runner → strategy-hook boundary. Strategy signals remain intents, and feedback is emitted only after the portfolio/execution outcome is authoritative. The optional BaseStrategy hook remains compatible through a default no-op; `SMACrossOverStrategy` is the validated reference strategy, while PivotBoss remains outside M4.2 validated scope.
 
-Future evidence must cover at least:
+Accepted evidence covers:
 
 1. accepted BUY convergence: a BUY intent does not open strategy-local state, and `ENTRY_ACCEPTED` does;
 2. rejected BUY convergence: `ENTRY_REJECTED` leaves or returns strategy-local state to flat;
@@ -634,10 +634,20 @@ Future evidence must cover at least:
 6. feedback is delivered only after the authoritative portfolio outcome and contains symbol, timestamp, resulting authoritative position state, and applicable fill price/quantity/rejection reason;
 7. a strategy execution-feedback handler failure propagates and fails the Backtest explicitly;
 8. contradictory validated-research states fail explicitly, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT when these indicate disagreement;
-9. ordered multiple-event capability without a one-event-per-candle restriction, including support for the later M4.3 sequence `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`; and
+9. ordered multiple-event capability without a one-event-per-candle restriction, including infrastructure support for the later M4.3 sequence `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`; and
 10. no regression to authoritative PortfolioManager/TradeExecutionEngine accounting or ownership.
 
-The design baseline adds no executed evidence. No tests were run, implementation remains unauthorized, and validation remains NOT_STARTED.
+Completion evidence:
+
+- Implementation commit: `770d3a5 Implement M4.2 execution feedback contract`
+- Focused execution/backtest validation: 26 passed
+- Independently rerun full suite: 323 passed in 6.53s
+- Previous accepted full-suite baseline: 309 passed
+- Tests added: 14
+- Repository line changes: +620 / -13, net +607
+- Staged `git diff --check`: passed before commit
+
+M4.2 does not validate PivotBoss or paper-runtime feedback integration. It also does not implement or validate M4.3 next-open execution, gap-stop, event-priority or fill semantics.
 
 ### M4.3 — Execution timing and stop/fill validity
 

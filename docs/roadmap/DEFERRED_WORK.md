@@ -80,12 +80,16 @@ Required work: propagate the effective capital, execution/risk configuration and
 
 ## DW-009 — Strategy and Execution Position-State Agreement
 
-**Status:** OPEN
+**Status:** PARTIALLY RESOLVED
 **Target:** M4.2 before strategy conclusions; M7 before paper acceptance.
 
 A strategy can change its local position-open state after emitting BUY without a complete response for risk rejection, affordability rejection or forced stop exit. Strategy state can then disagree with the execution portfolio.
 
-Accepted AD-017 now defines the intended typed, ordered execution-feedback and strategy-state-authority contract. DW-009 remains OPEN until M4.2 implementation and validation prove accepted entry, rejected entry, strategy exit, protective exit, explicit rejection reasons, contradictory-state failure and authoritative state convergence.
+M4.2 resolves the validated Backtest/`SMACrossOverStrategy` execution-feedback and state-convergence scope. The typed ordered AD-017 contract covers accepted and rejected entries, strategy and protective exits, explicit rejection reasons, contradictory-state failures and authoritative outcome ordering without changing PortfolioManager accounting ownership.
+
+**Evidence:** implementation commit `770d3a5 Implement M4.2 execution feedback contract`; focused execution/backtest validation 26 passed; independent full suite 323 passed.
+
+DW-009 remains partially resolved because paper-runtime feedback/state convergence is still required before M7 acceptance. PivotBoss and other unvalidated strategy-specific state contracts also remain outside the M4.2 resolution claim.
 
 ## DW-010 — SQLite Timestamp and Range-Bound Compatibility
 
