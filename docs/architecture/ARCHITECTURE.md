@@ -114,19 +114,19 @@ TradeExecutionEngine
 
 `TradeExecutionEngine` does not directly mutate a strategy. The strategy hook is optional and defaults to a no-op so existing strategy implementations remain compatible. If feedback handling fails, the Backtest fails explicitly rather than continuing with divergent strategy and portfolio state.
 
-The feedback contract is typed, immutable and ordered. It supports `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`, carrying the symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Rejections cover current drawdown-limit, invalid-quantity/entry and portfolio-risk classes. Later M4.3/M4.5 reasons may extend the same contract without being implemented by M4.2.
+The feedback contract is typed, immutable and ordered. It supports `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`, carrying the symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Rejections cover current drawdown-limit, invalid-quantity/entry and portfolio-risk classes. Later M4.5 work may extend the same contract without changing M4.2 ownership.
 
-Feedback is an ordered immutable collection rather than a one-event-per-candle slot. This preserves a future same-bar sequence such as `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT`. Contradictory validated-research states fail explicitly when they reveal disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
+Feedback is an ordered immutable collection rather than a one-event-per-candle slot. M4.3 uses this for the same-execution-bar sequence `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT`. Contradictory validated-research states fail explicitly when they reveal disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
 
 `SMACrossOverStrategy` is the reference M4.2 strategy: intent emission alone does not change its local position flag; accepted entry opens it, rejected entry leaves it flat, and strategy or protective exit closes it. PivotBoss remains unvalidated and outside M4.2 scope.
 
-This flow is implemented and validated for the Backtest/`SMACrossOverStrategy` boundary at `770d3a5`. It does not claim PivotBoss or paper-runtime feedback integration, and it does not implement M4.3 next-open timing, gap-stop or fill semantics.
+This flow is implemented and validated for the Backtest/`SMACrossOverStrategy` boundary at `770d3a5`. It does not claim PivotBoss or paper-runtime feedback integration.
 
-### M4.3 TARGET — PHASED NEXT-BAR EXECUTION
+### M4.3 CURRENT — PHASED NEXT-BAR EXECUTION
 
 Backtest orchestration owns one pending market-style intent between bars. A decision produced after completed bar N retains the signal and decision-time context needed for execution without reading bar N+1 data. It cannot execute until bar N+1.
 
-Each new candle follows this target order:
+Each Backtest candle follows this implemented order:
 
 ~~~text
 pending intent + authoritative position at candle open
@@ -157,12 +157,13 @@ M4.2 contradictory-state validation remains authoritative: queued BUY while LONG
 
 A decision from the final available candle remains pending and unfilled. No synthetic candle or final-close fill is created, and an existing position is not automatically liquidated. Any position still open after final-bar execution/protection is marked to the final close so final equity includes unrealized P&L.
 
-M4.3 does not own current-equity sizing, affordability, final daily/weekly drawdown semantics, performance metrics, successor fingerprinting, PivotBoss, paper/live, WFA, API/frontend or release acceptance. This section records target design only and does not claim implementation.
+This Backtest behavior is implemented and validated at `bc9409c`. The legacy immediate `TradeExecutionEngine.on_signal()` path remains available for non-Backtest callers, and PaperRuntime was not migrated to next-bar semantics. PivotBoss and paper-runtime feedback/state convergence remain unvalidated.
+
+M4.3 does not own current-equity sizing, affordability, final daily/weekly drawdown semantics, performance metrics, successor fingerprinting, PivotBoss, paper/live, WFA, API/frontend or release acceptance.
 
 ### KNOWN DIVERGENCES
 
 - Execution feedback is validated for Backtest with `SMACrossOverStrategy`; PivotBoss and paper-runtime state convergence remain unvalidated.
-- Stop processing marks the current close before testing the stop, and gap-through-stop fill semantics remain simplified.
 - Risk sizing uses fixed initial capital and does not establish affordability or dynamic-equity sizing.
 - Brokerage is a simplified research cost model, not a declaration of exact broker/product tax fidelity.
 - Broader equity-based daily/weekly drawdown semantics remain deferred.

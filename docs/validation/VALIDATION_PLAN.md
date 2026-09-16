@@ -608,9 +608,9 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 ## 9. M4 — Backtest Validity
 
-**Status:** IN_PROGRESS / partially validated through completed M4.2
+**Status:** IN_PROGRESS / partially validated through completed M4.2 and M4.3
 
-M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2 is validated at its accepted scope, while M4.3–M4.7 remain unvalidated. The latest accepted full suite is 323 passed at `770d3a5`.
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2 and M4.3 are validated at their accepted scopes, while M4.4–M4.7 remain unvalidated. The latest accepted full suite is 334 passed at `bc9409c`.
 
 ### M4.1 — Backtest economic contract
 
@@ -634,7 +634,7 @@ Accepted evidence covers:
 6. feedback is delivered only after the authoritative portfolio outcome and contains symbol, timestamp, resulting authoritative position state, and applicable fill price/quantity/rejection reason;
 7. a strategy execution-feedback handler failure propagates and fails the Backtest explicitly;
 8. contradictory validated-research states fail explicitly, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT when these indicate disagreement;
-9. ordered multiple-event capability without a one-event-per-candle restriction, including infrastructure support for the later M4.3 sequence `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`; and
+9. ordered multiple-event capability without a one-event-per-candle restriction, including infrastructure subsequently exercised by M4.3 for `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT`; and
 10. no regression to authoritative PortfolioManager/TradeExecutionEngine accounting or ownership.
 
 Completion evidence:
@@ -647,15 +647,15 @@ Completion evidence:
 - Repository line changes: +620 / -13, net +607
 - Staged `git diff --check`: passed before commit
 
-M4.2 does not validate PivotBoss or paper-runtime feedback integration. It also does not implement or validate M4.3 next-open execution, gap-stop, event-priority or fill semantics.
+M4.2 does not validate PivotBoss or paper-runtime feedback integration. M4.3 separately validates next-open execution, gap-stop, event-priority and fill semantics for Backtest.
 
 ### M4.3 — Execution timing and stop/fill validity
 
-**Status:** READY at design scope / implementation NOT_STARTED / validation NOT_STARTED
+**Status:** DONE / validated at accepted implementation scope
 
-Future evidence must exercise the accepted phased Backtest contract with one pending intent carrying decision-time context. No M4.3 test has been run, and the latest accepted full suite remains 323 passed at `770d3a5`.
+Accepted evidence exercises the phased Backtest contract with one immutable pending intent carrying decision-time context.
 
-Future evidence must prove:
+Validated evidence proves:
 
 1. a completed signal-bar decision cannot receive a same-close fill and is executed, if possible, only on the next execution bar;
 2. a queued BUY uses the next bar open, while its stop uses only the decision-time rejection midpoint or the existing 2% fallback from the signal-bar close;
@@ -672,7 +672,18 @@ Future evidence must prove:
 13. `BarRecord` may report execution from the previous decision and the current completed-bar signal while its singular execution diagnostics represent the final event on a multi-event bar; and
 14. M4.2 feedback ordering, state convergence, contradiction detection, handler-failure propagation and authoritative accounting remain green.
 
-These requirements do not validate M4.4/M4.5 metrics, equity-based sizing, affordability, final drawdown policy, M4.6 identity, PivotBoss, paper/live, WFA, API/frontend or release behavior.
+Completion evidence:
+
+- Design baseline: `d7ee0d937a99e99154b200936560abc67e32704a Baseline M4.3 execution timing design`
+- Implementation commit: `bc9409c904ee77db1c3e587931e4ca8209c4d71d Implement M4.3 execution timing validity`
+- Focused Codex validation: 41 passed in 1.09s
+- Additional Backtest/execution focused validation: 37 passed in 0.19s
+- Independent full regression: 334 passed in 7.88s
+- Previous accepted full-suite baseline: 323 passed
+- Tests added: 11
+- Repository line changes: production +338 / -191; tests +415 / -11; total +753 / -202; documentation +0 / -0
+
+The evidence preserves M4.2 contradiction detection, ordered feedback, handler-failure propagation and authoritative accounting. It also confirms legacy immediate `on_signal()` compatibility for non-Backtest callers; PaperRuntime was not migrated. M4.3 does not validate M4.4/M4.5 metrics, equity-based sizing, affordability, final drawdown policy, M4.6 identity, PivotBoss, paper/live, WFA, API/frontend or release behavior.
 
 ### M4.4 — Account returns and performance metrics
 

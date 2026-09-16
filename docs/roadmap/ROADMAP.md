@@ -64,7 +64,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 - **M4 — IN_PROGRESS** — Backtest validity.
   - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
   - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
-  - **M4.3 — READY** — Execution timing and stop/fill validity; design baselined, implementation not authorized.
+  - **M4.3 — DONE** — Execution timing and stop/fill validity at accepted implementation/validation scope.
   - **M4.4 — PLANNED** — Account returns and performance metrics.
   - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
   - **M4.6 — PLANNED** — Research manifest and deterministic references.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 is DONE at its accepted scope, M4.3 is READY with implementation and validation NOT_STARTED, and M4.4–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 and M4.3 implementation and validation. M4.1 is complete only at design-contract scope, M4.2 and M4.3 are DONE at their accepted scopes, and M4.4–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -538,7 +538,7 @@ M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DON
 
 ### M4 — Backtest validity
 
-**Status:** IN_PROGRESS through completed M4.2 implementation and validation.
+**Status:** IN_PROGRESS through completed M4.2 and M4.3 implementation and validation.
 
 **Outcome:** Establish deterministic and economically coherent bar-based Backtest semantics, authoritative strategy/execution state agreement, account-based reporting and risk controls, versioned research identity for the new economic policy, and integrated reference evidence.
 
@@ -568,7 +568,7 @@ The accepted target is:
 
 Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth, and strategy-local belief changes only after authoritative execution feedback.
 
-M4.2 implements a typed, immutable feedback contract that supports an ordered sequence of events. Its event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. Each event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. M4.3/M4.5 may extend the same contract for later accepted reasons such as invalid post-gap stop or insufficient cash; those later semantics remain outside M4.2.
+M4.2 implements a typed, immutable feedback contract that supports an ordered sequence of events. Its event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. Each event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. M4.5 may extend the same contract for later accepted reasons such as insufficient cash; those later semantics remain outside M4.2.
 
 The target feedback flow is:
 
@@ -583,15 +583,15 @@ The strategy hook defaults to a no-op for compatibility. `TradeExecutionEngine` 
 
 `SMACrossOverStrategy` is the M4.2 reference strategy. Emitting BUY does not open its local position; `ENTRY_ACCEPTED` opens it and `ENTRY_REJECTED` leaves or sets it flat. Emitting SELL does not close it before execution; `STRATEGY_EXIT` and `PROTECTIVE_EXIT` close it. Contradictory validated-research states, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT, fail explicitly when they represent state disagreement.
 
-The contract is ordered and does not impose a one-event-per-candle limit. It supports a future M4.3 sequence such as `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT` on the same bar. PivotBoss remains unvalidated and outside the M4.2 reference-strategy scope.
+The contract is ordered and does not impose a one-event-per-candle limit. Completed M4.3 uses it for `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT` on the same execution bar. PivotBoss remains unvalidated and outside the M4.2 reference-strategy scope.
 
 **Completion evidence:** implementation commit `770d3a5`; focused execution/backtest validation 26 passed; independently rerun full suite 323 passed in 6.53s; 14 tests added over the previous 309-test baseline; repository line changes +620 / -13, net +607; staged diff-check passed before commit.
 
-M4.2 preserves PortfolioManager/execution accounting ownership and leaves M4.3 next-open timing and stop/fill semantics unchanged.
+M4.2 preserves PortfolioManager/execution accounting ownership. M4.3 subsequently changed Backtest timing and stop/fill semantics without moving that authority.
 
 #### M4.3 — Execution timing and stop/fill validity
 
-**Status:** READY at design scope — implementation NOT AUTHORIZED / NOT_STARTED; validation NOT_STARTED.
+**Status:** DONE at accepted implementation/validation scope.
 
 Backtest orchestration owns one pending BUY or discretionary SELL intent between completed bars. The intent retains decision-time context, including the strategy rejection midpoint or fallback signal-bar close needed for stop construction, and executes no earlier than the next candle.
 
@@ -603,12 +603,14 @@ For an existing long, priority is gap protective stop at the candle open, then q
 
 A final-bar decision remains pending and unfilled. No final-close execution or automatic liquidation is manufactured; any position still open after final-bar execution/protection is marked to the final close. M4.3 does not own equity-based sizing, affordability, final drawdown policy, performance metrics, successor identity, PivotBoss, paper/live, WFA, application or release work.
 
-This accepted design does not authorize implementation or claim validation. A separate explicit authorization/review is required.
+**Completion evidence:** design baseline `d7ee0d9`; implementation commit `bc9409c`; focused validation 41 passed in 1.09s; additional Backtest/execution validation 37 passed in 0.19s; independently rerun full suite 334 passed in 7.88s; 11 tests added over the previous 323-test baseline; repository line changes +753 / -202 across implementation and tests, with no documentation changes in the implementation commit.
+
+The accepted behavior is implemented for Backtest. The legacy immediate `on_signal()` path remains for non-Backtest callers, PaperRuntime was not migrated, and this completion does not validate PivotBoss, M4.4+ economics, WFA or later runtime/application scopes.
 
 #### Child-step responsibilities
 
 - **M4.2 — Signal/execution state agreement:** DONE at accepted implementation/validation scope under AD-017.
-- **M4.3 — Execution timing and stop/fill validity:** READY at design scope; future implementation must validate next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior.
+- **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
 - **M4.4 — Account returns and performance metrics:** preserve instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state.
 - **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
 - **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
@@ -616,11 +618,11 @@ This accepted design does not authorize implementation or claim validation. A se
 
 **Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
 
-**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 323 passed at `770d3a5`; M4.1 remains documentation/design evidence only.
+**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 334 passed at `bc9409c`; M4.1 remains documentation/design evidence only.
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.3 is READY because its design is baselined, but implementation and validation remain NOT_STARTED and require separate explicit authorization.
+M4 is IN_PROGRESS and is not complete. M4.3 is DONE at its accepted scope. M4.4 remains PLANNED, and its design or implementation is not automatically authorized.
 
 ### M5 — WFA validity
 

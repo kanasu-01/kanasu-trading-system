@@ -8,16 +8,16 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m4-backtest-validity` |
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
-| Implementation verification baseline | `770d3a5 Implement M4.2 execution feedback contract` |
-| Latest reported test baseline | `323 passed at 770d3a5` |
+| Implementation verification baseline | `bc9409c Implement M4.3 execution timing validity` |
+| Latest reported test baseline | `334 passed at bc9409c` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.3 — Execution timing and stop/fill validity design baseline |
-| Lifecycle | M4 IN_PROGRESS; M4.1 and M4.2 DONE at accepted scopes; M4.3 READY at design scope with implementation/validation NOT_STARTED |
-| Next planned review | Separate M4.3 implementation authorization/review; implementation is NOT AUTHORIZED automatically |
+| Step | M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope |
+| Lifecycle | M4 IN_PROGRESS; M4.1, M4.2 and M4.3 DONE at accepted scopes; M4.4–M4.7 PLANNED |
+| Next planned review | Separate M4.4 account returns and performance metrics design/review; implementation is NOT AUTHORIZED automatically |
 
-The independently rerun 323-test full suite passed at implementation commit `770d3a5`.
+The independently rerun 334-test full suite passed at implementation commit `bc9409c`.
 
 ## Completed foundation
 
@@ -248,19 +248,34 @@ M3.8d validates deterministic composition and integration; it does not automatic
 
 M4.2 implements the immutable typed `ExecutionFeedback` contract with accepted/rejected entry, strategy-exit and protective-exit events plus machine-readable rejection reasons. Feedback is emitted after authoritative execution/portfolio outcomes and flows through TradeExecutionEngine → BacktestEngine → StrategyRunner → the optional BaseStrategy hook. Hook failures abort the Backtest, contradictory BUY-while-LONG and SELL-while-FLAT states fail explicitly, and the ordered collection supports multiple events per candle.
 
-`SMACrossOverStrategy` now changes local position belief from execution feedback rather than signal intent. PortfolioManager and execution accounting ownership remain unchanged. PivotBoss and paper-runtime feedback integration remain outside the validated scope, and M4.3 next-open timing and stop/fill semantics were not implemented.
+`SMACrossOverStrategy` now changes local position belief from execution feedback rather than signal intent. PortfolioManager and execution accounting ownership remain unchanged. PivotBoss and paper-runtime feedback integration remain outside the validated M4.2 scope.
+
+## M4.3 validation evidence
+
+- Design baseline: `d7ee0d937a99e99154b200936560abc67e32704a Baseline M4.3 execution timing design`
+- Implementation commit: `bc9409c904ee77db1c3e587931e4ca8209c4d71d Implement M4.3 execution timing validity`
+- Focused Codex validation: 41 passed in 1.09s
+- Additional Backtest/execution focused validation: 37 passed in 0.19s
+- Independent full regression: 334 passed in 7.88s
+- Previous accepted full-suite baseline: 323 passed
+- Tests added: 11
+- Repository line changes: production +338 / -191; tests +415 / -11; total +753 / -202; documentation +0 / -0
+
+M4.3 implements a Backtest-owned immutable pending intent so completed-bar BUY and discretionary SELL decisions execute at the next bar open using snapshotted decision-time stop context. Slippage applies once, an entry stop must remain below the actual fill, and existing-long priority is gap stop → queued SELL → ordinary stop. Gap stops use the candle open; ordinary stops use the stop price; and a next-open entry may produce ordered `ENTRY_ACCEPTED` → `PROTECTIVE_EXIT` feedback when that bar's later low reaches the stop.
+
+Open-time actions precede current-close marking. Final-bar intents remain unfilled, open positions are not automatically liquidated, and surviving positions are marked to the final close. M4.2 contradiction and feedback-handler behavior remain intact. The legacy immediate `on_signal()` path remains available to non-Backtest callers, and PaperRuntime was not migrated. PivotBoss, M4.4+ economics, WFA and later runtime scopes are not part of this validation.
 
 ## Current work
 
-M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `770d3a5 Implement M4.2 execution feedback contract` with 323 passing tests.
+M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `bc9409c Implement M4.3 execution timing validity` with 334 passing tests.
 
 The M4 design audit used source baseline `6a0ab9a`. It confirmed that M4 owns the remaining Backtest validity contracts: completed-bar decisions and next-bar execution, protective-stop and gap behavior, deterministic event priority, strategy/execution state agreement, account-based returns and drawdown, current-equity risk sizing and affordability, simplified brokerage application, end-of-data handling, and versioned economic-policy research identity.
 
-M4 — Backtest Validity is IN_PROGRESS because authorized production implementation has begun and M4.2 is complete. Its permanent child steps are:
+M4 — Backtest Validity remains IN_PROGRESS. M4.2 and M4.3 are implemented and validated at their accepted scopes. Its permanent child steps are:
 
 - M4.1 — Backtest economic contract — DONE at accepted design-contract scope
 - M4.2 — Signal/execution state agreement — DONE at accepted implementation/validation scope
-- M4.3 — Execution timing and stop/fill validity — READY at design scope; implementation NOT AUTHORIZED / NOT_STARTED, validation NOT_STARTED
+- M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope
 - M4.4 — Account returns and performance metrics — PLANNED
 - M4.5 — Risk sizing and drawdown validity — PLANNED
 - M4.6 — Research manifest and deterministic references — PLANNED
@@ -268,9 +283,9 @@ M4 — Backtest Validity is IN_PROGRESS because authorized production implementa
 
 M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 is implemented and validated for the Backtest/`SMACrossOverStrategy` scope under AD-017. PivotBoss and paper-runtime integration remain outside that claim.
 
-M4.3 now has an accepted design for completed-bar decisions, one pending intent, next-open BUY/SELL execution, decision-time stop context, gap-stop/queued-SELL/ordinary-stop priority, exact single slippage, same-bar post-entry protection, execution-before-close-mark ordering, and end-of-data handling. This is design authority only; no M4.3 implementation or validation evidence exists.
+M4.3 now implements and validates completed-bar decisions, one pending intent, next-open BUY/SELL execution, decision-time stop context, gap-stop/queued-SELL/ordinary-stop priority, exact single slippage, same-bar post-entry protection, execution-before-close-mark ordering, and end-of-data handling for Backtest.
 
-The next planned action is a separate M4.3 implementation authorization/review. M4.3 does not become authorized or implemented automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
+The next planned action is a separate M4.4 account returns and performance metrics design/review. M4.4 implementation is not automatically authorized. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 
