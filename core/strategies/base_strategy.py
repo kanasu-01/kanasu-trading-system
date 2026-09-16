@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from core.strategies.signal import SignalType
 from core.entities.candle_series import CandleSeries
+from core.execution.execution_feedback import ExecutionFeedback
 
 
 class BaseStrategy(ABC):
@@ -45,6 +46,16 @@ class BaseStrategy(ABC):
         Default is 0.
         """
         return 0
+
+    def on_execution_feedback(self, feedback: ExecutionFeedback) -> None:
+        """Receive an authoritative execution outcome.
+
+        Strategies that maintain execution-dependent local state may override
+        this hook. The default no-op preserves compatibility for strategies
+        that do not need execution feedback.
+        """
+
+        return None
 
     def get_debug_state(self) -> dict:
         """

@@ -3,6 +3,10 @@ from typing import Optional
 from core.entities.candle_series import CandleSeries
 from core.strategies.base_strategy import BaseStrategy
 from core.strategies.signal import SignalType
+from core.execution.execution_feedback import (
+    ExecutionFeedback,
+    ExecutionFeedbackType,
+)
 
 
 class SMACrossOverStrategy(BaseStrategy):
@@ -62,16 +66,26 @@ class SMACrossOverStrategy(BaseStrategy):
 
         # Entry condition
         if not self.position_open and self.fast_sma > self.slow_sma:
-            self.position_open = True
             signal = SignalType.BUY
 
         # Exit condition
         elif self.position_open and self.fast_sma < self.slow_sma:
-            self.position_open = False
             signal = SignalType.SELL
 
         self.last_signal = signal
         return signal
+
+    def on_execution_feedback(self, feedback: ExecutionFeedback) -> None:
+        """Reconcile local position belief with authoritative execution."""
+
+        if feedback.event_type == ExecutionFeedbackType.ENTRY_ACCEPTED:
+            self.position_open = True
+        elif feedback.event_type in {
+            ExecutionFeedbackType.ENTRY_REJECTED,
+            ExecutionFeedbackType.STRATEGY_EXIT,
+            ExecutionFeedbackType.PROTECTIVE_EXIT,
+        }:
+            self.position_open = False
 
     # -------------------------------------------------
     # Debug / replay support

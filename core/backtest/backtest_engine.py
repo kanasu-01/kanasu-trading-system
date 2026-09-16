@@ -67,12 +67,13 @@ class BacktestEngine:
 
                 signal = self.runner.on_new_candle(candle)
 
-                self.execution_engine.on_signal(
+                feedback_events = self.execution_engine.on_signal(
                     signal=signal,
                     candle=candle,
                     series=series,
                     symbol=self.dataset_context.symbol,
                 )
+                self.runner.deliver_execution_feedback(feedback_events)
 
                 state = self.execution_engine.portfolio_manager.snapshot()
 

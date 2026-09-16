@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import pytest
+
 from core.entities.candle import Candle
 
 from core.backtest.backtest_engine import (
@@ -17,6 +19,7 @@ from core.strategies.signal import SignalType
 from core.strategies.sma_crossover_strategy import (
     SMACrossOverStrategy,
 )
+from core.execution.execution_feedback import ExecutionFeedback
 
 
 def build_dummy_candles(count: int):
@@ -63,6 +66,46 @@ class DeterministicRoundTripStrategy(BaseStrategy):
             return SignalType.SELL
 
         return None
+
+    def reset(self) -> None:
+        self._candle_count = 0
+
+
+class FeedbackSnapshotStrategy(BaseStrategy):
+    def __init__(self):
+        super().__init__(name="FeedbackSnapshot")
+        self._candle_count = 0
+        self.feedback_received = False
+        self.authoritative_position_lookup = None
+
+    def on_new_candle(self, series):
+        self._candle_count += 1
+        return SignalType.BUY if self._candle_count == 1 else None
+
+    def on_execution_feedback(self, feedback: ExecutionFeedback) -> None:
+        assert self.authoritative_position_lookup is not None
+        assert self.authoritative_position_lookup() is not None
+        self.feedback_received = True
+
+    def reset(self) -> None:
+        self._candle_count = 0
+        self.feedback_received = False
+
+    def get_debug_state(self) -> dict:
+        return {"feedback_received": self.feedback_received}
+
+
+class FailingFeedbackStrategy(BaseStrategy):
+    def __init__(self):
+        super().__init__(name="FailingFeedback")
+        self._candle_count = 0
+
+    def on_new_candle(self, series):
+        self._candle_count += 1
+        return SignalType.BUY if self._candle_count == 1 else None
+
+    def on_execution_feedback(self, feedback: ExecutionFeedback) -> None:
+        raise RuntimeError("feedback handler failed")
 
     def reset(self) -> None:
         self._candle_count = 0
@@ -136,3 +179,35 @@ def test_backtest_reports_authoritative_execution_portfolio_state():
     assert final_record.equity == authoritative_state.equity
     assert final_record.position_size == authoritative_state.position_size
     assert final_record.drawdown == authoritative_state.drawdown
+
+
+def test_backtest_delivers_feedback_after_portfolio_transition_before_snapshot():
+    strategy = FeedbackSnapshotStrategy()
+    engine = BacktestEngine(
+        strategy=strategy,
+        initial_capital=100000,
+        runtime_context=RuntimeContext(),
+        dataset_context=DatasetContext(symbol="TEST"),
+    )
+    strategy.authoritative_position_lookup = lambda: (
+        engine.execution_engine.get_runtime_position("TEST")
+    )
+
+    result = engine.run(build_dummy_candles(1))
+
+    assert strategy.feedback_received is True
+    assert result.bar_records[0].decision_snapshot == {
+        "feedback_received": True,
+    }
+
+
+def test_feedback_handler_failure_aborts_backtest():
+    engine = BacktestEngine(
+        strategy=FailingFeedbackStrategy(),
+        initial_capital=100000,
+        runtime_context=RuntimeContext(),
+        dataset_context=DatasetContext(symbol="TEST"),
+    )
+
+    with pytest.raises(RuntimeError, match="feedback handler failed"):
+        engine.run(build_dummy_candles(1))

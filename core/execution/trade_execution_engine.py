@@ -36,6 +36,12 @@ from core.portfolio.portfolio_manager import (
 from core.runtime.runtime_context import (
     RuntimeContext,
 )
+from core.execution.execution_feedback import (
+    ExecutionFeedback,
+    ExecutionFeedbackType,
+    ExecutionPositionState,
+    ExecutionRejectionReason,
+)
 
 
 class TradeExecutionEngine:
@@ -100,7 +106,7 @@ class TradeExecutionEngine:
         candle: Candle,
         series,
         symbol: str,
-    ) -> None:
+    ) -> tuple[ExecutionFeedback, ...]:
 
         self.last_execution_event = None
 
@@ -108,19 +114,42 @@ class TradeExecutionEngine:
 
         self.last_execution_quantity = None
 
+        open_position = self._get_open_position(symbol)
+
+        if signal == SignalType.SELL and open_position is None:
+            raise RuntimeError(
+                f"SELL signal received while authoritative position state is FLAT "
+                f"for {symbol}"
+            )
+
+        if signal == SignalType.BUY and open_position is not None:
+            raise RuntimeError(
+                f"BUY signal received while authoritative position state is LONG "
+                f"for {symbol}"
+            )
+
         self.drawdown_manager.update_period(candle.timestamp)
 
         # ---------------- NO POSITION ----------------
 
-        open_position = self._get_open_position(symbol)
         if open_position is None:
 
             if signal != SignalType.BUY:
-                return
+                return ()
 
             if not self.drawdown_manager.can_trade():
                 self.logger.info("TRADE REJECTED | Drawdown limit reached")
-                return
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        rejection_reason=(
+                            ExecutionRejectionReason.DRAWDOWN_LIMIT
+                        ),
+                    ),
+                )
 
             rejection_midpoint = getattr(
                 self.strategy,
@@ -137,7 +166,18 @@ class TradeExecutionEngine:
                 stop_price = candle.close * 0.98
 
             if stop_price is None:
-                return
+                self.logger.info("TRADE REJECTED | Invalid entry")
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        rejection_reason=(
+                            ExecutionRejectionReason.INVALID_ENTRY
+                        ),
+                    ),
+                )
 
             if self.runtime_context.execution_config.slippage_enabled:
 
@@ -158,7 +198,17 @@ class TradeExecutionEngine:
 
                 self.logger.info("TRADE REJECTED | Invalid quantity")
 
-                return
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        rejection_reason=(
+                            ExecutionRejectionReason.INVALID_QUANTITY
+                        ),
+                    ),
+                )
 
             entry_transaction_cost = 0.0
 
@@ -174,7 +224,18 @@ class TradeExecutionEngine:
                 open_trade_risks_pct=[],
                 new_trade_risk_pct=(self.risk_manager.risk_per_trade_pct),
             ):
-                return
+                self.logger.info("TRADE REJECTED | Portfolio risk limit")
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.ENTRY_REJECTED,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        rejection_reason=(
+                            ExecutionRejectionReason.PORTFOLIO_RISK_LIMIT
+                        ),
+                    ),
+                )
 
             position = Position(
                 symbol=symbol,
@@ -207,7 +268,16 @@ class TradeExecutionEngine:
                 f"Stop={stop_price:.2f}"
             )
 
-            return
+            return (
+                ExecutionFeedback(
+                    event_type=ExecutionFeedbackType.ENTRY_ACCEPTED,
+                    symbol=symbol,
+                    timestamp=candle.timestamp,
+                    position_state=ExecutionPositionState.LONG,
+                    fill_price=entry_price,
+                    quantity=qty,
+                ),
+            )
 
         # ---------------- POSITION OPEN ----------------
         open_position = self._get_open_position(symbol)
@@ -246,7 +316,16 @@ class TradeExecutionEngine:
 
                 self.last_execution_quantity = exit_quantity
 
-                return
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        fill_price=exit_price,
+                        quantity=exit_quantity,
+                    ),
+                )
 
             if signal == SignalType.SELL:
 
@@ -270,6 +349,19 @@ class TradeExecutionEngine:
                 self.last_execution_event = "SELL"
                 self.last_execution_price = exit_price
                 self.last_execution_quantity = exit_quantity
+
+                return (
+                    ExecutionFeedback(
+                        event_type=ExecutionFeedbackType.STRATEGY_EXIT,
+                        symbol=symbol,
+                        timestamp=candle.timestamp,
+                        position_state=ExecutionPositionState.FLAT,
+                        fill_price=exit_price,
+                        quantity=exit_quantity,
+                    ),
+                )
+
+        return ()
 
     # -------------------------------------------------
 

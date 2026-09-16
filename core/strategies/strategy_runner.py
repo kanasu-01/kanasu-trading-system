@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Optional, Sequence
 
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.strategies.base_strategy import BaseStrategy
 from core.strategies.signal import SignalType
 from core.logging.logger import get_logger
+from core.execution.execution_feedback import ExecutionFeedback
 
 
 class StrategyRunner:
@@ -51,6 +52,15 @@ class StrategyRunner:
             )
 
         return signal
+
+    def deliver_execution_feedback(
+        self,
+        feedback_events: Sequence[ExecutionFeedback],
+    ) -> None:
+        """Deliver authoritative execution outcomes to the strategy in order."""
+
+        for feedback in feedback_events:
+            self.strategy.on_execution_feedback(feedback)
 
     def stop(self) -> None:
         """
