@@ -22,12 +22,19 @@ from core.backtest.performance_metrics import (
 
 def print_performance_summary(result: BacktestResult):
 
-    metrics = PerformanceMetrics.summarize(result.trades)
+    metrics = PerformanceMetrics.summarize_backtest(result)
 
     print("\n=== PERFORMANCE METRICS ===")
 
     for key, value in metrics.items():
-        print(f"{key}: {value}")
+        if key.endswith("_count"):
+            display_value = str(value)
+        elif isinstance(value, float):
+            display_value = f"{value:.2f}"
+        else:
+            display_value = str(value)
+
+        print(f"{key}: {display_value}")
 
 
 def run_replay(

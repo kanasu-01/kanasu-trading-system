@@ -112,6 +112,15 @@ def test_optimizer_propagates_caller_dataset_context(monkeypatch):
             }
         ),
     )
+    monkeypatch.setattr(
+        optimizer_module.PerformanceMetrics,
+        "summarize_backtest",
+        staticmethod(
+            lambda _result: (_ for _ in ()).throw(
+                AssertionError("WFA optimizer used result-aware Backtest metrics")
+            )
+        ),
+    )
 
     optimizer = GridSearchOptimizer()
     optimizer.optimize(
