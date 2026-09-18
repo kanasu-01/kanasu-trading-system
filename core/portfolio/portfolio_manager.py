@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 from core.portfolio.pnl_snapshot import (
     PnLSnapshot,
 )
@@ -91,10 +92,16 @@ class PortfolioManager:
         if self.position_book.get_position(position.symbol) is not None:
             raise ValueError(f"Position already open for {position.symbol}")
 
-        self.cash -= (
+        required_cash = (
             position.entry_price * position.quantity
             + position.entry_transaction_cost
         )
+        if not isfinite(self.cash) or not isfinite(required_cash):
+            raise ValueError("authoritative cash and entry requirement must be finite")
+        if required_cash > self.cash:
+            raise ValueError("Insufficient cash to open long position")
+
+        self.cash -= required_cash
         self.position_book.add_position(
             symbol=position.symbol,
             position=position,

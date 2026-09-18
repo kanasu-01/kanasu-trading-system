@@ -55,7 +55,9 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             historical_source=historical_source,
             strategy=strategy,
             config=backtest_config,
-            runtime_context=RuntimeContext(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=app_config.risk_per_trade_pct,
+            ),
             dataset_context=DatasetContext(
                 symbol=backtest_config.symbol,
                 timeframe=backtest_config.timeframe,

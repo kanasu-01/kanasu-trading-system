@@ -166,7 +166,10 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
 def test_main_backtest_composes_and_passes_historical_source(monkeypatch):
     source = object()
     captured = {}
-    app_config = AppConfig(runtime_mode=RuntimeMode.BACKTEST)
+    app_config = AppConfig(
+        runtime_mode=RuntimeMode.BACKTEST,
+        risk_per_trade_pct=2.5,
+    )
 
     def create_source(value):
         captured["factory_config"] = value
@@ -189,6 +192,10 @@ def test_main_backtest_composes_and_passes_historical_source(monkeypatch):
     assert captured["factory_config"] is app_config
     assert captured["runtime_kwargs"]["historical_source"] is source
     assert "broker" not in captured["runtime_kwargs"]
+    assert (
+        captured["runtime_kwargs"]["runtime_context"].risk_per_trade_pct
+        == 2.5
+    )
 
 
 def test_main_walk_forward_composes_and_passes_historical_source(monkeypatch):

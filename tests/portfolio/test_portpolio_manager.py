@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from core.entities.position import Position
 from core.portfolio.portfolio_manager import (
     PortfolioManager,
@@ -77,3 +79,43 @@ def test_portfolio_accounts_for_complete_buy_mark_sell_lifecycle():
     assert final_state.total_pnl == (
         final_state.realized_pnl + final_state.unrealized_pnl
     )
+
+
+def test_direct_unaffordable_long_open_is_rejected_without_mutation():
+    portfolio = PortfolioManager(initial_capital=100)
+    position = Position(
+        symbol="RELIANCE",
+        entry_time=datetime(2026, 1, 2, 9, 15),
+        entry_price=100,
+        entry_transaction_cost=0.08,
+        quantity=1,
+        stop_price=90,
+        direction="LONG",
+        entry_index=0,
+    )
+    before = portfolio.snapshot()
+
+    with pytest.raises(ValueError, match="Insufficient cash"):
+        portfolio.open_position(position)
+
+    assert portfolio.snapshot() == before
+    assert portfolio.active_positions() == 0
+
+
+def test_direct_exactly_affordable_long_open_cannot_create_negative_cash():
+    portfolio = PortfolioManager(initial_capital=100.08)
+    position = Position(
+        symbol="RELIANCE",
+        entry_time=datetime(2026, 1, 2, 9, 15),
+        entry_price=100,
+        entry_transaction_cost=0.08,
+        quantity=1,
+        stop_price=90,
+        direction="LONG",
+        entry_index=0,
+    )
+
+    portfolio.open_position(position)
+
+    assert portfolio.cash == pytest.approx(0.0)
+    assert portfolio.cash >= 0.0

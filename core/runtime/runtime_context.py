@@ -20,3 +20,4 @@ class RuntimeContext:
     """
 
     execution_config: ExecutionConfig = EXECUTION_CONFIG
+    risk_per_trade_pct: float = 1.0

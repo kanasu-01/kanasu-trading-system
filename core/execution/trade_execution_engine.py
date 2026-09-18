@@ -1,3 +1,4 @@
+from math import isfinite
 from typing import List, Optional
 
 from core.risk.risk_manager import RiskManager
@@ -104,6 +105,69 @@ class TradeExecutionEngine:
         self.last_execution_event = None
         self.last_execution_price = None
         self.last_execution_quantity = None
+        self.last_transaction_cost = 0.0
+
+    @staticmethod
+    def _require_finite(value: float, name: str) -> None:
+        if not isfinite(value):
+            raise ValueError(f"{name} must be finite")
+
+    def _entry_cost(self, *, entry_price: float, quantity: int) -> float:
+        if not self.runtime_context.execution_config.brokerage_enabled:
+            return 0.0
+
+        transaction_cost = self.brokerage_model.calculate(
+            turnover=entry_price * quantity,
+        ).total_cost
+        self._require_finite(transaction_cost, "entry transaction cost")
+        return transaction_cost
+
+    def _largest_affordable_quantity(
+        self,
+        *,
+        candidate_quantity: int,
+        entry_price: float,
+        available_cash: float,
+    ) -> Optional[tuple[int, float]]:
+        """Return the largest affordable quantity and its final entry cost."""
+
+        self._require_finite(entry_price, "actual entry fill")
+        self._require_finite(available_cash, "authoritative cash")
+
+        if candidate_quantity < 1 or available_cash < 0:
+            return None
+
+        def required_cash(quantity: int) -> tuple[float, float]:
+            transaction_cost = self._entry_cost(
+                entry_price=entry_price,
+                quantity=quantity,
+            )
+            required = entry_price * quantity + transaction_cost
+            self._require_finite(required, "required entry cash")
+            return required, transaction_cost
+
+        full_required, full_cost = required_cash(candidate_quantity)
+        if full_required <= available_cash:
+            return candidate_quantity, full_cost
+
+        low = 1
+        high = candidate_quantity - 1
+        best_quantity = 0
+
+        while low <= high:
+            midpoint = (low + high) // 2
+            required, _ = required_cash(midpoint)
+            if required <= available_cash:
+                best_quantity = midpoint
+                low = midpoint + 1
+            else:
+                high = midpoint - 1
+
+        if best_quantity < 1:
+            return None
+
+        _, final_cost = required_cash(best_quantity)
+        return best_quantity, final_cost
 
     def _entry_rejected(
         self,
@@ -131,6 +195,8 @@ class TradeExecutionEngine:
         stop_price: Optional[float],
         entry_index: int,
         require_stop_below_fill: bool,
+        use_current_equity_sizing: bool,
+        observe_equity_risk: bool,
     ) -> tuple[ExecutionFeedback, ...]:
         """Attempt one authoritative long entry at the supplied reference."""
 
@@ -142,18 +208,24 @@ class TradeExecutionEngine:
                 reason=ExecutionRejectionReason.DRAWDOWN_LIMIT,
             )
 
-        if stop_price is None:
-            self.logger.info("TRADE REJECTED | Invalid entry")
+        if self.runtime_context.execution_config.slippage_enabled:
+            entry_price = self.slippage_model.apply_buy_slippage(reference_price)
+        else:
+            entry_price = reference_price
+
+        self._require_finite(entry_price, "actual entry fill")
+        if (
+            stop_price is None
+            or not isfinite(stop_price)
+            or entry_price <= 0
+            or stop_price <= 0
+        ):
+            self.logger.info("TRADE REJECTED | Invalid entry price or stop")
             return self._entry_rejected(
                 symbol=symbol,
                 timestamp=candle.timestamp,
                 reason=ExecutionRejectionReason.INVALID_ENTRY,
             )
-
-        if self.runtime_context.execution_config.slippage_enabled:
-            entry_price = self.slippage_model.apply_buy_slippage(reference_price)
-        else:
-            entry_price = reference_price
 
         if require_stop_below_fill and stop_price >= entry_price:
             self.logger.info("TRADE REJECTED | Stop is not below actual entry fill")
@@ -163,10 +235,21 @@ class TradeExecutionEngine:
                 reason=ExecutionRejectionReason.INVALID_ENTRY,
             )
 
-        qty = self.risk_manager.calculate_position_size(
-            entry_price=entry_price,
-            stop_price=stop_price,
-        )
+        portfolio_state = self.portfolio_manager.snapshot()
+        self._require_finite(portfolio_state.equity, "authoritative equity")
+        self._require_finite(portfolio_state.cash, "authoritative cash")
+
+        if use_current_equity_sizing:
+            qty = self.risk_manager.calculate_position_size_for_equity(
+                account_equity=portfolio_state.equity,
+                entry_price=entry_price,
+                stop_price=stop_price,
+            )
+        else:
+            qty = self.risk_manager.calculate_position_size(
+                entry_price=entry_price,
+                stop_price=stop_price,
+            )
         if qty is None:
             self.logger.info("TRADE REJECTED | Invalid quantity")
             return self._entry_rejected(
@@ -175,13 +258,19 @@ class TradeExecutionEngine:
                 reason=ExecutionRejectionReason.INVALID_QUANTITY,
             )
 
-        entry_transaction_cost = 0.0
-        if self.runtime_context.execution_config.brokerage_enabled:
-            turnover = entry_price * qty
-            entry_transaction_cost = self.brokerage_model.calculate(
-                turnover=turnover,
-            ).total_cost
-        self.last_transaction_cost = entry_transaction_cost
+        affordable = self._largest_affordable_quantity(
+            candidate_quantity=qty,
+            entry_price=entry_price,
+            available_cash=portfolio_state.cash,
+        )
+        if affordable is None:
+            self.logger.info("TRADE REJECTED | Insufficient cash")
+            return self._entry_rejected(
+                symbol=symbol,
+                timestamp=candle.timestamp,
+                reason=ExecutionRejectionReason.INSUFFICIENT_CASH,
+            )
+        qty, entry_transaction_cost = affordable
 
         if not self.portfolio_risk_manager.can_open_new_trade(
             open_trade_risks_pct=[],
@@ -194,6 +283,7 @@ class TradeExecutionEngine:
                 reason=ExecutionRejectionReason.PORTFOLIO_RISK_LIMIT,
             )
 
+        self.last_transaction_cost = entry_transaction_cost
         position = Position(
             symbol=symbol,
             entry_price=entry_price,
@@ -205,6 +295,10 @@ class TradeExecutionEngine:
             direction="LONG",
         )
         self.portfolio_manager.open_position(position)
+        if observe_equity_risk:
+            self.drawdown_manager.observe_equity(
+                self.portfolio_manager.snapshot().equity
+            )
         self.last_execution_event = "BUY"
         self.last_execution_price = entry_price
         self.last_execution_quantity = qty
@@ -232,6 +326,7 @@ class TradeExecutionEngine:
         exit_reason: str,
         event_type: ExecutionFeedbackType,
         diagnostic_event: str,
+        observe_equity_risk: bool,
     ) -> ExecutionFeedback:
         open_position = self._get_open_position(symbol)
         if open_position is None:
@@ -241,12 +336,14 @@ class TradeExecutionEngine:
             exit_price = self.slippage_model.apply_sell_slippage(reference_price)
         else:
             exit_price = reference_price
+        self._require_finite(exit_price, "actual exit fill")
         exit_quantity = open_position.quantity
         self._close_position(
             symbol=symbol,
             exit_price=exit_price,
             exit_reason=exit_reason,
             candle=candle,
+            observe_equity_risk=observe_equity_risk,
         )
         self.last_execution_event = diagnostic_event
         self.last_execution_price = exit_price
@@ -273,7 +370,11 @@ class TradeExecutionEngine:
         """Execute prior-bar intent and protection before current-bar decisions."""
 
         self._reset_execution_diagnostics()
-        self.drawdown_manager.update_period(candle.timestamp)
+        carried_equity = self.portfolio_manager.snapshot().equity
+        self.drawdown_manager.update_equity_period(
+            candle.timestamp,
+            carried_equity,
+        )
         open_position = self._get_open_position(symbol)
 
         if pending_signal == SignalType.SELL and open_position is None:
@@ -297,6 +398,7 @@ class TradeExecutionEngine:
                         exit_reason="STOP_LOSS",
                         event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
                         diagnostic_event="STOP_EXIT",
+                        observe_equity_risk=True,
                     ),
                 )
             if pending_signal == SignalType.SELL:
@@ -308,6 +410,7 @@ class TradeExecutionEngine:
                         exit_reason="STRATEGY_EXIT",
                         event_type=ExecutionFeedbackType.STRATEGY_EXIT,
                         diagnostic_event="SELL",
+                        observe_equity_risk=True,
                     ),
                 )
             if candle.low <= open_position.stop_price:
@@ -319,6 +422,7 @@ class TradeExecutionEngine:
                         exit_reason="STOP_LOSS",
                         event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
                         diagnostic_event="STOP_EXIT",
+                        observe_equity_risk=True,
                     ),
                 )
             return ()
@@ -327,11 +431,12 @@ class TradeExecutionEngine:
             return ()
 
         if decision_close is None:
-            raise ValueError("Pending BUY requires its decision candle close")
-
-        if rejection_midpoint is not None:
-            stop_price = self.stop_manager.compute_long_stop(
-                rejection_midpoint
+            stop_price = None
+        elif rejection_midpoint is not None:
+            stop_price = (
+                self.stop_manager.compute_long_stop(rejection_midpoint)
+                if isfinite(rejection_midpoint)
+                else rejection_midpoint
             )
         else:
             stop_price = decision_close * 0.98
@@ -343,6 +448,8 @@ class TradeExecutionEngine:
             stop_price=stop_price,
             entry_index=execution_index,
             require_stop_below_fill=True,
+            use_current_equity_sizing=True,
+            observe_equity_risk=True,
         )
         if entry_feedback[0].event_type is not ExecutionFeedbackType.ENTRY_ACCEPTED:
             return entry_feedback
@@ -358,6 +465,7 @@ class TradeExecutionEngine:
                 exit_reason="STOP_LOSS",
                 event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
                 diagnostic_event="STOP_EXIT",
+                observe_equity_risk=True,
             )
             return entry_feedback + (protective_feedback,)
         return entry_feedback
@@ -367,6 +475,9 @@ class TradeExecutionEngine:
 
         if self._get_open_position(symbol) is not None:
             self.portfolio_manager.mark_to_market({symbol: price})
+            self.drawdown_manager.observe_equity(
+                self.portfolio_manager.snapshot().equity
+            )
 
     def on_signal(
         self,
@@ -422,6 +533,8 @@ class TradeExecutionEngine:
                 stop_price=stop_price,
                 entry_index=len(series) - 1,
                 require_stop_below_fill=False,
+                use_current_equity_sizing=False,
+                observe_equity_risk=False,
             )
             if feedback[0].event_type is ExecutionFeedbackType.ENTRY_ACCEPTED:
                 self.portfolio_manager.mark_to_market({symbol: candle.close})
@@ -448,6 +561,7 @@ class TradeExecutionEngine:
                         exit_reason="STOP_LOSS",
                         event_type=ExecutionFeedbackType.PROTECTIVE_EXIT,
                         diagnostic_event="STOP_EXIT",
+                        observe_equity_risk=False,
                     ),
                 )
 
@@ -461,6 +575,7 @@ class TradeExecutionEngine:
                         exit_reason="STRATEGY_EXIT",
                         event_type=ExecutionFeedbackType.STRATEGY_EXIT,
                         diagnostic_event="SELL",
+                        observe_equity_risk=False,
                     ),
                 )
 
@@ -474,6 +589,7 @@ class TradeExecutionEngine:
         exit_price: float,
         exit_reason: str,
         candle: Candle,
+        observe_equity_risk: bool,
     ) -> None:
 
         open_position = self._get_open_position(symbol)
@@ -488,6 +604,7 @@ class TradeExecutionEngine:
             exit_transaction_cost = self.brokerage_model.calculate(
                 turnover=turnover,
             ).total_cost
+        self._require_finite(exit_transaction_cost, "exit transaction cost")
 
         total_transaction_cost = (
             open_position.entry_transaction_cost + exit_transaction_cost
@@ -501,17 +618,22 @@ class TradeExecutionEngine:
             exit_time=candle.timestamp,
         )
 
-        account_pnl_pct = (
-            trade.pnl / self.portfolio_manager.initial_capital
-        ) * 100
-        self.drawdown_manager.record_trade_pnl(account_pnl_pct)
-
-        self.completed_trades.append(trade)
         self.portfolio_manager.close_position(
             symbol=symbol,
             exit_price=exit_price,
             exit_transaction_cost=exit_transaction_cost,
         )
+        if observe_equity_risk:
+            self.drawdown_manager.observe_equity(
+                self.portfolio_manager.snapshot().equity
+            )
+        else:
+            account_pnl_pct = (
+                trade.pnl / self.portfolio_manager.initial_capital
+            ) * 100
+            self.drawdown_manager.record_trade_pnl(account_pnl_pct)
+
+        self.completed_trades.append(trade)
 
         self.journal.log_trade(trade)
 

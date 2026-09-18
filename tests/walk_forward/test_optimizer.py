@@ -86,6 +86,7 @@ def test_optimizer_propagates_caller_dataset_context(monkeypatch):
         timeframe="15m",
     )
     received_dataset_contexts = []
+    received_risk_settings = []
 
     class SpyBacktestEngine:
         def __init__(
@@ -97,6 +98,7 @@ def test_optimizer_propagates_caller_dataset_context(monkeypatch):
             dataset_context,
         ):
             received_dataset_contexts.append(dataset_context)
+            received_risk_settings.append(runtime_context.risk_per_trade_pct)
 
         def run(self, candles):
             return SimpleNamespace(trades=[])
@@ -131,3 +133,4 @@ def test_optimizer_propagates_caller_dataset_context(monkeypatch):
     )
 
     assert received_dataset_contexts == [dataset_context]
+    assert received_risk_settings == [1.0]

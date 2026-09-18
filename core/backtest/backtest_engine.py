@@ -47,6 +47,7 @@ class BacktestEngine:
             account_capital=initial_capital,
             session_id=self.session_id,
             runtime_context=self.runtime_context,
+            risk_per_trade_pct=self.runtime_context.risk_per_trade_pct,
         )
 
     # -------------------------------------------------
