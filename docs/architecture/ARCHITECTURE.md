@@ -93,7 +93,7 @@ For an existing long, a bar opening at or below the stop uses the open as the ga
 
 Execution and portfolio state are authoritative. Strategy-local position belief must receive explicit feedback for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must enforce available-cash affordability including entry transaction costs.
 
-Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct. Account performance and drawdown derive from the authoritative equity curve, including unrealized P&L where the accepted risk contract requires it, rather than synthetic compounding of `Trade.pnl_pct`. Detailed daily/weekly session and reset semantics remain M4.5 work.
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct. Account performance and drawdown derive from the authoritative equity curve, including unrealized P&L where the accepted risk contract requires it, rather than synthetic compounding of `Trade.pnl_pct`. AD-018 defines the accepted M4.5 target for daily/weekly period-start-equity entry guards and candle-calendar reset semantics; production implementation remains pending.
 
 An open position at the dataset boundary remains open, is marked to the final available close and contributes unrealized P&L to final equity. Forced end liquidation requires an explicit configured research policy. The simplified `BrokerageModel` must apply exactly once when enabled and flow consistently through cash, trade P&L and equity; M4 does not claim exact AngelOne, exchange, product or tax fidelity.
 
@@ -113,7 +113,38 @@ The authoritative Backtest metric contract uses `completed_trade_count`, `net_pr
 
 For zero completed trades, trade counts, rates, means, realized totals and per-trade expectancy are zero while account metrics still derive from equity and may be nonzero. Calculations remain full precision programmatically; console/export presentation owns rounding. Ambiguous `avg_win_pct`, `avg_loss_pct`, `expectancy_pct` and synthetic `max_drawdown_pct` names are not authoritative Backtest metrics, although they may remain temporarily inside the bounded legacy WFA path until M5.
 
-This behavior is implemented and validated at `7102859`. Focused evidence covers the complete metric contract, reporting ownership, equity/account separation, transaction costs, final unrealized equity, drawdown history, zero-trade and failure boundaries, WFA compatibility, and M4.2/M4.3 accounting regressions. An independent full suite passed 364 tests in 6.86s. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and frozen AD-015 v1 remain unchanged. M4.5 equity-risk sizing, affordability and daily/weekly reset semantics remain incomplete.
+This behavior is implemented and validated at `7102859`. Focused evidence covers the complete metric contract, reporting ownership, equity/account separation, transaction costs, final unrealized equity, drawdown history, zero-trade and failure boundaries, WFA compatibility, and M4.2/M4.3 accounting regressions. An independent full suite passed 364 tests in 6.86s. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and frozen AD-015 v1 remain unchanged. M4.5 sizing, affordability and period-loss semantics now have accepted target design under AD-018 but remain unimplemented and unvalidated.
+
+### M4.5 ACCEPTED TARGET — CURRENT-EQUITY SIZING AND PERIOD-LOSS GUARDS
+
+M4.5 is READY at accepted design scope; implementation is NOT_STARTED and NOT AUTHORIZED. The target refines AD-001, AD-002 and AD-016 through AD-018 without changing current production behavior.
+
+For a Backtest long entry, `PortfolioManager` equity immediately before entry mutation is authoritative sizing equity. Risk budget is `sizing_equity * risk_per_trade_pct / 100`; price risk per share is actual entry fill after configured BUY slippage minus the prior completed-bar decision's stop; risk quantity is the floor of risk budget divided by that price risk; max-position quantity is the floor of `sizing_equity * max_position_pct / 100` divided by actual fill; and the candidate is the smaller integer quantity. Current candle high, low and close cannot influence this open-time calculation. A long stop must be strictly below actual fill. Equity, prices and risk inputs must be finite; risk and max-position percentages must be finite and positive; zero/negative equity or a quantity below one cannot open a position. `max_position_pct` is not restricted to at most 100 because available cash, rather than this configurable sizing preference, is the hard unlevered boundary.
+
+Risk sizing, max-position sizing and affordability remain distinct. For candidate quantity `q`, required cash is actual-fill notional plus the current `BrokerageModel` entry cost when brokerage is enabled, otherwise notional alone. Execution must choose the largest affordable integer quantity no greater than the sizing candidate. The current monotonic cost model permits deterministic binary search, but the durable contract is the selected result rather than a search algorithm. Search-time cost calculations are pure, and only final accepted entry cost is charged once. No affordable share produces `INSUFFICIENT_CASH` without account mutation. `PortfolioManager` must defensively reject an unaffordable long entry, and accepted entry cannot make authoritative cash negative.
+
+Daily and weekly entry guards use period-start authoritative equity rather than period peak-to-current drawdown:
+
+~~~text
+period_loss_pct = max(
+    0,
+    (period_start_equity - current_equity)
+    / period_start_equity
+    * 100
+)
+~~~
+
+Daily baseline is carried authoritative equity before the first observed candle of a represented date; weekly baseline is the same before the first observed candle of a represented `(ISO year, ISO week)`. Gains do not raise baselines. Realized P&L, unrealized marked P&L and transaction costs participate through equity; the Backtest path does not additionally accumulate trade percentages. A loss equal to or greater than its configured threshold blocks new entries and latches for the rest of that period. Recovery does not reopen the period. Exits and protective stops remain allowed, and no forced liquidation is introduced. A new date resets only daily state; a new ISO-year/week resets weekly state; simultaneous transitions reset both. Non-positive baseline equity latches without division, non-finite observed equity is an invariant failure, and negative equity may produce loss greater than 100% without clipping. M4.4 historical `max_equity_drawdown_pct` remains a separate reporting concept.
+
+Period identities use `candle.timestamp.date()` and represented `(ISO year, ISO week)` fields. Naive timestamps use their represented naive calendar; aware timestamps use their represented local calendar. M4.5 does not localize/convert timestamps, alter `DatasetContext` timezone semantics, infer holidays, introduce an exchange calendar or synthesize missing sessions. Sparse data transitions on the first observed new identity. For a carried position, the new baseline is equity from the prior completed/marked bar before the new candle's open-time execution; a subsequent gap-stop effect therefore belongs to the new period.
+
+The no-lookahead sequence preserves M4.3. Each candle begins with carried authoritative state. Period transitions use only current timestamp and carried equity. Pending open-time action then observes existing latches; a BUY derives actual open fill, validates the prior-decision stop, samples pre-entry equity and cash, sizes and enforces affordability. After an accepted entry, authoritative equity is observed after the position and entry cost are recorded. After an exit, `PortfolioManager` closes first and post-close equity is then observed without separately adding `Trade.pnl`. A surviving position is marked to current close and post-mark equity is observed before strategy evaluation. Strategy then evaluates the completed candle and queues the next intent; bar recording follows authoritative state.
+
+`AppConfig.risk_per_trade_pct` is the accepted canonical Backtest source and must flow through an effective `RuntimeContext` setting, `BacktestEngine` and `TradeExecutionEngine`, retaining a compatible 1% context default. M4.5 does not duplicate the field into `BacktestConfig` and does not change frozen AD-015 v1; M4.6 owns the successor economic-policy identity. WFA-specific configuration and validity remain M5 work. WFA may inherit corrected shared Backtest mechanics without creating a deliberately incorrect legacy Backtest fork or establishing WFA validity.
+
+The target feedback reasons are `INVALID_ENTRY` for missing/invalid long stop, `INVALID_QUANTITY` when equity/risk sizing produces no quantity, `DRAWDOWN_LIMIT` for a latched equity-loss guard, existing `PORTFOLIO_RISK_LIMIT`, and new `INSUFFICIENT_CASH` when no otherwise-legitimate share is affordable. Non-finite authoritative equity, cash, fill or cost is an invariant failure rather than a normal rejection. Rejection leaves cash, positions, completed trades and cost accounting unchanged, and execution diagnostics including `last_transaction_cost` reset before each attempt.
+
+This target does not validate or migrate WFA-specific economics, PaperRuntime, broker/live policy, multi-symbol risk, exchange calendars, exact broker/tax fidelity, leverage, margin, shorts, derivatives, forced liquidation, PivotBoss or standalone-script repair, API/frontend behavior, M4.6 identity or M4.7 integration.
 
 ### M4.2 CURRENT — EXECUTION FEEDBACK AND STRATEGY-STATE AUTHORITY
 
@@ -130,7 +161,7 @@ TradeExecutionEngine
 
 `TradeExecutionEngine` does not directly mutate a strategy. The strategy hook is optional and defaults to a no-op so existing strategy implementations remain compatible. If feedback handling fails, the Backtest fails explicitly rather than continuing with divergent strategy and portfolio state.
 
-The feedback contract is typed, immutable and ordered. It supports `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`, carrying the symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Rejections cover current drawdown-limit, invalid-quantity/entry and portfolio-risk classes. Later M4.5 work may extend the same contract without changing M4.2 ownership.
+The feedback contract is typed, immutable and ordered. It supports `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`, carrying the symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Implemented rejections cover current drawdown-limit, invalid-quantity/entry and portfolio-risk classes. Accepted M4.5 target design adds `INSUFFICIENT_CASH` without changing M4.2 ownership; that extension is not yet implemented.
 
 Feedback is an ordered immutable collection rather than a one-event-per-candle slot. M4.3 uses this for the same-execution-bar sequence `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT`. Contradictory validated-research states fail explicitly when they reveal disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
 
@@ -180,9 +211,9 @@ M4.3 does not own current-equity sizing, affordability, final daily/weekly drawd
 ### KNOWN DIVERGENCES
 
 - Execution feedback is validated for Backtest with `SMACrossOverStrategy`; PivotBoss and paper-runtime state convergence remain unvalidated.
-- Risk sizing uses fixed initial capital and does not establish affordability or dynamic-equity sizing.
+- Risk sizing still uses fixed initial capital, canonical Backtest risk still falls back to the execution-engine default, and production does not yet enforce AD-018 current-equity sizing or cash affordability.
 - Brokerage is a simplified research cost model, not a declaration of exact broker/product tax fidelity.
-- Broader equity-based daily/weekly drawdown semantics remain deferred.
+- Daily/weekly production guards still aggregate closed-trade percentages rather than implementing AD-018 period-start-equity observation, sticky latches and represented candle-calendar resets.
 
 ## 6. Historical-data architecture
 

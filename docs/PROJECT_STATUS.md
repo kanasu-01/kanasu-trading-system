@@ -10,12 +10,13 @@
 | Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
 | Implementation verification baseline | `7102859 Implement M4.4 account performance metrics` |
 | Latest reported test baseline | `364 passed at 7102859` |
+| Current source baseline | `30e6200` — M4.4 documentation closure |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope |
-| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.4 DONE at accepted scopes; M4.5–M4.7 PLANNED |
-| Next planned review | Separate M4.5 risk sizing and drawdown validity design/review; M4.5 is not automatically authorized |
+| Step | M4.5 — Risk sizing and drawdown validity — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED |
+| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.4 DONE at accepted scopes; M4.5 READY at accepted design scope; M4.6–M4.7 PLANNED |
+| Next planned review | Separate M4.5 implementation authorization/review; implementation is not automatically authorized |
 
 The independently rerun 364-test full suite passed in 6.86s at implementation commit `7102859`.
 
@@ -281,6 +282,18 @@ Empty no-bar/no-trade results return the complete zero-valued contract. Trades w
 - Implementation files: production +134 / -3; tests +454 / -0; total +588 / -3
 - Independent `git diff --check`: clean
 
+## M4.5 accepted design baseline
+
+M4.5 is READY at accepted design scope. Implementation remains NOT_STARTED and NOT AUTHORIZED. The accepted design is based on source baseline `30e6200`, while the latest implementation/test evidence remains the completed M4.4 baseline `7102859` with an independently passing 364-test full suite.
+
+The accepted AD-018 Backtest target uses authoritative current pre-entry `PortfolioManager` equity for stop-distance and max-position sizing. Actual next-open fill after configured BUY slippage is used, stop context remains limited to the prior completed-bar decision, and current candle high/low/close cannot influence open-time sizing. Risk/max-position sizing remains distinct from available-cash affordability. The largest affordable integer quantity must satisfy notional plus enabled entry transaction cost less than or equal to authoritative cash; no affordable share produces `INSUFFICIENT_CASH`, and an accepted unlevered long entry cannot create negative cash. `max_position_pct` must be finite and positive but is not restricted to 100 because cash affordability is the hard no-leverage boundary.
+
+Daily and weekly M4.5 entry guards use sticky period-start-equity loss rather than period peak-to-current drawdown. Authoritative realized, unrealized and transaction-cost effects participate through equity. Exact-threshold breach blocks new entries for the remainder of that date or `(ISO year, ISO week)` while exits and protective stops remain allowed and no forced liquidation is introduced. Period identities use represented candle-calendar fields without localization, exchange calendars or synthetic sessions. Baselines use authoritative equity carried from the prior completed/marked bar before the new candle's open-time execution.
+
+The accepted order preserves M4.3: period transitions use timestamp and carried equity; pending open-time action then uses current open and prior-decision stop context; authoritative equity is observed after entry, exit or close marking; strategy evaluation follows completed-bar marking and risk observation. Backtest must not additionally accumulate `Trade.pnl` percentages into the equity guard. Effective Backtest risk propagates `AppConfig.risk_per_trade_pct` through `RuntimeContext`, `BacktestEngine` and `TradeExecutionEngine`; `BacktestConfig` and frozen AD-015 v1 remain unchanged. WFA may inherit corrected shared Backtest mechanics, but WFA-specific configuration and economic validity remain M5 work.
+
+Expected M4.5 production impact and the 44-case future validation matrix are recorded in the Roadmap and Validation Plan. No implementation or validation evidence is claimed by this design baseline.
+
 ## Current work
 
 M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `7102859 Implement M4.4 account performance metrics` with an independently passing 364-test full suite.
@@ -293,7 +306,7 @@ M4 — Backtest Validity remains IN_PROGRESS. M4.2, M4.3 and M4.4 are implemente
 - M4.2 — Signal/execution state agreement — DONE at accepted implementation/validation scope
 - M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope
 - M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope
-- M4.5 — Risk sizing and drawdown validity — PLANNED
+- M4.5 — Risk sizing and drawdown validity — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED
 - M4.6 — Research manifest and deterministic references — PLANNED
 - M4.7 — Backtest validity integration — PLANNED
 
@@ -303,7 +316,7 @@ M4.3 now implements and validates completed-bar decisions, one pending intent, n
 
 M4.4 now implements and validates result-aware authoritative Backtest metrics, equity-derived account return and maximum drawdown, explicit completed-trade monetary and instrument-return statistics, zero-trade/open-position behavior, failure boundaries and full-precision programmatic results while preserving the legacy WFA compatibility path.
 
-The next planned action is a separate M4.5 risk sizing and drawdown validity design/review. M4.5 may become READY only after review; it is not automatically authorized or IN_PROGRESS. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.5 now has an accepted design contract under AD-018 but no implementation or validation evidence. The next planned action is a separate M4.5 implementation authorization/review. M4.5 remains READY at design scope and does not become IN_PROGRESS or implementation-authorized automatically. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

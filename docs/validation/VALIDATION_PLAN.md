@@ -608,9 +608,9 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 ## 9. M4 — Backtest Validity
 
-**Status:** IN_PROGRESS / partially validated through completed M4.2, M4.3 and M4.4
+**Status:** IN_PROGRESS / partially validated through completed M4.2, M4.3 and M4.4; M4.5 READY at accepted design scope
 
-M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011 and AD-016 contracts. M4.2, M4.3 and M4.4 are validated at their accepted scopes, while M4.5–M4.7 remain unvalidated. The latest accepted full suite is 364 passed at `7102859`.
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011, AD-016 and AD-018 contracts. M4.2, M4.3 and M4.4 are validated at their accepted scopes. M4.5 is READY at accepted design scope but its implementation is NOT_STARTED / NOT AUTHORIZED and all evidence below remains future work; M4.6–M4.7 also remain unvalidated. The latest accepted full suite remains 364 passed at M4.4 implementation `7102859`.
 
 ### M4.1 — Backtest economic contract
 
@@ -754,9 +754,99 @@ The implementation leaves `BacktestResult`, `BarRecord` and `Trade` schemas, `Tr
 
 ### M4.5 — Risk sizing and drawdown validity
 
-**Status:** PLANNED / not validated
+**Status:** READY at accepted design scope / implementation NOT_STARTED / NOT AUTHORIZED / not validated
 
-Future evidence must cover current-pre-entry-equity risk sizing, available-cash affordability, transaction-cost-aware purchase limits, daily/weekly equity-risk behavior, unrealized-P&L treatment, and explicit trading-session/reset semantics.
+AD-018 is the future validation authority. M4.5 must prove that Backtest sizing uses authoritative current pre-entry equity, that cash affordability includes enabled entry transaction cost, and that daily/weekly entry guards use sticky period-start authoritative equity loss rather than peak-to-current drawdown or accumulated trade percentages. It must preserve M4.3 no-lookahead ordering and M4.2 feedback/state convergence while leaving M4.4 historical maximum drawdown separate.
+
+The accepted sizing reference is:
+
+~~~text
+risk_budget = sizing_equity * risk_per_trade_pct / 100
+price_risk_per_share = actual_entry_fill - stop_price
+risk_quantity = floor(risk_budget / price_risk_per_share)
+max_position_notional = sizing_equity * max_position_pct / 100
+max_position_quantity = floor(max_position_notional / actual_entry_fill)
+candidate_quantity = min(risk_quantity, max_position_quantity)
+~~~
+
+The accepted affordability result is the largest integer quantity `q` no greater than the candidate for which actual-fill notional plus enabled `BrokerageModel` entry cost is no greater than authoritative cash. When brokerage is disabled, only notional participates. `max_position_pct` must be finite and positive but is not restricted to at most 100 because affordability is the final unlevered cash boundary. No affordable share produces `INSUFFICIENT_CASH`; successful entry cannot create negative cash; final accepted entry cost is charged once.
+
+The accepted guard formula is:
+
+~~~text
+period_loss_pct = max(
+    0,
+    (period_start_equity - current_equity)
+    / period_start_equity
+    * 100
+)
+~~~
+
+Daily identity is represented candle date and weekly identity is represented `(ISO year, ISO week)`. Baselines use authoritative equity carried before the first observed candle's current-period open-time execution. Exact threshold breaches and latches against new entries for the rest of the period; gains do not raise baselines; recovery does not reopen entries; realized, unrealized and transaction-cost effects enter through equity; exits remain allowed; and no forced liquidation is introduced. Non-positive baseline equity latches without division, non-finite equity fails explicitly and greater-than-100% loss is not clipped. No exchange calendar, timestamp conversion or synthetic session is implied.
+
+#### Future deterministic M4.5 evidence
+
+No item below has been executed or accepted as implementation evidence. Future implementation authorization must produce deterministic proof for:
+
+##### Position sizing
+
+1. equity 100000, risk 1%, entry 100 and stop 90 produces quantity 100;
+2. equity 110000 under the same risk/price inputs produces quantity 110;
+3. equity 90000 under the same risk/price inputs produces quantity 90;
+4. original capital 100000 with current equity 50000 produces quantity 50, proving original capital no longer controls later sizing;
+5. `max_position_pct` caps quantity from current equity rather than original capital;
+6. zero or negative equity produces no valid entry quantity;
+7. non-finite equity fails explicitly; and
+8. missing, equal-entry, above-entry or otherwise invalid long stop is rejected.
+
+##### Available-cash affordability
+
+9. a fully affordable sizing candidate remains unchanged;
+10. a sizing candidate exceeding available cash is reduced;
+11. enabled brokerage can make otherwise affordable raw notional unaffordable;
+12. the largest affordable integer quantity no greater than the candidate is selected;
+13. inability to afford one share produces `INSUFFICIENT_CASH` without portfolio mutation;
+14. accepted entry cannot produce negative authoritative cash;
+15. brokerage-disabled affordability uses notional alone;
+16. accepted entry cost is applied exactly once;
+17. brokerage cap and component/total rounding boundaries preserve correct affordability selection; and
+18. one-share cases immediately below, equal to and above required cash obey the inclusive `required_cash <= available_cash` contract.
+
+##### Daily and weekly equity-loss guards
+
+19. daily loss below threshold permits a new entry;
+20. loss exactly equal to the daily threshold blocks entry;
+21. loss exactly equal to the weekly threshold blocks entry;
+22. a represented new date resets daily baseline/latch while preserving weekly state;
+23. a new represented `(ISO year, ISO week)` resets weekly baseline/latch;
+24. ISO-year/week identity resets correctly across year boundaries, including sparse observations with equal week numbers in different years;
+25. unrealized marked loss alone can breach a guard;
+26. entry or exit transaction cost can contribute to breach through authoritative equity;
+27. realized loss contributes through authoritative post-close equity;
+28. gain followed by decline is measured from period start rather than period peak;
+29. a breached period remains latched despite recovery;
+30. a carried position uses prior completed/marked authoritative equity at a day/week transition;
+31. sparse date/week changes reset at the first observed new identity without synthetic sessions;
+32. non-positive period-start equity latches without division;
+33. negative equity can produce greater-than-100% period loss without clipping; and
+34. simultaneous daily and weekly breach/reset behavior is deterministic.
+
+##### Ordering, configuration and regression
+
+35. current-open sizing cannot observe the current candle high, low or close;
+36. a gap-stop after a period transition is measured from the new period's carried-equity baseline;
+37. M4.3 next-open, gap/ordinary-stop and same-bar entry/protective-stop behavior remains intact;
+38. M4.2 ordered feedback, rejection handling and strategy/execution state agreement remains intact;
+39. M4.4 account return and historical maximum equity drawdown remain intact and separate from M4.5 guards;
+40. every rejected entry leaves authoritative cash, position, completed trades and transaction-cost accounting unchanged and exposes no stale execution diagnostics;
+41. effective `AppConfig.risk_per_trade_pct` reaches canonical Backtest execution through `RuntimeContext`, `BacktestEngine` and `TradeExecutionEngine`;
+42. WFA-specific APIs, capital/configuration propagation, scoring, metric keys, stitching and verdicts are not migrated, while inherited shared Backtest changes do not create a WFA validity claim;
+43. legacy non-Backtest `on_signal()` compatibility is explicitly assessed without claiming its economics valid or migrating PaperRuntime/live policy; and
+44. independent full-suite regression is required before M4.5 implementation closure.
+
+Expected M4.5 production impact is `core/risk/risk_manager.py`, `core/risk/drawdown_risk_manager.py`, `core/execution/trade_execution_engine.py`, `core/portfolio/portfolio_manager.py`, `core/execution/execution_feedback.py`, `core/runtime/runtime_context.py`, `core/backtest/backtest_engine.py` and `main.py`. `BacktestResult`, `BarRecord`, `Trade`, `Position`, TradeBuilder, BrokerageModel, SlippageModel, StopLossManager, PortfolioRiskManager, PositionBook, BacktestConfig, AppConfig/loaders, BacktestRuntime, PaperRuntime, BrokerExecutionEngine, WFA production, M4.4 metrics and research identity/fingerprint code are expected unchanged unless a documented implementation blocker is proven.
+
+This future validation does not include WFA validity/configuration migration, M4.6 successor identity, M4.7 integration, PaperRuntime or broker/live risk migration, multi-symbol redesign, exchange calendars, exact broker/tax fidelity, leverage/margin/shorts/derivatives, forced liquidation, PivotBoss or obsolete standalone-script repair, or API/frontend behavior. Frozen AD-015 v1 remains unchanged.
 
 ### M4.6 — Research manifest and deterministic references
 

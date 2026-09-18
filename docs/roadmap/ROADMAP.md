@@ -66,7 +66,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
   - **M4.3 — DONE** — Execution timing and stop/fill validity at accepted implementation/validation scope.
   - **M4.4 — DONE** — Account returns and performance metrics at accepted implementation/validation scope.
-  - **M4.5 — PLANNED** — Risk sizing and drawdown validity.
+  - **M4.5 — READY** — Risk sizing and drawdown validity at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED.
   - **M4.6 — PLANNED** — Research manifest and deterministic references.
   - **M4.7 — PLANNED** — Backtest validity integration.
 - **M5 — RESERVED** — WFA validity.
@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.4 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.4 are DONE at their accepted scopes, and M4.5–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.4 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.4 are DONE at their accepted scopes, M4.5 is READY at accepted design scope with implementation NOT_STARTED / NOT AUTHORIZED, and M4.6–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -568,7 +568,7 @@ The accepted target is:
 
 Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth, and strategy-local belief changes only after authoritative execution feedback.
 
-M4.2 implements a typed, immutable feedback contract that supports an ordered sequence of events. Its event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. Each event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. M4.5 may extend the same contract for later accepted reasons such as insufficient cash; those later semantics remain outside M4.2.
+M4.2 implements a typed, immutable feedback contract that supports an ordered sequence of events. Its event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. Each event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current implemented rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. AD-018 accepts `INSUFFICIENT_CASH` as an M4.5 target extension; it remains unimplemented and outside M4.2.
 
 The target feedback flow is:
 
@@ -625,22 +625,40 @@ The authoritative names are `completed_trade_count`, `net_profitable_trade_count
 
 The accepted evidence covers the authoritative 15-key result contract, instrument/account separation, equity-derived account P&L and return, equity-derived historical maximum drawdown, transaction costs, final unrealized equity, zero-trade and open-position behavior, explicit invalid-equity/result failures, unrounded programmatic values, console presentation and unchanged WFA production compatibility. `BacktestResult`, `BarRecord` and `Trade` schemas, `TradeBuilder.pnl_pct` semantics and AD-015 v1 remain unchanged. No M4.5, M4.6 or M5 implementation occurred.
 
+#### M4.5 — Risk sizing and drawdown validity
+
+**Status:** READY at accepted design scope. Implementation is NOT_STARTED and NOT AUTHORIZED.
+
+AD-018 defines the accepted target. A Backtest long entry uses authoritative current pre-entry `PortfolioManager` equity. Risk budget is current equity multiplied by `risk_per_trade_pct`; price risk per share is actual next-open BUY fill after configured slippage minus the prior-decision stop; and the risk quantity is capped by max-position notional calculated from the same current equity. Current candle high, low and close cannot influence open-time sizing. Equity, prices and risk inputs must be finite; the long stop must be strictly below the actual fill; zero/negative equity or quantity below one cannot produce an entry. `max_position_pct` must be finite and positive but is not capped at 100 by configuration because authoritative cash affordability is the final unlevered safety boundary.
+
+Risk/max-position sizing and affordability are separate constraints. For quantity `q`, required cash is actual fill notional plus the current `BrokerageModel` entry cost when brokerage is enabled, otherwise notional alone. M4.5 must choose the largest affordable integer quantity no greater than the sizing candidate. Search-time cost calculations are pure; only final accepted entry cost is charged once. If no share is affordable, execution rejects with `INSUFFICIENT_CASH` without mutating portfolio or cost state. `PortfolioManager` defensively rejects any unaffordable long entry, and accepted entry cannot make authoritative cash negative.
+
+Daily and weekly entry guards use period-start authoritative equity, not period peak-to-current drawdown. Period loss is `max(0, (period_start_equity - current_equity) / period_start_equity * 100)`. Gains do not raise baselines; realized P&L, unrealized marked P&L and transaction costs participate through equity; exact-threshold breach blocks new entries and latches for the rest of that period. Exits and protective stops remain allowed and no forced liquidation is introduced. A new represented candle date resets only the daily baseline/latch; a new `(ISO year, ISO week)` resets weekly state; non-positive period-start equity latches without division; negative equity may produce more than 100% loss without clipping; non-finite observed equity fails explicitly. M4.4 historical maximum equity drawdown remains a separate reporting concept.
+
+M4.5 uses candle-calendar boundaries from the timestamp representation already supplied by canonical candles. It does not localize timestamps, alter `DatasetContext` timezone semantics, infer holidays, create missing sessions or introduce an exchange calendar. Sparse data transitions on the first observed new identity. A carried position's new baseline is the authoritative equity from the prior completed/marked bar before current-period open-time execution, so a subsequent gap-stop effect belongs to the new period.
+
+M4.3 ordering remains authoritative. Period transitions first use only timestamp and carried equity. A pending BUY then respects existing latches, derives actual open fill, validates prior-decision stop, samples pre-entry equity/cash, sizes and enforces affordability. Equity is observed after authoritative entry, exit or close-mark mutation; trade percentages are not separately accumulated. Strategy evaluation occurs only after surviving positions are marked to close and risk state is observed. `AppConfig.risk_per_trade_pct` must propagate through an effective `RuntimeContext` setting to `BacktestEngine` and `TradeExecutionEngine`, with a compatible 1% default and no duplicate `BacktestConfig` field.
+
+The target adds `INSUFFICIENT_CASH`; retains `INVALID_ENTRY`, `INVALID_QUANTITY`, `DRAWDOWN_LIMIT` and `PORTFOLIO_RISK_LIMIT`; treats non-finite authoritative equity, cash, fill or cost as invariant failure; and requires rejected attempts to preserve portfolio/accounting state and clear stale execution diagnostics. Expected production impact is limited to `core/risk/risk_manager.py`, `core/risk/drawdown_risk_manager.py`, `core/execution/trade_execution_engine.py`, `core/portfolio/portfolio_manager.py`, `core/execution/execution_feedback.py`, `core/runtime/runtime_context.py`, `core/backtest/backtest_engine.py` and `main.py` unless an implementation blocker is proven.
+
+M4.5 does not migrate WFA-specific risk/configuration, metrics, scoring, stitching or verdicts; WFA may inherit corrected shared Backtest mechanics without becoming economically validated. It does not change AD-015 v1, create the M4.6 successor identity, migrate PaperRuntime or broker/live policy, redesign multi-symbol risk, introduce exchange calendars, leverage/margin/shorts/derivatives, force liquidation, repair PivotBoss/standalone scripts, or change API/frontend behavior. The next action requires separate implementation authorization.
+
 #### Child-step responsibilities
 
 - **M4.2 — Signal/execution state agreement:** DONE at accepted implementation/validation scope under AD-017.
 - **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
 - **M4.4 — Account returns and performance metrics:** DONE/CLOSED at accepted implementation/validation scope; preserves instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API.
-- **M4.5 — Risk sizing and drawdown validity:** use current pre-entry equity, enforce transaction-cost-aware affordability, and define daily/weekly equity-risk and session/reset semantics.
+- **M4.5 — Risk sizing and drawdown validity:** READY at accepted design scope under AD-018; implementation NOT_STARTED / NOT AUTHORIZED. The accepted target uses current pre-entry equity, transaction-cost-aware cash affordability, sticky period-start-equity entry guards and represented candle-calendar resets.
 - **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
 - **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
 
-**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
+**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics, and AD-018 owns the accepted M4.5 sizing, affordability and period-loss-guard target. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
 
 **Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 364 passed at `7102859`; M4.1 remains documentation/design evidence only.
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.2 through M4.4 are DONE/CLOSED at their accepted scopes. M4.5–M4.7 remain PLANNED and M5 remains RESERVED. The next planned action is a separate M4.5 design/review; M4.5 may become READY only after review and is not automatically authorized or IN_PROGRESS.
+M4 is IN_PROGRESS and is not complete. M4.2 through M4.4 are DONE/CLOSED at their accepted scopes. M4.5 is READY at accepted design scope with implementation NOT_STARTED / NOT AUTHORIZED; M4.6–M4.7 remain PLANNED and M5 remains RESERVED. The next planned action is a separate M4.5 implementation authorization/review. Design acceptance does not make implementation authorized or IN_PROGRESS.
 
 ### M5 — WFA validity
 

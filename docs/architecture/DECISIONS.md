@@ -283,7 +283,7 @@ The authoritative metric names are `completed_trade_count`, `net_profitable_trad
 
 Execution and portfolio state are authoritative over strategy-local position belief. M4 must provide explicit agreement for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must also enforce available-cash affordability including entry transaction costs.
 
-Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. Detailed daily/weekly equity-risk, unrealized-P&L and session/reset semantics remain M4.5 work.
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. AD-018 records the accepted M4.5 target for daily/weekly equity-risk, unrealized-P&L and session/reset semantics; production implementation remains pending.
 
 The configured simplified `BrokerageModel` must be applied exactly once where applicable, be independently enabled or disabled, and flow consistently into cash, trade P&L and account equity. This decision does not claim exact AngelOne, exchange, product or tax fidelity.
 
@@ -299,13 +299,76 @@ AD-017 defines intended M4.2 design authority. It does not claim that the contra
 
 Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth. Strategy-local state changes from execution feedback after the authoritative outcome, not merely because BUY or SELL was emitted.
 
-Execution feedback is typed, immutable and ordered. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. An event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. Later M4.3/M4.5 work may extend the same reason contract for its own accepted failure semantics.
+Execution feedback is typed, immutable and ordered. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. An event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current implemented rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. AD-018 accepts future M4.5 extension with `INSUFFICIENT_CASH`; that target does not claim implementation.
 
 The feedback path is `TradeExecutionEngine` → `BacktestEngine` → `StrategyRunner` → an optional BaseStrategy execution-feedback hook. The hook defaults to a no-op for compatibility. `TradeExecutionEngine` does not directly mutate strategy-local state. A feedback-handler failure fails the Backtest explicitly rather than allowing execution and strategy state to diverge silently.
 
 The contract supports multiple ordered events within one candle and must not impose a one-event-per-candle limitation. In particular, future M4.3 timing may produce `ENTRY_ACCEPTED` followed by `PROTECTIVE_EXIT` on the same bar. Contradictory validated-research states fail explicitly when they indicate disagreement, including BUY while authoritative state is LONG or SELL while authoritative state is FLAT.
 
 `SMACrossOverStrategy` is the M4.2 reference strategy. Emitting BUY does not set its local position open; `ENTRY_ACCEPTED` does, while `ENTRY_REJECTED` leaves or sets it flat. Emitting SELL does not set it flat before execution; `STRATEGY_EXIT` and `PROTECTIVE_EXIT` do. PivotBoss remains unvalidated and outside M4.2 validated strategy scope.
+
+### AD-018 — Backtest current-equity sizing and period-loss guards v1
+
+**Status:** ACCEPTED
+
+**Target:** M4.5
+
+AD-018 refines AD-001, AD-002 and AD-016; it does not supersede them. It defines accepted M4.5 Backtest target design and does not claim that production implementation or validation already satisfies the contract. AD-015 v1 remains frozen.
+
+#### Current-equity sizing
+
+`PortfolioManager` equity and cash are authoritative. A Backtest long entry sizes from authoritative current pre-entry equity sampled immediately before entry mutation. Risk budget is `sizing_equity * risk_per_trade_pct / 100`; price risk per share is actual entry fill after configured BUY slippage minus the stop retained from the prior completed-bar decision; risk quantity is the floor of risk budget divided by price risk; max-position notional is `sizing_equity * max_position_pct / 100`; max-position quantity is its floor after division by actual fill; and the candidate quantity is the smaller result.
+
+Initial capital does not remain the sizing denominator after account equity changes. Current candle high, low and close cannot affect open-time sizing. A long stop must be strictly below actual fill. Equity, prices and risk inputs must be finite; `risk_per_trade_pct` and `max_position_pct` must be finite and strictly positive; zero/negative equity and a quantity below one produce no valid entry. The existing fixed-construction-capital RiskManager path may remain temporarily for excluded legacy callers, but Backtest must use an explicitly current-equity-aware boundary.
+
+AD-018 does not impose `max_position_pct <= 100` as a configuration invariant. Available-cash affordability is the final unlevered safety boundary, so a configured value above 100 cannot authorize spending beyond authoritative cash.
+
+#### Available-cash affordability
+
+Risk-distance sizing, max-position sizing and affordability are separate constraints. For integer quantity `q`, notional is actual entry fill multiplied by `q`. When brokerage is enabled, required cash is notional plus `BrokerageModel.calculate(notional).total_cost`; when disabled, required cash is notional. Accepted quantity is the largest affordable integer quantity not exceeding the sizing candidate and must satisfy required cash less than or equal to authoritative available cash.
+
+The current monotonic BrokerageModel permits deterministic binary search, but the durable decision is the selected largest affordable result, not the search mechanism. Search-time cost calculations are pure; only final accepted entry cost is charged exactly once. When no quantity of at least one is affordable, entry is rejected without portfolio mutation using `ExecutionRejectionReason.INSUFFICIENT_CASH`. `PortfolioManager` defensively rejects an unaffordable long entry if execution violates the pre-check. An accepted unlevered long entry cannot create negative authoritative cash.
+
+#### Period-start-equity loss guards
+
+Daily and weekly Backtest guards use period-start authoritative equity rather than period peak-to-current drawdown:
+
+~~~text
+period_loss_pct = max(
+    0,
+    (period_start_equity - current_equity)
+    / period_start_equity
+    * 100
+)
+~~~
+
+Daily baseline is authoritative equity carried into the first observed candle of a represented date. Weekly baseline is authoritative equity carried into the first observed candle of a represented `(ISO year, ISO week)`. Gains do not raise or reset either baseline. Realized P&L, unrealized marked P&L and transaction costs enter only through authoritative equity; the Backtest path does not additionally accumulate `Trade.pnl` or trade-return percentages.
+
+Loss equal to or greater than its configured threshold is a breach. A daily or weekly breach blocks new entries only and latches for the remainder of that period; recovery does not reopen entries. Exits and protective stops remain allowed, and no forced liquidation is introduced. A new date resets only daily baseline/latch, a new ISO-year/week resets weekly baseline/latch, and simultaneous transitions reset both as applicable. Negative account equity may produce loss greater than 100% without clipping. Non-finite observed equity is an invariant failure. Non-positive period-start equity latches the affected period without division.
+
+M4.4 historical `max_equity_drawdown_pct` remains a separate account-reporting concept and is not the M4.5 entry guard.
+
+#### Candle-calendar boundaries
+
+Daily identity is `candle.timestamp.date()` and weekly identity is represented `(ISO year, ISO week)`. Naive timestamps use represented naive fields; aware timestamps use represented local fields. AD-018 does not localize or convert timestamps, change `DatasetContext` timezone semantics, infer holidays, create synthetic missing sessions or imply an exchange calendar. Sparse data transitions on the first observed candle with a different period identity.
+
+For a position carried across a boundary, the new baseline is authoritative equity carried from the prior completed/marked bar before the new candle's open-time execution. Consequently, a gap-stop economic effect after the transition belongs to the new period.
+
+#### No-lookahead state ordering
+
+AD-016/M4.3 execution priority remains authoritative. Each Backtest candle begins from portfolio state carried from the prior completed bar. Period initialization or transition uses only current timestamp and carried equity. A pending BUY first respects existing latches, determines actual open fill, validates the prior-decision stop, samples current pre-entry equity and cash, calculates risk/max-position quantity and enforces affordability.
+
+After accepted entry, the position and entry cost mutate authoritative portfolio state once and the resulting equity is then observed. After exit, fill/cost are determined, `PortfolioManager` closes first and authoritative post-close equity is then observed without separately adding trade P&L. Gap stop, queued discretionary SELL, ordinary stop, same-bar post-entry protection and ordered feedback remain unchanged. A surviving open position is marked to current close; post-mark equity is observed; only then does the strategy evaluate the completed candle and queue its next intent. Current candle high, low and close never influence a current-open entry except that the later low retains its accepted M4.3 protective-stop role after entry.
+
+#### Configuration and failure contract
+
+Canonical Backtest effective risk propagates `AppConfig.risk_per_trade_pct` through a compatible `RuntimeContext` setting to `BacktestEngine` and `TradeExecutionEngine`. M4.5 does not duplicate the setting in `BacktestConfig`. WFA-specific risk/configuration propagation remains M5 work, although WFA may inherit corrected shared Backtest mechanics because it uses `BacktestEngine`; this inheritance does not validate WFA economics and does not justify a deliberately incorrect legacy Backtest fork.
+
+Accepted rejection meanings are: `INVALID_ENTRY` for missing/invalid long stop or stop not strictly below actual fill; `INVALID_QUANTITY` when equity/risk sizing produces no valid quantity; `DRAWDOWN_LIMIT` when a daily/weekly equity-loss latch blocks entry; existing `PORTFOLIO_RISK_LIMIT`; and `INSUFFICIENT_CASH` when otherwise-legitimate sizing cannot fund one share including enabled entry cost. Non-finite authoritative equity, cash, fill or transaction cost is an invariant failure rather than a normal rejection. Rejection leaves authoritative cash, position state, completed trades and transaction-cost accounting unchanged. Execution diagnostics, including `last_transaction_cost`, reset before every attempt.
+
+#### Consequences and scope
+
+M4.5 production must preserve authoritative portfolio ownership, explicit fill/cost ownership, M4.2 strategy/execution agreement, M4.3 no-lookahead ordering and M4.4 reporting semantics. PaperRuntime and broker/live risk-policy migration, WFA validity/configuration migration, multi-symbol risk redesign, exchange session/holiday calendars, exact broker/exchange/tax fidelity, leverage, margin, shorts, derivatives, forced liquidation, PivotBoss or obsolete standalone-script repair, API/frontend changes, M4.6 successor identity and M4.7 integration are excluded from validated M4.5 scope.
 
 ## Decision workflow
 

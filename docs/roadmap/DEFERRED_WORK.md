@@ -13,7 +13,9 @@ Existing identifiers are permanent.
 
 Account-level net realized trade contribution was corrected in M2.3. Daily and weekly drawdown controls still aggregate recorded closed-trade percentages rather than being defined from actual account equity through time, including unrealized P&L where appropriate.
 
-Required work: define the intended daily/weekly denominator, treatment of realized and unrealized changes, session boundaries, reset semantics, and deterministic validation cases.
+AD-018 now defines the accepted M4.5 Backtest target. Daily and weekly entry guards use period-start authoritative equity rather than period peak-to-current drawdown. Realized P&L, unrealized marked P&L and transaction costs participate through equity; exact-threshold breaches latch against new entries for the remainder of the represented candle date or `(ISO year, ISO week)`; gains do not raise baselines; exits remain allowed; and no forced liquidation is introduced. Period baselines use authoritative equity carried from the prior completed/marked bar before the first observed candle's current-period execution. Sparse data resets on the first observed new identity without timestamp conversion, exchange calendars or synthetic sessions.
+
+M4.5 implementation and validation remain pending. Current Backtest controls still aggregate closed-trade percentages, so DW-001 remains OPEN. M5 must later establish corresponding WFA configuration propagation and economic validity; the accepted Backtest design does not validate WFA, PaperRuntime or live risk behavior.
 
 ## DW-002 — P&L Percentage Accounting
 
