@@ -283,7 +283,7 @@ The authoritative metric names are `completed_trade_count`, `net_profitable_trad
 
 Execution and portfolio state are authoritative over strategy-local position belief. M4 must provide explicit agreement for accepted entry, rejected entry, strategy exit and forced/protective exit. Position sizing targets current pre-entry account equity and must also enforce available-cash affordability including entry transaction costs.
 
-Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. AD-018 records the accepted M4.5 target for daily/weekly equity-risk, unrealized-P&L and session/reset semantics; production implementation remains pending.
+Instrument price return, gross monetary trade P&L, net monetary trade P&L and account/equity return remain distinct under AD-011. `Trade.pnl_pct` retains instrument-price-return meaning unless explicitly migrated and is not authoritative account return. Account return, performance and drawdown derive from authoritative portfolio/equity state rather than synthetic compounding of trade percentages. AD-018 records the accepted and now implemented M4.5 Backtest contract for daily/weekly equity-risk, unrealized-P&L and session/reset semantics.
 
 The configured simplified `BrokerageModel` must be applied exactly once where applicable, be independently enabled or disabled, and flow consistently into cash, trade P&L and account equity. This decision does not claim exact AngelOne, exchange, product or tax fidelity.
 
@@ -299,7 +299,7 @@ AD-017 defines intended M4.2 design authority. It does not claim that the contra
 
 Strategy signals are intents rather than proof of execution. `TradeExecutionEngine` and `PortfolioManager` own authoritative position truth. Strategy-local state changes from execution feedback after the authoritative outcome, not merely because BUY or SELL was emitted.
 
-Execution feedback is typed, immutable and ordered. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. An event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Current implemented rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, and portfolio-risk rejection. AD-018 accepts future M4.5 extension with `INSUFFICIENT_CASH`; that target does not claim implementation.
+Execution feedback is typed, immutable and ordered. Its logical event types are `ENTRY_ACCEPTED`, `ENTRY_REJECTED`, `STRATEGY_EXIT` and `PROTECTIVE_EXIT`. An event carries its type, symbol, timestamp, authoritative position state after the event, and applicable fill price, quantity or machine-readable rejection reason. Implemented rejection classes include drawdown-limit, invalid-quantity or invalid-entry conditions, portfolio-risk rejection and the AD-018 `INSUFFICIENT_CASH` extension.
 
 The feedback path is `TradeExecutionEngine` → `BacktestEngine` → `StrategyRunner` → an optional BaseStrategy execution-feedback hook. The hook defaults to a no-op for compatibility. `TradeExecutionEngine` does not directly mutate strategy-local state. A feedback-handler failure fails the Backtest explicitly rather than allowing execution and strategy state to diverge silently.
 
@@ -313,7 +313,7 @@ The contract supports multiple ordered events within one candle and must not imp
 
 **Target:** M4.5
 
-AD-018 refines AD-001, AD-002 and AD-016; it does not supersede them. It defines accepted M4.5 Backtest target design and does not claim that production implementation or validation already satisfies the contract. AD-015 v1 remains frozen.
+AD-018 refines AD-001, AD-002 and AD-016; it does not supersede them. It was accepted as the M4.5 Backtest target design before implementation and did not originally claim production or validation evidence. AD-015 v1 remains frozen.
 
 #### Current-equity sizing
 
@@ -369,6 +369,10 @@ Accepted rejection meanings are: `INVALID_ENTRY` for missing/invalid long stop o
 #### Consequences and scope
 
 M4.5 production must preserve authoritative portfolio ownership, explicit fill/cost ownership, M4.2 strategy/execution agreement, M4.3 no-lookahead ordering and M4.4 reporting semantics. PaperRuntime and broker/live risk-policy migration, WFA validity/configuration migration, multi-symbol risk redesign, exchange session/holiday calendars, exact broker/exchange/tax fidelity, leverage, margin, shorts, derivatives, forced liquidation, PivotBoss or obsolete standalone-script repair, API/frontend changes, M4.6 successor identity and M4.7 integration are excluded from validated M4.5 scope.
+
+#### Subsequent implementation and validation evidence
+
+The accepted contract was subsequently implemented by `57ccface0f086dd12e38fca9cfed3b5aa92fbe9c Implement M4.5 risk sizing and drawdown validity` from design baseline `78e4493430dab2a9389bfda4e41b1149ef038f7f`. Focused M4.5/regression validation passed 193 tests in 3.01s, and independent full regression passed 443 tests in 9.03s with exit code 0. Independent `git diff --check` was clean. This evidence implements AD-018 for canonical Backtest only; it does not change the decision's normative contract or validate the excluded WFA, PaperRuntime, live/broker, M4.6 or M4.7 scopes.
 
 ## Decision workflow
 

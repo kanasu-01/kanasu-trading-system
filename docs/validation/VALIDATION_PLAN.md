@@ -608,9 +608,10 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 ## 9. M4 — Backtest Validity
 
-**Status:** IN_PROGRESS / partially validated through completed M4.2, M4.3 and M4.4; M4.5 READY at accepted design scope
+**Status:** IN_PROGRESS / partially validated through completed M4.2, M4.3, M4.4 and M4.5
 
-M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011, AD-016 and AD-018 contracts. M4.2, M4.3 and M4.4 are validated at their accepted scopes. M4.5 is READY at accepted design scope but its implementation is NOT_STARTED / NOT AUTHORIZED and all evidence below remains future work; M4.6–M4.7 also remain unvalidated. The latest accepted full suite remains 364 passed at M4.4 implementation `7102859`.
+M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011, AD-016 and AD-018 contracts. M4.2 through M4.5 are validated at their accepted scopes.
+M4.6–M4.7 remain unvalidated, so M4 remains IN_PROGRESS. The latest accepted full suite is 443 passed in 9.03s at M4.5 implementation `57ccfac`.
 
 ### M4.1 — Backtest economic contract
 
@@ -754,9 +755,9 @@ The implementation leaves `BacktestResult`, `BarRecord` and `Trade` schemas, `Tr
 
 ### M4.5 — Risk sizing and drawdown validity
 
-**Status:** READY at accepted design scope / implementation NOT_STARTED / NOT AUTHORIZED / not validated
+**Status:** DONE/CLOSED at accepted implementation/validation scope
 
-AD-018 is the future validation authority. M4.5 must prove that Backtest sizing uses authoritative current pre-entry equity, that cash affordability includes enabled entry transaction cost, and that daily/weekly entry guards use sticky period-start authoritative equity loss rather than peak-to-current drawdown or accumulated trade percentages. It must preserve M4.3 no-lookahead ordering and M4.2 feedback/state convergence while leaving M4.4 historical maximum drawdown separate.
+AD-018 is the validation authority. Accepted evidence proves that Backtest sizing uses authoritative current pre-entry equity, cash affordability includes enabled entry transaction cost, and daily/weekly entry guards use sticky period-start authoritative equity loss rather than peak-to-current drawdown or accumulated trade percentages. The implementation preserves M4.3 no-lookahead ordering and M4.2 feedback/state convergence while leaving M4.4 historical maximum drawdown separate.
 
 The accepted sizing reference is:
 
@@ -784,9 +785,9 @@ period_loss_pct = max(
 
 Daily identity is represented candle date and weekly identity is represented `(ISO year, ISO week)`. Baselines use authoritative equity carried before the first observed candle's current-period open-time execution. Exact threshold breaches and latches against new entries for the rest of the period; gains do not raise baselines; recovery does not reopen entries; realized, unrealized and transaction-cost effects enter through equity; exits remain allowed; and no forced liquidation is introduced. Non-positive baseline equity latches without division, non-finite equity fails explicitly and greater-than-100% loss is not clipped. No exchange calendar, timestamp conversion or synthetic session is implied.
 
-#### Future deterministic M4.5 evidence
+#### Accepted deterministic M4.5 evidence
 
-No item below has been executed or accepted as implementation evidence. Future implementation authorization must produce deterministic proof for:
+The following 44-case matrix remains the accepted validation contract. The M4.5 implementation and validation evidence was independently reviewed against AD-018 and this contract. The focused M4.5/regression suite passed 193 tests and the independent full regression passed 443 tests; no one-test-per-item mapping is asserted.
 
 ##### Position sizing
 
@@ -844,9 +845,19 @@ No item below has been executed or accepted as implementation evidence. Future i
 43. legacy non-Backtest `on_signal()` compatibility is explicitly assessed without claiming its economics valid or migrating PaperRuntime/live policy; and
 44. independent full-suite regression is required before M4.5 implementation closure.
 
-Expected M4.5 production impact is `core/risk/risk_manager.py`, `core/risk/drawdown_risk_manager.py`, `core/execution/trade_execution_engine.py`, `core/portfolio/portfolio_manager.py`, `core/execution/execution_feedback.py`, `core/runtime/runtime_context.py`, `core/backtest/backtest_engine.py` and `main.py`. `BacktestResult`, `BarRecord`, `Trade`, `Position`, TradeBuilder, BrokerageModel, SlippageModel, StopLossManager, PortfolioRiskManager, PositionBook, BacktestConfig, AppConfig/loaders, BacktestRuntime, PaperRuntime, BrokerExecutionEngine, WFA production, M4.4 metrics and research identity/fingerprint code are expected unchanged unless a documented implementation blocker is proven.
+Completion evidence:
 
-This future validation does not include WFA validity/configuration migration, M4.6 successor identity, M4.7 integration, PaperRuntime or broker/live risk migration, multi-symbol redesign, exchange calendars, exact broker/tax fidelity, leverage/margin/shorts/derivatives, forced liquidation, PivotBoss or obsolete standalone-script repair, or API/frontend behavior. Frozen AD-015 v1 remains unchanged.
+- Design baseline: `78e4493430dab2a9389bfda4e41b1149ef038f7f Baseline M4.5 risk sizing design`
+- Implementation commit: `57ccface0f086dd12e38fca9cfed3b5aa92fbe9c Implement M4.5 risk sizing and drawdown validity`
+- Focused M4.5/regression suite: 193 passed in 3.01s
+- Independent full regression: 443 passed in 9.03s, exit code 0
+- Previous accepted full-suite baseline: 364 passed; increase: 79 tests
+- Repository line changes: production +301 / -38; tests +911 / -1; total +1212 / -39
+- Independent `git diff --check`: clean
+
+M4.5 production changes are `core/risk/risk_manager.py`, `core/risk/drawdown_risk_manager.py`, `core/execution/trade_execution_engine.py`, `core/portfolio/portfolio_manager.py`, `core/execution/execution_feedback.py`, `core/runtime/runtime_context.py`, `core/backtest/backtest_engine.py` and `main.py`. `BacktestResult`, `BarRecord`, `Trade`, `Position`, TradeBuilder, BrokerageModel, SlippageModel, StopLossManager, PortfolioRiskManager, PositionBook, BacktestConfig, AppConfig/loaders, BacktestRuntime, PaperRuntime, BrokerExecutionEngine, WFA production, M4.4 metrics and research identity/fingerprint code remain unchanged.
+
+The validated M4.5 scope does not include WFA validity/configuration migration, M4.6 successor identity, M4.7 integration, PaperRuntime or broker/live risk migration, multi-symbol redesign, exchange calendars, exact broker/tax fidelity, leverage/margin/shorts/derivatives, forced liquidation, PivotBoss or obsolete standalone-script repair, or API/frontend behavior. WFA may inherit corrected shared Backtest mechanics, but that is not a WFA validity claim. Frozen AD-015 v1 remains unchanged.
 
 ### M4.6 — Research manifest and deterministic references
 

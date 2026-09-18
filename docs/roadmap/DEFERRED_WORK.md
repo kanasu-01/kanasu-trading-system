@@ -8,14 +8,16 @@ Existing identifiers are permanent.
 
 ## DW-001 — Equity-Based Drawdown
 
-**Status:** OPEN
+**Status:** PARTIALLY ADDRESSED
 **Target:** M4.5 / M5 risk and research validity; required before V2.
 
-Account-level net realized trade contribution was corrected in M2.3. Daily and weekly drawdown controls still aggregate recorded closed-trade percentages rather than being defined from actual account equity through time, including unrealized P&L where appropriate.
+Account-level net realized trade contribution was corrected in M2.3. M4.5 has now replaced canonical Backtest closed-trade-percentage aggregation with authoritative-equity observation for daily and weekly entry guards.
 
 AD-018 now defines the accepted M4.5 Backtest target. Daily and weekly entry guards use period-start authoritative equity rather than period peak-to-current drawdown. Realized P&L, unrealized marked P&L and transaction costs participate through equity; exact-threshold breaches latch against new entries for the remainder of the represented candle date or `(ISO year, ISO week)`; gains do not raise baselines; exits remain allowed; and no forced liquidation is introduced. Period baselines use authoritative equity carried from the prior completed/marked bar before the first observed candle's current-period execution. Sparse data resets on the first observed new identity without timestamp conversion, exchange calendars or synthetic sessions.
 
-M4.5 implementation and validation remain pending. Current Backtest controls still aggregate closed-trade percentages, so DW-001 remains OPEN. M5 must later establish corresponding WFA configuration propagation and economic validity; the accepted Backtest design does not validate WFA, PaperRuntime or live risk behavior.
+The M4.5 Backtest portion is implemented and validated by `57ccface0f086dd12e38fca9cfed3b5aa92fbe9c Implement M4.5 risk sizing and drawdown validity` from design baseline `78e4493430dab2a9389bfda4e41b1149ef038f7f`. Focused M4.5/regression validation passed 193 tests in 3.01s; independent full regression passed 443 tests in 9.03s with exit code 0; and independent `git diff --check` was clean.
+
+DW-001 remains PARTIALLY ADDRESSED because M5 must establish corresponding WFA configuration propagation and economic validity, and M4.5 did not migrate or validate PaperRuntime or live/broker risk behavior. WFA may inherit corrected shared Backtest mechanics, but that inheritance is not a WFA validity claim.
 
 ## DW-002 — P&L Percentage Accounting
 
