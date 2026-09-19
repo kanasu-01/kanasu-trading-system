@@ -131,18 +131,46 @@ def test_wfa_aggregate_uses_account_outcomes() -> None:
         ]
     )
 
-    assert metrics == {
-        "total_windows": 3,
-        "profitable_windows": 2,
-        "consistency_ratio": 0.67,
-        "avg_account_return_pct": 0.33,
-        "worst_equity_drawdown_pct": 4.0,
-        "account_return_stability_score": 0.72,
-    }
+    assert metrics["total_windows"] == 3
+    assert metrics["profitable_windows"] == 2
+    assert metrics["consistency_ratio"] == pytest.approx(
+        2 / 3
+    )
+    assert metrics["avg_account_return_pct"] == pytest.approx(
+        1 / 3
+    )
+    assert metrics["worst_equity_drawdown_pct"] == pytest.approx(
+        4.0
+    )
+    assert metrics[
+        "account_return_stability_score"
+    ] == pytest.approx(0.72)
 
     assert "avg_expectancy_pct" not in metrics
     assert "worst_drawdown_pct" not in metrics
     assert "stability_score" not in metrics
+
+
+def test_wfa_aggregate_preserves_verdict_boundary_precision() -> None:
+    metrics = WalkForwardMetrics.aggregate(
+        [
+            {
+                "account_return_pct": 0.004,
+                "max_equity_drawdown_pct": 20.004,
+            }
+        ]
+    )
+
+    assert metrics["consistency_ratio"] == 1.0
+    assert metrics["avg_account_return_pct"] == pytest.approx(
+        0.004
+    )
+    assert metrics["worst_equity_drawdown_pct"] == pytest.approx(
+        20.004
+    )
+    assert metrics[
+        "account_return_stability_score"
+    ] == 1.0
 
 
 @pytest.mark.parametrize(
@@ -178,6 +206,28 @@ def test_wfa_aggregate_rejects_invalid_account_metrics(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         WalkForwardMetrics.aggregate(window_metrics)
+
+
+def test_stitched_metrics_preserve_verdict_boundary_precision() -> None:
+    positive = WalkForwardMetrics.compute_stitched_equity_metrics(
+        [
+            (START, 100.0),
+            (START + timedelta(minutes=15), 100.004),
+        ]
+    )
+    drawdown = WalkForwardMetrics.compute_stitched_equity_metrics(
+        [
+            (START, 100.0),
+            (START + timedelta(minutes=15), 79.996),
+        ]
+    )
+
+    assert positive["stitched_total_return_pct"] == pytest.approx(
+        0.004
+    )
+    assert drawdown[
+        "stitched_max_drawdown_pct"
+    ] == pytest.approx(20.004)
 
 
 def test_stitched_metrics_use_continuous_equity_path() -> None:

@@ -78,3 +78,52 @@ def test_wfa_verdict_accepts_exact_non_return_boundaries() -> None:
         )
         == "PASS"
     )
+
+
+@pytest.mark.parametrize(
+    ("metric_overrides", "stitched_overrides", "expected"),
+    [
+        (
+            {"consistency_ratio": 0.5996},
+            None,
+            "FAIL",
+        ),
+        (
+            {"avg_account_return_pct": 0.004},
+            None,
+            "PASS",
+        ),
+        (
+            {"worst_equity_drawdown_pct": 20.004},
+            None,
+            "FAIL",
+        ),
+        (
+            None,
+            {"stitched_total_return_pct": 0.004},
+            "PASS",
+        ),
+        (
+            None,
+            {"stitched_max_drawdown_pct": 20.004},
+            "FAIL",
+        ),
+        (
+            {"account_return_stability_score": 0.1996},
+            None,
+            "FAIL",
+        ),
+    ],
+)
+def test_wfa_verdict_uses_unrounded_threshold_values(
+    metric_overrides,
+    stitched_overrides,
+    expected,
+) -> None:
+    assert (
+        evaluate(
+            metric_overrides=metric_overrides,
+            stitched_overrides=stitched_overrides,
+        )
+        == expected
+    )

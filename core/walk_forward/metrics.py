@@ -104,18 +104,11 @@ class WalkForwardMetrics:
         return {
             "total_windows": total_windows,
             "profitable_windows": profitable_windows,
-            "consistency_ratio": round(consistency_ratio, 2),
-            "avg_account_return_pct": round(
-                avg_account_return,
-                2,
-            ),
-            "worst_equity_drawdown_pct": round(
-                worst_equity_drawdown,
-                2,
-            ),
-            "account_return_stability_score": round(
-                account_return_stability,
-                2,
+            "consistency_ratio": consistency_ratio,
+            "avg_account_return_pct": avg_account_return,
+            "worst_equity_drawdown_pct": worst_equity_drawdown,
+            "account_return_stability_score": (
+                account_return_stability
             ),
         }
 
@@ -180,14 +173,8 @@ class WalkForwardMetrics:
                 max_drawdown = drawdown
 
         return {
-            "stitched_total_return_pct": round(
-                total_return_pct,
-                2,
-            ),
-            "stitched_max_drawdown_pct": round(
-                max_drawdown,
-                2,
-            ),
+            "stitched_total_return_pct": total_return_pct,
+            "stitched_max_drawdown_pct": max_drawdown,
         }
 
     # ------------------------------------------------------

@@ -277,15 +277,23 @@ def test_m5_5_end_to_end_wfa_validity_chain(monkeypatch):
         for window in result.windows
     ] == pytest.approx([2.0, 1.0, 0.5])
 
-    assert result.aggregated_metrics == {
-        "total_windows": 3,
-        "profitable_windows": 3,
-        "consistency_ratio": 1.0,
-        "avg_account_return_pct": 1.17,
-        "worst_equity_drawdown_pct": 0.0,
-        "account_return_stability_score": 0.72,
-        "avg_optimization_stability": 1.0,
-    }
+    assert result.aggregated_metrics["total_windows"] == 3
+    assert result.aggregated_metrics["profitable_windows"] == 3
+    assert result.aggregated_metrics[
+        "consistency_ratio"
+    ] == pytest.approx(1.0)
+    assert result.aggregated_metrics[
+        "avg_account_return_pct"
+    ] == pytest.approx(7 / 6)
+    assert result.aggregated_metrics[
+        "worst_equity_drawdown_pct"
+    ] == pytest.approx(0.0)
+    assert result.aggregated_metrics[
+        "account_return_stability_score"
+    ] == pytest.approx(0.72)
+    assert result.aggregated_metrics[
+        "avg_optimization_stability"
+    ] == pytest.approx(1.0)
 
     assert [
         equity
@@ -301,10 +309,12 @@ def test_m5_5_end_to_end_wfa_validity_chain(monkeypatch):
         ]
     )
 
-    assert result.stitched_equity_metrics == {
-        "stitched_total_return_pct": 3.54,
-        "stitched_max_drawdown_pct": 0.0,
-    }
+    assert result.stitched_equity_metrics[
+        "stitched_total_return_pct"
+    ] == pytest.approx(3.5351)
+    assert result.stitched_equity_metrics[
+        "stitched_max_drawdown_pct"
+    ] == pytest.approx(0.0)
 
     assert result.verdict == "PASS"
 
