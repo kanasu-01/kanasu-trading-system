@@ -417,6 +417,26 @@ def test_manifest_strategy_parameters_are_deeply_immutable():
         manifest.strategy_params["nested"]["extra"] = 6
 
 
+def test_manifest_strategy_parameter_list_reinitialization_is_rejected():
+    manifest = build_manifest(
+        strategy=NoopStrategy(
+            params={
+                "nested": {
+                    "levels": [1, 2],
+                }
+            }
+        )
+    )
+    levels = manifest.strategy_params["nested"]["levels"]
+    fingerprint = backtest_configuration_fingerprint_v2(manifest)
+
+    with pytest.raises(TypeError, match="immutable"):
+        levels.__init__([9, 10])
+
+    assert list(levels) == [1, 2]
+    assert backtest_configuration_fingerprint_v2(manifest) == fingerprint
+
+
 def test_shared_execution_path_does_not_implicitly_consume_backtest_policy():
     custom_policy = replace(
         BACKTEST_ECONOMIC_POLICY,

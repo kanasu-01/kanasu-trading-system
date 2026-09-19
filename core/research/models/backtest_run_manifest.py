@@ -19,10 +19,26 @@ _FINGERPRINT_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 class _FrozenList(list):
     """List-shaped immutable container for canonical type stability."""
 
+    __slots__ = ("_constructing",)
+
     @staticmethod
     def _immutable(*args, **kwargs):
         raise TypeError("manifest strategy parameters are immutable")
 
+    def __new__(cls, values=()):
+        instance = super().__new__(cls)
+        list.__init__(instance, values)
+        object.__setattr__(instance, "_constructing", True)
+        return instance
+
+    def __init__(self, values=()):
+        if getattr(self, "_constructing", False):
+            object.__delattr__(self, "_constructing")
+            return
+        self._immutable()
+
+    __setattr__ = _immutable
+    __delattr__ = _immutable
     __setitem__ = _immutable
     __delitem__ = _immutable
     append = _immutable
