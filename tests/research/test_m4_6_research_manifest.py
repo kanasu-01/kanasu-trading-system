@@ -5,6 +5,7 @@ import pytest
 
 from core.backtest.backtest_engine import BacktestEngine
 from core.backtest.performance_metrics import PerformanceMetrics
+from core.config.app_config import AppConfig
 from core.config.backtest_economic_policy import (
     BACKTEST_ECONOMIC_POLICY,
     BACKTEST_ECONOMIC_POLICY_ID,
@@ -13,6 +14,10 @@ from core.config.execution_config import ExecutionConfig
 from core.entities.candle import Candle
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.research_evidence import (
+    ResearchEvidence,
+    ResearchEvidenceStatus,
+)
 from core.research.reproducibility import (
     BACKTEST_CONFIG_V2_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
@@ -20,6 +25,9 @@ from core.research.reproducibility import (
     backtest_run_manifest_bytes,
     build_backtest_run_manifest,
     dataset_fingerprint,
+)
+from core.research.sqlite_research_evidence_store import (
+    SQLiteResearchEvidenceStore,
 )
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
@@ -463,3 +471,88 @@ def test_backtest_engine_explicitly_binds_runtime_economic_policy():
         engine.execution_engine.risk_manager.max_position_pct
         == 25.0
     )
+
+def test_inert_app_config_fields_do_not_change_v2_identity():
+    left_app = AppConfig(
+        initial_capital=1.0,
+        risk_per_trade_pct=1.0,
+        slippage_pct=9.0,
+        brokerage_pct=8.0,
+    )
+    right_app = AppConfig(
+        initial_capital=9_999_999.0,
+        risk_per_trade_pct=1.0,
+        slippage_pct=0.000001,
+        brokerage_pct=77.0,
+    )
+
+    execution = ExecutionConfig(
+        slippage_pct=0.0,
+        slippage_enabled=False,
+        brokerage_enabled=False,
+    )
+
+    left = build_manifest(
+        runtime_context=RuntimeContext(
+            execution_config=execution,
+            risk_per_trade_pct=left_app.risk_per_trade_pct,
+        )
+    )
+    right = build_manifest(
+        runtime_context=RuntimeContext(
+            execution_config=execution,
+            risk_per_trade_pct=right_app.risk_per_trade_pct,
+        )
+    )
+
+    assert left.initial_capital == 100_000.0
+    assert right.initial_capital == 100_000.0
+    assert (
+        backtest_configuration_fingerprint_v2(left)
+        == backtest_configuration_fingerprint_v2(right)
+    )
+
+
+def test_v2_research_evidence_round_trips_manifest_reference_without_schema_change(
+    tmp_path,
+):
+    manifest = build_manifest()
+    manifest_reference = (
+        "artifacts/m4.6/backtest-run-manifest.v1.json"
+    )
+
+    evidence = ResearchEvidence(
+        evidence_id="m4.6-v2-reference",
+        created_at=START,
+        status=ResearchEvidenceStatus.ACCEPTED,
+        dataset_context=manifest.dataset_context,
+        requested_range=manifest.requested_range,
+        dataset_fingerprint=manifest.dataset_fingerprint,
+        configuration_fingerprint=(
+            backtest_configuration_fingerprint_v2(manifest)
+        ),
+        result_fingerprint="sha256:" + "f" * 64,
+        provenance={
+            "validation": "m4.6-deterministic-reference",
+        },
+        repository_revision=(
+            "c56b52478358110663e4e408d90e1d712624ba24"
+        ),
+        summary="M4.6 v2 manifest compatibility reference",
+        artifact_references=(manifest_reference,),
+    )
+
+    store = SQLiteResearchEvidenceStore(
+        tmp_path / "research-evidence.sqlite3"
+    )
+    store.save(evidence)
+
+    loaded = SQLiteResearchEvidenceStore(
+        tmp_path / "research-evidence.sqlite3"
+    ).load(evidence.evidence_id)
+
+    assert loaded == evidence
+    assert loaded.configuration_fingerprint == (
+        backtest_configuration_fingerprint_v2(manifest)
+    )
+    assert loaded.artifact_references == (manifest_reference,)
