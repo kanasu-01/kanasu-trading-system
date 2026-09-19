@@ -125,6 +125,8 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
 
     optimizer_calls = []
     out_of_sample_calls = []
+    out_of_sample_results = []
+    metric_inputs = []
 
     class SingleWindowGenerator:
         def generate(self, source_candles):
@@ -164,7 +166,8 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
             )
 
     class StubMetrics:
-        def compute(self, trades):
+        def compute(self, result):
+            metric_inputs.append(result)
             return {}
 
     class SpyBacktestEngine:
@@ -185,7 +188,9 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
             )
 
         def run(self, source_candles):
-            return SimpleNamespace(trades=[])
+            result = SimpleNamespace(trades=[])
+            out_of_sample_results.append(result)
+            return result
 
     monkeypatch.setattr(
         runner_module,
@@ -230,3 +235,4 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
     ]
     assert optimizer_calls == expected
     assert out_of_sample_calls == expected
+    assert metric_inputs == out_of_sample_results

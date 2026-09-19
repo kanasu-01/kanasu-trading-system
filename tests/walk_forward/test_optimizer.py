@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from core.entities.candle import Candle
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
@@ -122,26 +124,26 @@ def test_optimizer_propagates_caller_effective_settings(monkeypatch):
         optimizer_module.PerformanceMetrics,
         "summarize",
         staticmethod(
-            lambda trades: {
-                "expectancy_pct": 1.0,
-                "max_drawdown_pct": 0.0,
-            }
+            lambda _trades: (_ for _ in ()).throw(
+                AssertionError(
+                    "optimizer used legacy trade-only metrics"
+                )
+            )
         ),
     )
     monkeypatch.setattr(
         optimizer_module.PerformanceMetrics,
         "summarize_backtest",
         staticmethod(
-            lambda _result: (_ for _ in ()).throw(
-                AssertionError(
-                    "M5.1 must not migrate WFA metrics yet"
-                )
-            )
+            lambda _result: {
+                "account_return_pct": 4.0,
+                "max_equity_drawdown_pct": 2.0,
+            }
         ),
     )
 
     optimizer = GridSearchOptimizer()
-    optimizer.optimize(
+    optimization_result = optimizer.optimize(
         strategy_cls=SMACrossOverStrategy,
         param_space=[
             {
@@ -158,3 +160,24 @@ def test_optimizer_propagates_caller_effective_settings(monkeypatch):
     assert received_dataset_contexts == [dataset_context]
     assert received_initial_capitals == [initial_capital]
     assert received_runtime_contexts == [runtime_context]
+    assert optimization_result.best_score == pytest.approx(3.0)
+    assert optimization_result.evaluations[0].metrics == {
+        "account_return_pct": 4.0,
+        "max_equity_drawdown_pct": 2.0,
+    }
+
+
+def test_optimizer_score_uses_account_return_and_equity_drawdown():
+    assert GridSearchOptimizer._score(
+        {
+            "account_return_pct": 5.0,
+            "max_equity_drawdown_pct": 4.0,
+        }
+    ) == pytest.approx(3.0)
+
+    assert GridSearchOptimizer._score(
+        {
+            "account_return_pct": 5.0,
+            "max_equity_drawdown_pct": 10.0,
+        }
+    ) == pytest.approx(0.0)

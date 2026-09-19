@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 
+from core.backtest.backtest_result import BacktestResult
 from core.backtest.performance_metrics import PerformanceMetrics
-from core.entities.trade import Trade
 
 # ==========================================================
 # WALK-FORWARD METRICS
@@ -17,26 +17,33 @@ class WalkForwardMetrics:
     # Per-window metrics
     # ------------------------------------------------------
 
-    def compute(self, trades: List[Trade]) -> Dict[str, Any]:
+    def compute(
+        self,
+        result: BacktestResult,
+    ) -> Dict[str, Any]:
         """
-        Compute metrics for a single out-of-sample window.
+        Compute authoritative metrics for one out-of-sample window.
+
+        Legacy trade-only fields are retained temporarily for the
+        cross-window aggregation migration completed later in M5.
         """
-        if not trades:
-            return {
+        summary = PerformanceMetrics.summarize_backtest(result)
+
+        legacy_summary = PerformanceMetrics.summarize(
+            result.trades
+        )
+        if not legacy_summary:
+            legacy_summary = {
                 "total_trades": 0,
                 "win_rate": 0.0,
                 "expectancy_pct": 0.0,
                 "max_drawdown_pct": 0.0,
-                "profitable": False,
             }
 
-        summary = PerformanceMetrics.summarize(trades)
-
-        expectancy = summary.get("expectancy_pct", 0.0)
-
         return {
+            **legacy_summary,
             **summary,
-            "profitable": expectancy > 0,
+            "profitable": summary["account_return_pct"] > 0,
         }
 
     # ------------------------------------------------------

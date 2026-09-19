@@ -113,7 +113,7 @@ class WalkForwardRunner:
 
         backtest_result = engine.run(window.test_bars)
 
-        test_metrics = self.metrics.compute(backtest_result.trades)
+        test_metrics = self.metrics.compute(backtest_result)
 
         evaluation_scores = [
             evaluation.score for evaluation in optimization_result.evaluations

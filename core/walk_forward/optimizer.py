@@ -63,10 +63,9 @@ class GridSearchOptimizer:
 
             backtest_result = engine.run(train_bars)
 
-            metrics = PerformanceMetrics.summarize(backtest_result.trades)
-
-            if not metrics:
-                continue
+            metrics = PerformanceMetrics.summarize_backtest(
+                backtest_result
+            )
 
             score = self._score(metrics)
             evaluations.append(
@@ -97,14 +96,10 @@ class GridSearchOptimizer:
     @staticmethod
     def _score(metrics: Dict[str, Any]) -> float:
         """
-        Simple scoring:
-        Prefer higher expectancy with lower drawdown.
+        Prefer higher account return with lower equity drawdown.
         """
 
-        expectancy = metrics.get("expectancy_pct", 0.0)
-        max_dd = metrics.get("max_drawdown_pct", 0.0)
+        account_return = metrics["account_return_pct"]
+        max_drawdown = metrics["max_equity_drawdown_pct"]
 
-        # Penalize drawdown
-        score = expectancy - (0.5 * max_dd)
-
-        return score
+        return account_return - (0.5 * max_drawdown)
