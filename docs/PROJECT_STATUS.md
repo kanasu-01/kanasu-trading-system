@@ -6,17 +6,17 @@
 |---|---|
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
-| Branch | `m4-backtest-validity` |
-| Documentation governance baseline | `170f618 Restructure Kanasu documentation governance` |
+| Branch | `m4.6-research-manifest` |
+| Documentation governance baseline | `2a305a5 Optimize agent context loading` |
 | Implementation verification baseline | `57ccfac Implement M4.5 risk sizing and drawdown validity` |
 | Latest reported test baseline | `443 passed in 9.03s at 57ccfac` |
 | Current source baseline | `57ccfac` — M4.5 implementation and accepted independent validation |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P2 — Trusted Research Engine |
 | Milestone | M4 — Backtest Validity |
-| Step | M4.5 — Risk sizing and drawdown validity — DONE/CLOSED at accepted implementation/validation scope |
-| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.5 DONE at accepted scopes; M4.6–M4.7 PLANNED |
-| Next planned review | Separate M4.6 design/review; M4.6 implementation is not automatically authorized |
+| Step | M4.6 — Research manifest and deterministic references — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED |
+| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.5 DONE at accepted scopes; M4.6 READY at design scope; M4.7 PLANNED |
+| Next planned review | Separate M4.6 implementation authorization/review; implementation remains NOT AUTHORIZED |
 
 The independently rerun 443-test full suite passed in 9.03s with exit code 0 at implementation commit `57ccfac`.
 
@@ -313,7 +313,7 @@ M4 — Backtest Validity remains IN_PROGRESS. M4.2 through M4.5 are implemented 
 - M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope
 - M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope
 - M4.5 — Risk sizing and drawdown validity — DONE/CLOSED at accepted implementation/validation scope
-- M4.6 — Research manifest and deterministic references — PLANNED
+- M4.6 — Research manifest and deterministic references — READY at accepted design scope under AD-019; implementation NOT_STARTED / NOT AUTHORIZED
 - M4.7 — Backtest validity integration — PLANNED
 
 M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 is implemented and validated for the Backtest/`SMACrossOverStrategy` scope under AD-017. PivotBoss and paper-runtime integration remain outside that claim.
@@ -322,7 +322,9 @@ M4.3 now implements and validates completed-bar decisions, one pending intent, n
 
 M4.4 now implements and validates result-aware authoritative Backtest metrics, equity-derived account return and maximum drawdown, explicit completed-trade monetary and instrument-return statistics, zero-trade/open-position behavior, failure boundaries and full-precision programmatic results while preserving the legacy WFA compatibility path.
 
-M4.5 now implements and validates AD-018 current-equity sizing, transaction-cost-aware affordability, period-start-equity guards, calendar-period transitions, mutation-free rejection behavior and effective Backtest risk propagation at the accepted Backtest scope. The next planned action is a separate M4.6 design/review. M4.6 remains PLANNED and is not automatically implementation-authorized. Existing open and deferred concerns remain governed by the deferred-work ledger.
+M4.5 now implements and validates AD-018 current-equity sizing, transaction-cost-aware affordability, period-start-equity guards, calendar-period transitions, mutation-free rejection behavior and effective Backtest risk propagation at the accepted Backtest scope.
+
+M4.6 design is accepted under AD-019. The target introduces a versioned `BacktestEconomicPolicy`, a complete effective-input `BacktestRunManifest`, successor `kanasu.backtest-config.v2` identity, deterministic hand-calculated references, and backward-compatible reuse of AD-015 v1 dataset/result identity and ResearchEvidence persistence. The design records what canonical Backtest actually consumes rather than copying inert configuration fields. It does not claim implementation or validation; separate implementation authorization/review remains required. Existing open and deferred concerns remain governed by the deferred-work ledger.
 
 ## Important V1 blockers
 

@@ -84,7 +84,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.5 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.5 are DONE at their accepted scopes, and M4.6–M4.7 remain PLANNED. M5–M9 remain RESERVED proposals.
+M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.5 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.5 are DONE at their accepted scopes, M4.6 is READY at accepted design scope under AD-019 with implementation not yet authorized, and M4.7 remains PLANNED. M5–M9 remain RESERVED proposals.
 
 ## Near-term detailed work
 
@@ -651,16 +651,18 @@ M4.5 does not migrate WFA-specific risk/configuration, metrics, scoring, stitchi
 - **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
 - **M4.4 — Account returns and performance metrics:** DONE/CLOSED at accepted implementation/validation scope; preserves instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API.
 - **M4.5 — Risk sizing and drawdown validity:** DONE/CLOSED at accepted implementation/validation scope under AD-018; uses current pre-entry equity, transaction-cost-aware cash affordability, sticky period-start-equity entry guards and represented candle-calendar resets.
-- **M4.6 — Research manifest and deterministic references:** define hand-calculated reference scenarios, a complete effective run manifest and a versioned successor economic-policy identity without changing AD-015 v1.
+- **M4.6 — Research manifest and deterministic references:** READY at accepted design scope under AD-019; introduce a versioned effective-input Backtest run manifest, shared Backtest economic-policy contract, successor configuration identity and hand-calculated deterministic references without changing frozen AD-015 v1.
 - **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
 
-**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics, and AD-018 owns the accepted M4.5 sizing, affordability and period-loss-guard target. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
+**M4.6 accepted design:** `BacktestEconomicPolicy` is the shared source of fixed M4 Backtest economic values used by execution and manifest identity. `BacktestRunManifest` records the effective dataset linkage, strategy, capital, runtime execution/risk inputs and policy. `kanasu.backtest-config.v2` fingerprints the effective configuration projection under `kanasu.backtest-economics.v1`; `kanasu.dataset.v1`, `kanasu.backtest-result.v1`, canonical serialization v1 and the frozen AD-015 ResearchEvidence contract remain compatible. Inert raw configuration fields are not recorded as though they affected canonical Backtest.
+
+**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics, AD-018 owns the accepted M4.5 sizing, affordability and period-loss-guard target, and AD-019 owns the M4.6 effective-manifest/successor-identity target. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
 
 **Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 443 passed in 9.03s at `57ccfac`; M4.1 remains documentation/design evidence only.
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.2 through M4.5 are DONE/CLOSED at their accepted scopes; M4.6–M4.7 remain PLANNED and M5 remains RESERVED. The next planned action is a separate M4.6 design/review. M4.6 remains PLANNED and is not automatically implementation-authorized.
+M4 is IN_PROGRESS and is not complete. M4.2 through M4.5 are DONE/CLOSED at their accepted scopes; M4.6 is READY at accepted design scope under AD-019 with implementation NOT_STARTED / NOT AUTHORIZED; M4.7 remains PLANNED and M5 remains RESERVED. The next planned action is separate M4.6 implementation authorization/review.
 
 ### M5 — WFA validity
 

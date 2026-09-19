@@ -374,6 +374,53 @@ M4.5 production must preserve authoritative portfolio ownership, explicit fill/c
 
 The accepted contract was subsequently implemented by `57ccface0f086dd12e38fca9cfed3b5aa92fbe9c Implement M4.5 risk sizing and drawdown validity` from design baseline `78e4493430dab2a9389bfda4e41b1149ef038f7f`. Focused M4.5/regression validation passed 193 tests in 3.01s, and independent full regression passed 443 tests in 9.03s with exit code 0. Independent `git diff --check` was clean. This evidence implements AD-018 for canonical Backtest only; it does not change the decision's normative contract or validate the excluded WFA, PaperRuntime, live/broker, M4.6 or M4.7 scopes.
 
+### AD-019 — Effective Backtest run manifest and economic-policy identity v1
+
+**Status:** ACCEPTED
+
+**Target:** M4.6
+
+AD-019 refines AD-015, AD-016 and AD-018; it does not supersede them. AD-015 v1 remains frozen. M4.6 adds a successor Backtest configuration identity and manifest for the accepted M4 economic contract without changing existing dataset/result fingerprint schemas or the immutable ResearchEvidence logical contract.
+
+#### Effective-configuration principle
+
+Research identity records what canonical Backtest actually consumes, not every field that happens to exist in a configuration object. At this baseline `BacktestConfig.initial_capital`, `RuntimeContext.execution_config` and the effective risk-per-trade value propagated from `AppConfig.risk_per_trade_pct` affect canonical Backtest. `AppConfig.initial_capital`, `AppConfig.slippage_pct` and `AppConfig.brokerage_pct` are not currently propagated into the canonical `main()` Backtest economic path and must not be copied into the manifest as though they were effective. M4.6 does not silently repair or rewire those fields.
+
+Caller-supplied effective runtime values must be represented when they are actually used. Presentation/replay/export controls, journal paths, source-policy/provider provenance, random session IDs and repository revision remain outside configuration identity.
+
+#### Shared Backtest economic policy
+
+Canonical Backtest uses one immutable `BacktestEconomicPolicy` as the source of fixed M4 economic values for both execution construction and research identity. The accepted initial policy identifier is `kanasu.backtest-economics.v1`.
+
+The v1 policy represents the current accepted fixed values: `max_position_pct=20.0`, `max_daily_loss_pct=3.0`, `max_weekly_loss_pct=6.0`, `max_total_risk_pct=5.0`, `max_open_trades=5`, structural-stop `buffer_pct=0.2`, `min_tick=0.05`, fallback long-stop multiplier `0.98`, simplified brokerage rate `0.0003` capped at `20`, simplified tax/charge rate `0.0005`, and two-decimal brokerage/tax/total-cost rounding. Runtime-selected slippage percentage/enabled state and brokerage-enabled state remain effective `ExecutionConfig` inputs rather than duplicate policy fields.
+
+The policy version also names the fixed M4 semantic contract: completed-bar decisions execute at the next open; gap stop precedes queued SELL, which precedes ordinary stop; a new entry retains same-bar protective-stop behavior; open terminal positions are marked rather than forcibly liquidated; M4.5 period-start-equity entry guards and represented candle-calendar transitions apply; and M4.4 authoritative-equity reporting semantics apply. These fixed semantics are versioned as a contract rather than represented by a collection of independent Booleans.
+
+Execution and manifest construction must consume the same policy instance/values. A separately duplicated manifest-only default table is not authoritative.
+
+#### Run manifest and successor configuration identity
+
+The versioned effective-input artifact is `kanasu.backtest-run-manifest.v1`. It contains dataset context/request and dataset fingerprint linkage; effective strategy name/parameters; Backtest initial capital; effective risk-per-trade percentage; effective `ExecutionConfig`; and the economic-policy identifier and scalar values.
+
+Successor research-configuration identity uses schema `kanasu.backtest-config.v2` and reuses the frozen AD-015 canonical serialization algorithm. Its identity projection contains dataset context/request, strategy name/parameters, initial capital, effective risk-per-trade percentage, effective execution settings and the economic-policy identifier/values. Exact candle content remains the independent `kanasu.dataset.v1` domain; stable output remains the independent `kanasu.backtest-result.v1` domain.
+
+Changing an effective result-affecting input or policy value changes v2 configuration identity. Mapping insertion order does not. Presentation controls, source/provider provenance, repository revision, artifact locations and execution-instance/session identity do not participate.
+
+#### ResearchEvidence and compatibility
+
+The AD-015 `ResearchEvidence` model and SQLite schema remain unchanged. Its generic `configuration_fingerprint` field may carry the successor v2 digest. Any accepted evidence using the v2 configuration identity must reference the serialized run manifest through `artifact_references`. Dataset fingerprint, result fingerprint, provenance and repository revision retain their existing ownership. Existing v1 evidence remains valid and requires no destructive migration.
+
+M4.6 establishes manifest/identity construction and deterministic evidence contracts; it does not claim that canonical `run_backtest()` currently auto-persists ResearchEvidence, and automatic research-catalog/job lifecycle integration is not introduced implicitly.
+
+#### Deterministic-reference contract
+
+M4.6 uses hand-calculated economic references whose timestamps, OHLCV, strategy decisions, stop context, fills, quantity, cash, positions, equity, trade P&L, account return and drawdown are explicit. The primary zero-friction reference uses capital `100000`, risk `1%`, max position `20%`, slippage OFF and brokerage OFF. A BUY decided from a completed bar carries rejection midpoint `90.2`; the v1 stop policy yields `90.00`; next-open fill `100` therefore gives risk budget `1000`, risk/share `10`, risk quantity `100`, max-position quantity `200`, and accepted quantity `100`. A later completed-bar SELL executes next-open at `110`, producing gross/net P&L `1000`, final cash/equity `101000`, instrument return `10%`, account return `1%` and maximum equity drawdown `0%`.
+
+Cryptographic SHA-256 values are generated from canonical serialization and tested for deterministic equality/sensitivity; they are not represented as hand-calculated economics. Implementation validation must also include an enabled-slippage/brokerage deterministic reference or equivalent hand-calculated sensitivity case so the zero-friction scenario is not the only economic reference.
+
+#### Scope
+
+M4.6 does not redesign WFA configuration/scoring/stitching or claim WFA validity; does not migrate PaperRuntime or live/broker policy; does not introduce exchange calendars, multi-symbol allocation, leverage/margin/shorts/derivatives, exact broker/exchange/tax fidelity, automatic application research jobs, or M4.7 integration closure. Existing M4.2–M4.5 behavior must remain economically unchanged except for sourcing the same accepted fixed values through the shared policy boundary.
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

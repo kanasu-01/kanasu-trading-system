@@ -861,31 +861,97 @@ The validated M4.5 scope does not include WFA validity/configuration migration, 
 
 ### M4.6 — Research manifest and deterministic references
 
-**Status:** PLANNED / not validated
+**Status:** READY at accepted design scope under AD-019 / implementation not validated
 
-Future evidence must include hand-calculated deterministic reference scenarios, a complete manifest of effective result-affecting run inputs, and a versioned successor research identity for M4 economic semantics. AD-015 v1, including `kanasu.backtest-config.v1`, remains unchanged.
+M4.6 must implement a complete versioned effective-input manifest, shared Backtest economic policy, successor configuration identity and deterministic references without modifying frozen AD-015 v1 contracts. `kanasu.dataset.v1`, `kanasu.backtest-config.v1`, `kanasu.backtest-result.v1`, canonical serialization v1 and existing ResearchEvidence rows remain valid.
 
-Canonical acceptance reference specification:
+Accepted identity/manifest requirements:
+
+1. Introduce `kanasu.backtest-economics.v1` and one shared `BacktestEconomicPolicy`; execution and manifest identity consume the same accepted fixed values rather than maintaining duplicate defaults.
+2. Introduce `kanasu.backtest-run-manifest.v1` linking dataset context/request/fingerprint to effective strategy, initial capital, effective risk, effective `ExecutionConfig` and economic policy.
+3. Introduce successor `kanasu.backtest-config.v2` using the existing canonical serializer. Dataset candle content and stable result content remain independent v1 fingerprint domains.
+4. Record effective inputs, not merely raw configuration fields. At this design baseline `AppConfig.risk_per_trade_pct` is effective; `AppConfig.initial_capital`, `AppConfig.slippage_pct` and `AppConfig.brokerage_pct` are not canonical `main()` Backtest economic inputs and M4.6 does not silently rewire them.
+5. Keep presentation/replay/export controls, journal paths, provider/source provenance, repository revision, artifact locations and session IDs outside configuration identity.
+6. Keep `ResearchEvidence` and its SQLite schema backward-compatible. V2 configuration fingerprints fit the existing field, and accepted v2 evidence must reference the manifest through existing artifact references. M4.6 does not require automatic canonical-runtime evidence persistence.
+7. Non-finite canonical values and unsupported canonical types fail explicitly under the existing serialization rules.
+
+Primary hand-calculated reference:
 
 ~~~text
-initial capital: 100000
-slippage: OFF
-brokerage: OFF
+dataset context:
+  symbol: TEST
+  timeframe: 15m
+  timezone: Asia/Kolkata
+request: [2026-01-05 09:15:00+05:30, 2026-01-05 10:15:00+05:30)
 
-completed Bar A → BUY decision
-Bar B open 100 → BUY quantity 100
-completed Bar C → SELL decision
-Bar D open 110 → SELL quantity 100
+effective inputs:
+  initial capital: 100000
+  risk per trade: 1%
+  max position: 20%
+  slippage: OFF
+  brokerage: OFF
+  economic policy: kanasu.backtest-economics.v1
 
-gross P&L: 1000
-net P&L: 1000
-final cash: 101000
-final equity: 101000
-instrument return: 10%
-account return: 1%
+Bar A 09:15
+  OHLCV: 100 / 101 / 99 / 100 / 1000
+  completed-bar decision: BUY
+  rejection midpoint: 90.2
+
+decision stop:
+  90.2 × (1 - 0.2%) = 90.0196
+  round to 0.05 tick = 90.00
+
+Bar B 09:30
+  OHLCV: 100 / 106 / 95 / 105 / 1100
+  BUY next-open fill: 100
+  risk budget: 100000 × 1% = 1000
+  risk/share: 100 - 90 = 10
+  risk quantity: 100
+  max-position quantity: floor(100000 × 20% / 100) = 200
+  accepted quantity: 100
+  after Bar B close mark, cash: 90000
+  after Bar B close mark, equity: 100500
+
+Bar C 09:45
+  OHLCV: 105 / 111 / 104 / 110 / 1200
+  completed-bar decision: SELL
+  cash: 90000
+  equity: 101000
+
+Bar D 10:00
+  OHLCV: 110 / 112 / 109 / 111 / 1300
+  SELL next-open fill: 110
+  quantity: 100
+  final cash: 101000
+  final equity: 101000
+
+completed trade:
+  entry: 100
+  exit: 110
+  stop: 90
+  quantity: 100
+  gross P&L: 1000
+  transaction cost: 0
+  net P&L: 1000
+  instrument return: 10%
+  account P&L: 1000
+  account return: 1%
+  maximum equity drawdown: 0%
 ~~~
 
-This is an acceptance reference specification, not newly executed evidence.
+Required deterministic evidence must cover:
+
+- identical effective manifests produce identical canonical v2 configuration identity;
+- changing strategy parameters, initial capital, effective risk, slippage percentage/enabled state, brokerage-enabled state, policy identifier or any policy scalar changes v2 identity as applicable;
+- mapping order and excluded presentation/provenance/repository/session fields do not change configuration identity;
+- changes to raw but inert AppConfig fields do not masquerade as effective Backtest changes;
+- the primary reference reproduces exact fills, stop, quantity, cash, position/equity sequence, completed trade and metrics above;
+- at least one additional hand-calculated enabled-slippage/brokerage reference or equivalent deterministic sensitivity case validates non-zero execution economics;
+- manifest/economic-policy values consumed by execution and identity cannot silently diverge;
+- existing v1 reproducibility/evidence tests remain valid and persisted v1 records require no destructive migration; and
+- M4.2–M4.5 timing, feedback, accounting, metrics, sizing, affordability and period-loss behavior remain regression-safe.
+
+The economic outputs are hand-calculated acceptance references. SHA-256 fingerprints are deterministic canonical-serialization outputs and should be asserted by reproducible tests rather than described as manually calculated hashes. This section records accepted future evidence, not newly executed M4.6 implementation evidence.
 
 ### M4.7 — Backtest validity integration
 
