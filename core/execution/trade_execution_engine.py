@@ -58,12 +58,29 @@ class TradeExecutionEngine:
         session_id: str,
         runtime_context: RuntimeContext,
         risk_per_trade_pct: float = 1.0,
+        economic_policy=None,
     ):
 
         self.strategy = strategy
         self.session_id = session_id
         self.runtime_context = runtime_context
-        self.brokerage_model = BrokerageModel()
+        self.economic_policy = economic_policy
+        self._fallback_long_stop_multiplier = (
+            economic_policy.fallback_long_stop_multiplier
+            if economic_policy is not None
+            else 0.98
+        )
+
+        if economic_policy is None:
+            self.brokerage_model = BrokerageModel()
+        else:
+            self.brokerage_model = BrokerageModel(
+                brokerage_rate=economic_policy.brokerage_rate,
+                brokerage_cap=economic_policy.brokerage_cap,
+                tax_rate=economic_policy.tax_rate,
+                rounding_digits=economic_policy.cost_rounding_digits,
+            )
+
         self.slippage_model = SlippageModel(
             slippage_pct=(self.runtime_context.execution_config.slippage_pct)
         )
@@ -77,16 +94,32 @@ class TradeExecutionEngine:
         self.last_execution_quantity = None
         self.last_transaction_cost = 0.0
 
-        self.risk_manager = RiskManager(
-            account_capital=account_capital,
-            risk_per_trade_pct=risk_per_trade_pct,
-        )
-
-        self.stop_manager = StopLossManager()
-
-        self.portfolio_risk_manager = PortfolioRiskManager()
-
-        self.drawdown_manager = DrawdownRiskManager()
+        if economic_policy is None:
+            self.risk_manager = RiskManager(
+                account_capital=account_capital,
+                risk_per_trade_pct=risk_per_trade_pct,
+            )
+            self.stop_manager = StopLossManager()
+            self.portfolio_risk_manager = PortfolioRiskManager()
+            self.drawdown_manager = DrawdownRiskManager()
+        else:
+            self.risk_manager = RiskManager(
+                account_capital=account_capital,
+                risk_per_trade_pct=risk_per_trade_pct,
+                max_position_pct=economic_policy.max_position_pct,
+            )
+            self.stop_manager = StopLossManager(
+                buffer_pct=economic_policy.stop_buffer_pct,
+                min_tick=economic_policy.stop_min_tick,
+            )
+            self.portfolio_risk_manager = PortfolioRiskManager(
+                max_total_risk_pct=economic_policy.max_total_risk_pct,
+                max_open_trades=economic_policy.max_open_trades,
+            )
+            self.drawdown_manager = DrawdownRiskManager(
+                max_daily_loss_pct=economic_policy.max_daily_loss_pct,
+                max_weekly_loss_pct=economic_policy.max_weekly_loss_pct,
+            )
 
         self.journal = TradeJournal(session_id=session_id)
 
@@ -439,7 +472,10 @@ class TradeExecutionEngine:
                 else rejection_midpoint
             )
         else:
-            stop_price = decision_close * 0.98
+            stop_price = (
+                decision_close
+                * self._fallback_long_stop_multiplier
+            )
 
         entry_feedback = self._open_long(
             symbol=symbol,
@@ -524,7 +560,10 @@ class TradeExecutionEngine:
 
             else:
 
-                stop_price = candle.close * 0.98
+                stop_price = (
+                    candle.close
+                    * self._fallback_long_stop_multiplier
+                )
 
             feedback = self._open_long(
                 symbol=symbol,

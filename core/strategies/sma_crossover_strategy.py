@@ -49,6 +49,14 @@ class SMACrossOverStrategy(BaseStrategy):
         """
         return self.slow_period
 
+    def research_parameters(self) -> dict:
+        """Return resolved strategy inputs used by this instance."""
+
+        return {
+            "fast_period": self.fast_period,
+            "slow_period": self.slow_period,
+        }
+
     # -------------------------------------------------
     # Core logic
     # -------------------------------------------------

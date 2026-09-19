@@ -89,6 +89,23 @@ class PivotBossSwingStrategy(BaseStrategy):
         return super().warmup_bars() + 30  # for volatility and structure calculations
     
     
+    def research_parameters(self) -> dict:
+        """Return resolved strategy inputs used by this instance."""
+
+        return {
+            "min_acc_score": self.min_acc_score,
+            "rejection_close_pct": self.rejection_close_pct,
+            "rejection_volume_multiplier": self.rejection_volume_multiplier,
+            "absorption_lookback": self.absorption_lookback,
+            "markup_lookback": self.markup_lookback,
+            "markup_volume_multiplier": self.markup_volume_multiplier,
+            "distribution_exit_threshold": self.distribution_exit_threshold,
+            "max_scale_entries": self.max_scale_entries,
+            "max_stagnation_candles": self.max_stagnation_candles,
+            "min_progress_pct": self.min_progress_pct,
+            "min_confidence_to_trade": self.min_confidence_to_trade,
+        }
+
     def reset(self) -> None:
         self.state = PivotBossState.NO_TRADE
         self.rejection_midpoint = None

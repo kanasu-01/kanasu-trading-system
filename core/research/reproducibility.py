@@ -14,14 +14,20 @@ from typing import Any
 from core.backtest.backtest_result import BacktestResult
 from core.config.backtest_config import BacktestConfig
 from core.config.execution_config import ExecutionConfig
+from core.config.backtest_economic_policy import BacktestEconomicPolicy
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.backtest_run_manifest import BacktestRunManifest
 from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
+from core.strategies.base_strategy import BaseStrategy
 
 
 DATASET_SCHEMA = "kanasu.dataset.v1"
 BACKTEST_CONFIG_SCHEMA = "kanasu.backtest-config.v1"
+BACKTEST_CONFIG_V2_SCHEMA = "kanasu.backtest-config.v2"
+BACKTEST_RUN_MANIFEST_SCHEMA = "kanasu.backtest-run-manifest.v1"
 BACKTEST_RESULT_SCHEMA = "kanasu.backtest-result.v1"
 
 
@@ -187,6 +193,97 @@ def backtest_configuration_fingerprint(
             },
         },
         schema=BACKTEST_CONFIG_SCHEMA,
+    )
+
+
+def _execution_payload(execution_config: ExecutionConfig) -> dict[str, Any]:
+    return {
+        "slippage_pct": execution_config.slippage_pct,
+        "slippage_enabled": execution_config.slippage_enabled,
+        "brokerage_enabled": execution_config.brokerage_enabled,
+    }
+
+
+def _economic_policy_payload(
+    policy: BacktestEconomicPolicy,
+) -> dict[str, Any]:
+    return policy.to_payload()
+
+
+def build_backtest_run_manifest(
+    context: DatasetContext,
+    request: TimeRange,
+    dataset_fingerprint_value: str,
+    strategy: BaseStrategy,
+    *,
+    initial_capital: float,
+    runtime_context: RuntimeContext,
+) -> BacktestRunManifest:
+    """Capture the effective inputs consumed by one canonical Backtest."""
+
+    if not isinstance(strategy, BaseStrategy):
+        raise TypeError("strategy must be a BaseStrategy")
+    if not isinstance(runtime_context, RuntimeContext):
+        raise TypeError("runtime_context must be a RuntimeContext")
+
+    return BacktestRunManifest(
+        dataset_context=context,
+        requested_range=request,
+        dataset_fingerprint=dataset_fingerprint_value,
+        strategy_name=strategy.name,
+        strategy_params=strategy.research_parameters(),
+        initial_capital=initial_capital,
+        effective_risk_per_trade_pct=runtime_context.risk_per_trade_pct,
+        execution_config=runtime_context.execution_config,
+        economic_policy=runtime_context.economic_policy,
+    )
+
+
+def backtest_run_manifest_payload(
+    manifest: BacktestRunManifest,
+) -> dict[str, Any]:
+    """Return the complete versioned effective-input manifest payload."""
+
+    if not isinstance(manifest, BacktestRunManifest):
+        raise TypeError("manifest must be a BacktestRunManifest")
+
+    return {
+        "dataset_context": _context_payload(manifest.dataset_context),
+        "request": _range_payload(manifest.requested_range),
+        "dataset_fingerprint": manifest.dataset_fingerprint,
+        "strategy_name": manifest.strategy_name,
+        "strategy_params": dict(manifest.strategy_params),
+        "initial_capital": manifest.initial_capital,
+        "effective_risk_per_trade_pct": manifest.effective_risk_per_trade_pct,
+        "execution": _execution_payload(manifest.execution_config),
+        "economic_policy": _economic_policy_payload(
+            manifest.economic_policy
+        ),
+    }
+
+
+def backtest_run_manifest_bytes(
+    manifest: BacktestRunManifest,
+) -> bytes:
+    """Serialize the complete manifest with its independent schema."""
+
+    return canonical_bytes(
+        backtest_run_manifest_payload(manifest),
+        schema=BACKTEST_RUN_MANIFEST_SCHEMA,
+    )
+
+
+def backtest_configuration_fingerprint_v2(
+    manifest: BacktestRunManifest,
+) -> str:
+    """Identify all effective M4 Backtest result-affecting inputs."""
+
+    payload = backtest_run_manifest_payload(manifest)
+    payload.pop("dataset_fingerprint")
+
+    return canonical_fingerprint(
+        payload,
+        schema=BACKTEST_CONFIG_V2_SCHEMA,
     )
 
 

@@ -21,6 +21,11 @@ class BaseStrategy(ABC):
         """
         return self.params.get(key, default)
 
+    def research_parameters(self) -> Dict[str, Any]:
+        """Return effective result-affecting strategy parameters."""
+
+        return dict(self.params)
+
     @abstractmethod
     def on_new_candle(self, series: CandleSeries) -> Optional[SignalType]:
         """
