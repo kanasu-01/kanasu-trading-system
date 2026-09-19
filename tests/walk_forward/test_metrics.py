@@ -84,9 +84,8 @@ def test_wfa_window_metrics_use_authoritative_account_equity() -> None:
     )
     assert metrics["profitable"] is True
 
-    # Temporary compatibility for pre-M5.4 aggregation.
-    assert metrics["expectancy_pct"] == 10.0
-    assert metrics["max_drawdown_pct"] == 0.0
+    assert "expectancy_pct" not in metrics
+    assert "max_drawdown_pct" not in metrics
 
 
 def test_wfa_window_metrics_include_open_terminal_account_outcome() -> None:
@@ -112,6 +111,73 @@ def test_wfa_profitability_uses_account_return_not_instrument_return() -> None:
     assert metrics["mean_instrument_return_pct"] == 10.0
     assert metrics["account_return_pct"] == pytest.approx(-1.0)
     assert metrics["profitable"] is False
+
+
+def test_wfa_aggregate_uses_account_outcomes() -> None:
+    metrics = WalkForwardMetrics.aggregate(
+        [
+            {
+                "account_return_pct": 1.0,
+                "max_equity_drawdown_pct": 2.0,
+            },
+            {
+                "account_return_pct": -0.5,
+                "max_equity_drawdown_pct": 4.0,
+            },
+            {
+                "account_return_pct": 0.5,
+                "max_equity_drawdown_pct": 1.0,
+            },
+        ]
+    )
+
+    assert metrics == {
+        "total_windows": 3,
+        "profitable_windows": 2,
+        "consistency_ratio": 0.67,
+        "avg_account_return_pct": 0.33,
+        "worst_equity_drawdown_pct": 4.0,
+        "account_return_stability_score": 0.72,
+    }
+
+    assert "avg_expectancy_pct" not in metrics
+    assert "worst_drawdown_pct" not in metrics
+    assert "stability_score" not in metrics
+
+
+@pytest.mark.parametrize(
+    ("window_metrics", "message"),
+    [
+        (
+            [{"max_equity_drawdown_pct": 1.0}],
+            "missing metric account_return_pct",
+        ),
+        (
+            [
+                {
+                    "account_return_pct": float("nan"),
+                    "max_equity_drawdown_pct": 1.0,
+                }
+            ],
+            "must be finite numbers",
+        ),
+        (
+            [
+                {
+                    "account_return_pct": 1.0,
+                    "max_equity_drawdown_pct": -1.0,
+                }
+            ],
+            "must be non-negative",
+        ),
+    ],
+)
+def test_wfa_aggregate_rejects_invalid_account_metrics(
+    window_metrics,
+    message,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        WalkForwardMetrics.aggregate(window_metrics)
 
 
 def test_stitched_metrics_use_continuous_equity_path() -> None:

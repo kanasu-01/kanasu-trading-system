@@ -30,7 +30,7 @@ class WalkWindowResult:
     # Canonical OOS execution result
     backtest_result: BacktestResult
 
-    # Legacy summary fields (temporary migration layer)
+    # Authoritative OOS account metrics
     test_metrics: Dict[str, Any]
     trade_count: int
 
@@ -48,7 +48,7 @@ class WalkForwardResult:
 
     windows: List[WalkWindowResult]
 
-    # Legacy summary metrics
+    # Authoritative cross-window account metrics
     aggregated_metrics: Dict[str, Any]
 
     # Canonical stitched OOS equity
@@ -128,16 +128,22 @@ class WalkForwardResult:
         if metrics["consistency_ratio"] < min_consistency:
             return "FAIL"
 
-        if metrics["avg_expectancy_pct"] <= 0:
+        if metrics["avg_account_return_pct"] <= 0:
             return "FAIL"
 
-        if metrics["worst_drawdown_pct"] > max_drawdown_pct:
+        if metrics["worst_equity_drawdown_pct"] > max_drawdown_pct:
+            return "FAIL"
+
+        if stitched_metrics["stitched_total_return_pct"] <= 0:
             return "FAIL"
 
         if stitched_metrics["stitched_max_drawdown_pct"] > max_drawdown_pct:
             return "FAIL"
 
-        if metrics["stability_score"] < min_stability_score:
+        if (
+            metrics["account_return_stability_score"]
+            < min_stability_score
+        ):
             return "FAIL"
 
         return "PASS"

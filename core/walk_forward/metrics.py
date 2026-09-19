@@ -24,25 +24,10 @@ class WalkForwardMetrics:
     ) -> Dict[str, Any]:
         """
         Compute authoritative metrics for one out-of-sample window.
-
-        Legacy trade-only fields are retained temporarily for the
-        cross-window aggregation migration completed later in M5.
         """
         summary = PerformanceMetrics.summarize_backtest(result)
 
-        legacy_summary = PerformanceMetrics.summarize(
-            result.trades
-        )
-        if not legacy_summary:
-            legacy_summary = {
-                "total_trades": 0,
-                "win_rate": 0.0,
-                "expectancy_pct": 0.0,
-                "max_drawdown_pct": 0.0,
-            }
-
         return {
-            **legacy_summary,
             **summary,
             "profitable": summary["account_return_pct"] > 0,
         }
@@ -63,29 +48,75 @@ class WalkForwardMetrics:
 
         total_windows = len(window_metrics)
 
-        profitable_windows = [m for m in window_metrics if m.get("profitable")]
+        account_returns = []
+        equity_drawdowns = []
 
-        expectancy_values = [m.get("expectancy_pct", 0.0) for m in window_metrics]
+        for index, metrics in enumerate(window_metrics):
+            try:
+                account_return = float(
+                    metrics["account_return_pct"]
+                )
+                equity_drawdown = float(
+                    metrics["max_equity_drawdown_pct"]
+                )
+            except KeyError as exc:
+                raise ValueError(
+                    f"WFA window {index} missing metric "
+                    f"{exc.args[0]}"
+                ) from exc
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"WFA window {index} account metrics "
+                    f"must be finite numbers"
+                ) from exc
 
-        drawdowns = [m.get("max_drawdown_pct", 0.0) for m in window_metrics]
+            if not isfinite(account_return) or not isfinite(
+                equity_drawdown
+            ):
+                raise ValueError(
+                    f"WFA window {index} account metrics "
+                    f"must be finite numbers"
+                )
 
-        consistency_ratio = len(profitable_windows) / total_windows
+            if equity_drawdown < 0:
+                raise ValueError(
+                    f"WFA window {index} equity drawdown "
+                    f"must be non-negative"
+                )
 
-        avg_expectancy = (
-            sum(expectancy_values) / total_windows if total_windows > 0 else 0.0
+            account_returns.append(account_return)
+            equity_drawdowns.append(equity_drawdown)
+
+        profitable_windows = sum(
+            account_return > 0
+            for account_return in account_returns
         )
 
-        worst_drawdown = max(drawdowns) if drawdowns else 0.0
-
-        stability_score = WalkForwardMetrics._stability_score(expectancy_values)
+        consistency_ratio = profitable_windows / total_windows
+        avg_account_return = (
+            sum(account_returns) / total_windows
+        )
+        worst_equity_drawdown = max(equity_drawdowns)
+        account_return_stability = WalkForwardMetrics._stability_score(
+            account_returns
+        )
 
         return {
             "total_windows": total_windows,
-            "profitable_windows": len(profitable_windows),
+            "profitable_windows": profitable_windows,
             "consistency_ratio": round(consistency_ratio, 2),
-            "avg_expectancy_pct": round(avg_expectancy, 2),
-            "worst_drawdown_pct": round(worst_drawdown, 2),
-            "stability_score": round(stability_score, 2),
+            "avg_account_return_pct": round(
+                avg_account_return,
+                2,
+            ),
+            "worst_equity_drawdown_pct": round(
+                worst_equity_drawdown,
+                2,
+            ),
+            "account_return_stability_score": round(
+                account_return_stability,
+                2,
+            ),
         }
 
     @staticmethod
@@ -166,7 +197,7 @@ class WalkForwardMetrics:
     @staticmethod
     def _stability_score(values: List[float]) -> float:
         """
-        Penalize large variance in expectancy across windows.
+        Penalize large variance across observed values.
         Higher is better.
         """
         if not values:
