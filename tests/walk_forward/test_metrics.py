@@ -112,3 +112,46 @@ def test_wfa_profitability_uses_account_return_not_instrument_return() -> None:
     assert metrics["mean_instrument_return_pct"] == 10.0
     assert metrics["account_return_pct"] == pytest.approx(-1.0)
     assert metrics["profitable"] is False
+
+
+def test_stitched_metrics_use_continuous_equity_path() -> None:
+    metrics = WalkForwardMetrics.compute_stitched_equity_metrics(
+        [
+            (START, 100.0),
+            (START + timedelta(minutes=15), 110.0),
+            (START + timedelta(minutes=30), 99.0),
+        ]
+    )
+
+    assert metrics["stitched_total_return_pct"] == pytest.approx(
+        -1.0
+    )
+    assert metrics["stitched_max_drawdown_pct"] == pytest.approx(
+        10.0
+    )
+
+
+@pytest.mark.parametrize(
+    "curve",
+    [
+        [(START, 0.0)],
+        [(START, -1.0)],
+    ],
+)
+def test_stitched_metrics_require_positive_start(curve) -> None:
+    with pytest.raises(ValueError, match="strictly positive"):
+        WalkForwardMetrics.compute_stitched_equity_metrics(curve)
+
+
+@pytest.mark.parametrize(
+    "equity",
+    [float("nan"), float("inf"), float("-inf")],
+)
+def test_stitched_metrics_reject_non_finite_equity(equity) -> None:
+    with pytest.raises(ValueError, match="must be finite"):
+        WalkForwardMetrics.compute_stitched_equity_metrics(
+            [
+                (START, 100.0),
+                (START + timedelta(minutes=15), equity),
+            ]
+        )

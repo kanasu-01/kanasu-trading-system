@@ -1,3 +1,4 @@
+from math import isfinite
 from typing import List, Dict, Any
 
 from core.backtest.backtest_result import BacktestResult
@@ -101,7 +102,23 @@ class WalkForwardMetrics:
                 "stitched_max_drawdown_pct": 0.0,
             }
 
-        equity_values = [equity for _, equity in stitched_equity_curve]
+        try:
+            equity_values = [
+                float(equity)
+                for _, equity in stitched_equity_curve
+            ]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "stitched WFA equity must be finite"
+            ) from exc
+
+        if any(not isfinite(equity) for equity in equity_values):
+            raise ValueError("stitched WFA equity must be finite")
+
+        if equity_values[0] <= 0:
+            raise ValueError(
+                "stitched WFA starting equity must be strictly positive"
+            )
 
         start_equity = equity_values[0]
         end_equity = equity_values[-1]

@@ -135,7 +135,11 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
 
         def run(self, **kwargs):
             captured["dataset_context"] = kwargs["dataset_context"]
-            return SimpleNamespace(windows=[], verdict="PASS")
+            return SimpleNamespace(
+                windows=[],
+                verdict="PASS",
+                stitched_equity_curve=[],
+            )
 
     class StubReporter:
         def log_summary(self, result):
@@ -155,11 +159,6 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
         walk_forward_runtime_module,
         "get_strategy_class",
         lambda config: object,
-    )
-    monkeypatch.setattr(
-        walk_forward_runtime_module.EquityStitcher,
-        "stitch",
-        staticmethod(lambda windows: []),
     )
     monkeypatch.setattr(
         walk_forward_runtime_module.EquityVisualizer,

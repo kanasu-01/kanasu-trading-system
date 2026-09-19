@@ -109,7 +109,11 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
 
         def run(self, **kwargs):
             captured.update(kwargs)
-            return SimpleNamespace(windows=[], verdict="PASS")
+            return SimpleNamespace(
+                windows=[],
+                verdict="PASS",
+                stitched_equity_curve=[],
+            )
 
     class StubReporter:
         def log_summary(self, result):
@@ -129,11 +133,6 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
         walk_forward_runtime_module,
         "get_strategy_class",
         lambda value: object,
-    )
-    monkeypatch.setattr(
-        walk_forward_runtime_module.EquityStitcher,
-        "stitch",
-        staticmethod(lambda windows: []),
     )
     monkeypatch.setattr(
         walk_forward_runtime_module.EquityVisualizer,

@@ -17,10 +17,6 @@ from core.walk_forward.exporters.aggregated_metrics_adapter import (
     aggregated_metrics_to_dict,
 )
 
-from core.walk_forward.equity_stitcher import (
-    EquityStitcher,
-)
-
 from core.walk_forward.exporters.equity_curve_adapter import (
     equity_curve_to_dicts,
 )
@@ -58,9 +54,9 @@ def export_walk_forward_results(
         filepath=(f"{filepath_prefix}_summary.json"),
     )
 
-    stitched_curve = EquityStitcher.stitch(result.windows)
-
-    curve_rows = equity_curve_to_dicts(stitched_curve)
+    curve_rows = equity_curve_to_dicts(
+        result.stitched_equity_curve
+    )
 
     CSVExporter.export(
         records=curve_rows,

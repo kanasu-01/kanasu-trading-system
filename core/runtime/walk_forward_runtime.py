@@ -36,10 +36,6 @@ from core.walk_forward.exporters.export_wfa_results import (
     export_walk_forward_results,
 )
 
-from core.walk_forward.equity_stitcher import (
-    EquityStitcher,
-)
-
 from core.walk_forward.equity_visualizer import (
     EquityVisualizer,
 )
@@ -125,10 +121,8 @@ def run_walk_forward(
 
     reporter.log_summary(wf_result)
 
-    stitched_curve = EquityStitcher.stitch(wf_result.windows)
-
     EquityVisualizer.plot(
-        curve=stitched_curve,
+        curve=wf_result.stitched_equity_curve,
         title=(f"{config.symbol} " f"{config.timeframe} " f"WFA Equity Curve"),
     )
 

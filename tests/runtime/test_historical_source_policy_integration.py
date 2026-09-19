@@ -163,7 +163,11 @@ def run_research_main(
 
             def run(self, **kwargs):
                 captured.extend(kwargs["candles"])
-                return SimpleNamespace(windows=[], verdict="PASS")
+                return SimpleNamespace(
+                    windows=[],
+                    verdict="PASS",
+                    stitched_equity_curve=[],
+                )
 
         class StubReporter:
             def log_summary(self, result):
@@ -183,11 +187,6 @@ def run_research_main(
             walk_forward_runtime_module,
             "get_strategy_class",
             lambda value: object,
-        )
-        monkeypatch.setattr(
-            walk_forward_runtime_module.EquityStitcher,
-            "stitch",
-            staticmethod(lambda windows: []),
         )
         monkeypatch.setattr(
             walk_forward_runtime_module.EquityVisualizer,
