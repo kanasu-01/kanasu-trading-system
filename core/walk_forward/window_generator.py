@@ -74,10 +74,11 @@ class WalkForwardWindowGenerator:
         while True:
             if self.mode == "rolling":
                 train_start = start
+                train_end = train_start + self.in_sample_bars
             else:  # expanding
                 train_start = 0
+                train_end = self.in_sample_bars + start
 
-            train_end = train_start + self.in_sample_bars
             test_end = train_end + self.out_sample_bars
 
             if test_end > total_bars:

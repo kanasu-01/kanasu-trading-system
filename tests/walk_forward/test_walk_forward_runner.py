@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from core.entities.candle import Candle
 from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
 
 import core.walk_forward.runner as runner_module
 
@@ -100,6 +101,8 @@ def test_walk_forward_runner_executes():
             symbol="RELIANCE",
             timeframe="15m",
         ),
+        initial_capital=100_000.0,
+        runtime_context=RuntimeContext(),
     )
 
     assert result is not None
@@ -109,14 +112,19 @@ def test_walk_forward_runner_executes():
     assert len(result.windows) > 0
 
 
-def test_walk_forward_runner_propagates_dataset_context(monkeypatch):
+def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
     dataset_context = DatasetContext(
         symbol="RELIANCE",
         timeframe="15m",
     )
+    runtime_context = RuntimeContext(
+        risk_per_trade_pct=2.5,
+    )
+    initial_capital = 250_000.0
     candles = build_dummy_candles(2)
-    optimizer_contexts = []
-    out_of_sample_contexts = []
+
+    optimizer_calls = []
+    out_of_sample_calls = []
 
     class SingleWindowGenerator:
         def generate(self, source_candles):
@@ -134,8 +142,16 @@ def test_walk_forward_runner_propagates_dataset_context(monkeypatch):
             param_space,
             train_bars,
             dataset_context,
+            initial_capital,
+            runtime_context,
         ):
-            optimizer_contexts.append(dataset_context)
+            optimizer_calls.append(
+                (
+                    dataset_context,
+                    initial_capital,
+                    runtime_context,
+                )
+            )
             evaluation = OptimizationEvaluation(
                 params=param_space[0],
                 score=1.0,
@@ -160,16 +176,30 @@ def test_walk_forward_runner_propagates_dataset_context(monkeypatch):
             runtime_context,
             dataset_context,
         ):
-            out_of_sample_contexts.append(dataset_context)
+            out_of_sample_calls.append(
+                (
+                    dataset_context,
+                    initial_capital,
+                    runtime_context,
+                )
+            )
 
         def run(self, source_candles):
             return SimpleNamespace(trades=[])
 
-    monkeypatch.setattr(runner_module, "BacktestEngine", SpyBacktestEngine)
+    monkeypatch.setattr(
+        runner_module,
+        "BacktestEngine",
+        SpyBacktestEngine,
+    )
     monkeypatch.setattr(
         runner_module.WalkForwardResult,
         "from_windows",
-        classmethod(lambda cls, windows: SimpleNamespace(windows=windows)),
+        classmethod(
+            lambda cls, windows: SimpleNamespace(
+                windows=windows
+            )
+        ),
     )
 
     runner = WalkForwardRunner(
@@ -179,10 +209,24 @@ def test_walk_forward_runner_propagates_dataset_context(monkeypatch):
     )
     runner.run(
         strategy_cls=SMACrossOverStrategy,
-        param_space=[{"fast_period": 10, "slow_period": 30}],
+        param_space=[
+            {
+                "fast_period": 10,
+                "slow_period": 30,
+            }
+        ],
         candles=candles,
         dataset_context=dataset_context,
+        initial_capital=initial_capital,
+        runtime_context=runtime_context,
     )
 
-    assert optimizer_contexts == [dataset_context]
-    assert out_of_sample_contexts == [dataset_context]
+    expected = [
+        (
+            dataset_context,
+            initial_capital,
+            runtime_context,
+        )
+    ]
+    assert optimizer_calls == expected
+    assert out_of_sample_calls == expected

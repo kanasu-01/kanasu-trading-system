@@ -7,6 +7,7 @@ from core.config.app_config import AppConfig
 from core.config.backtest_config import BacktestConfig
 from core.config.runtime_mode import RuntimeMode
 from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
 
 
 def backtest_config_values() -> dict:
@@ -174,6 +175,7 @@ def test_walk_forward_runtime_propagates_dataset_timezone(monkeypatch):
     walk_forward_runtime_module.run_walk_forward(
         historical_source=StubHistoricalSource(),
         config=config,
+        runtime_context=RuntimeContext(),
     )
 
     assert_nse_dataset_identity(captured["dataset_context"])

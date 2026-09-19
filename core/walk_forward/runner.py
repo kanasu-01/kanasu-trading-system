@@ -55,6 +55,8 @@ class WalkForwardRunner:
         param_space: List[Dict[str, Any]],
         candles: List[Candle],
         dataset_context: DatasetContext,
+        initial_capital: float,
+        runtime_context: RuntimeContext,
     ) -> WalkForwardResult:
 
         window_results: List[WalkWindowResult] = []
@@ -65,6 +67,8 @@ class WalkForwardRunner:
                 param_space=param_space,
                 window=window,
                 dataset_context=dataset_context,
+                initial_capital=initial_capital,
+                runtime_context=runtime_context,
             )
             window_results.append(window_result)
 
@@ -80,6 +84,8 @@ class WalkForwardRunner:
         param_space: List[Dict[str, Any]],
         window: WalkForwardWindow,
         dataset_context: DatasetContext,
+        initial_capital: float,
+        runtime_context: RuntimeContext,
     ) -> WalkWindowResult:
 
         # -----------------------------
@@ -90,6 +96,8 @@ class WalkForwardRunner:
             param_space=param_space,
             train_bars=window.train_bars,
             dataset_context=dataset_context,
+            initial_capital=initial_capital,
+            runtime_context=runtime_context,
         )
 
         # -----------------------------
@@ -98,8 +106,8 @@ class WalkForwardRunner:
         strategy = strategy_cls(params=optimization_result.best_params)
         engine = BacktestEngine(
             strategy=strategy,
-            initial_capital=100000,
-            runtime_context=RuntimeContext(),
+            initial_capital=initial_capital,
+            runtime_context=runtime_context,
             dataset_context=dataset_context,
         )
 

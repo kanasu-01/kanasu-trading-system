@@ -24,6 +24,7 @@ from core.config.backtest_config import (
 from core.market_data.historical_coverage import TimeRange
 from core.market_data.historical_source import HistoricalSource
 from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
 
 from core.strategies.strategy_factory import (
     get_strategy_class,
@@ -53,6 +54,7 @@ logger = get_logger(__name__)
 def run_walk_forward(
     historical_source: HistoricalSource,
     config: BacktestConfig,
+    runtime_context: RuntimeContext,
 ) -> None:
 
     logger.info(
@@ -113,6 +115,8 @@ def run_walk_forward(
         param_space=(WALK_FORWARD_CONFIG.param_space),
         candles=candles,
         dataset_context=dataset_context,
+        initial_capital=config.initial_capital,
+        runtime_context=runtime_context,
     )
 
     # -----------------------------------------

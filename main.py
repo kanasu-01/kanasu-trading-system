@@ -71,6 +71,9 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
         run_walk_forward(
             historical_source=historical_source,
             config=backtest_config,
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=app_config.risk_per_trade_pct,
+            ),
         )
 
     elif app_config.runtime_mode == RuntimeMode.PAPER:

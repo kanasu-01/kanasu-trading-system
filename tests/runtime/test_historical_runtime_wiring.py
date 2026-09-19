@@ -146,9 +146,13 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
         lambda **kwargs: None,
     )
 
+    runtime_context = RuntimeContext(
+        risk_per_trade_pct=2.5,
+    )
     walk_forward_runtime_module.run_walk_forward(
         historical_source=source,
         config=config(),
+        runtime_context=runtime_context,
     )
 
     expected_context = DatasetContext(
@@ -161,6 +165,8 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
     ]
     assert captured["candles"] == [candle()]
     assert captured["dataset_context"] == expected_context
+    assert captured["initial_capital"] == 100000
+    assert captured["runtime_context"] is runtime_context
 
 
 def test_main_backtest_composes_and_passes_historical_source(monkeypatch):
@@ -201,7 +207,10 @@ def test_main_backtest_composes_and_passes_historical_source(monkeypatch):
 def test_main_walk_forward_composes_and_passes_historical_source(monkeypatch):
     source = object()
     captured = {}
-    app_config = AppConfig(runtime_mode=RuntimeMode.WALK_FORWARD)
+    app_config = AppConfig(
+        runtime_mode=RuntimeMode.WALK_FORWARD,
+        risk_per_trade_pct=2.5,
+    )
 
     def create_source(value):
         captured["factory_config"] = value
@@ -221,10 +230,14 @@ def test_main_walk_forward_composes_and_passes_historical_source(monkeypatch):
     main_module.main(app_config, config())
 
     assert captured["factory_config"] is app_config
-    assert captured["runtime_kwargs"] == {
-        "historical_source": source,
-        "config": config(),
-    }
+    runtime_kwargs = captured["runtime_kwargs"]
+
+    assert runtime_kwargs["historical_source"] is source
+    assert runtime_kwargs["config"] == config()
+    assert (
+        runtime_kwargs["runtime_context"].risk_per_trade_pct
+        == 2.5
+    )
 
 
 def test_main_paper_does_not_compose_historical_source(monkeypatch):

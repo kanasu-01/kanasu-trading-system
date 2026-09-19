@@ -79,3 +79,42 @@ def test_each_window_has_expected_sizes():
         assert len(window.train_bars) == 300
 
         assert len(window.test_bars) == 100
+
+
+def test_expanding_windows_advance_and_terminate():
+
+    candles = build_dummy_candles(10)
+
+    generator = WalkForwardWindowGenerator(
+        in_sample_bars=3,
+        out_sample_bars=2,
+        step_bars=2,
+        mode="expanding",
+    )
+
+    windows = list(generator.generate(candles))
+
+    assert len(windows) == 3
+    assert [len(window.train_bars) for window in windows] == [
+        3,
+        5,
+        7,
+    ]
+    assert [len(window.test_bars) for window in windows] == [
+        2,
+        2,
+        2,
+    ]
+    assert [
+        window.test_bars[0].timestamp
+        for window in windows
+    ] == [
+        candles[3].timestamp,
+        candles[5].timestamp,
+        candles[7].timestamp,
+    ]
+    assert [window.window_index for window in windows] == [
+        0,
+        1,
+        2,
+    ]
