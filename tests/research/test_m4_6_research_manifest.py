@@ -1,5 +1,6 @@
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+import hashlib
+from datetime import datetime, timedelta, timezone, tzinfo
 
 import pytest
 
@@ -14,6 +15,7 @@ from core.config.execution_config import ExecutionConfig
 from core.entities.candle import Candle
 from core.execution.trade_execution_engine import TradeExecutionEngine
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.backtest_run_manifest import BacktestRunManifest
 from core.research.models.research_evidence import (
     ResearchEvidence,
     ResearchEvidenceStatus,
@@ -23,6 +25,7 @@ from core.research.reproducibility import (
     BACKTEST_RUN_MANIFEST_SCHEMA,
     backtest_configuration_fingerprint_v2,
     backtest_run_manifest_bytes,
+    backtest_run_manifest_payload,
     build_backtest_run_manifest,
     dataset_fingerprint,
 )
@@ -417,24 +420,302 @@ def test_manifest_strategy_parameters_are_deeply_immutable():
         manifest.strategy_params["nested"]["extra"] = 6
 
 
-def test_manifest_strategy_parameter_list_reinitialization_is_rejected():
+def test_manifest_nested_lists_resist_direct_builtin_mutation():
     manifest = build_manifest(
         strategy=NoopStrategy(
-            params={
-                "nested": {
-                    "levels": [1, 2],
-                }
-            }
+            params={"nested": {"levels": [1, 2]}}
         )
     )
     levels = manifest.strategy_params["nested"]["levels"]
     fingerprint = backtest_configuration_fingerprint_v2(manifest)
 
+    assert isinstance(levels, tuple)
+    assert not isinstance(levels, list)
+
+    with pytest.raises(TypeError):
+        list.__init__(levels, [9, 10])
+
+    with pytest.raises(TypeError):
+        list.append(levels, 3)
+
     with pytest.raises(TypeError, match="immutable"):
-        levels.__init__([9, 10])
+        levels.append(3)
 
     assert list(levels) == [1, 2]
     assert backtest_configuration_fingerprint_v2(manifest) == fingerprint
+
+
+def test_manifest_payload_preserves_list_and_tuple_semantics():
+    manifest = build_manifest(
+        strategy=NoopStrategy(
+            params={
+                "nested": {
+                    "levels": [1, 2],
+                    "pair": (3, 4),
+                }
+            }
+        )
+    )
+
+    payload = backtest_run_manifest_payload(manifest)
+    nested = payload["strategy_params"]["nested"]
+
+    assert isinstance(nested["levels"], list)
+    assert nested["levels"] == [1, 2]
+    assert isinstance(nested["pair"], tuple)
+    assert nested["pair"] == (3, 4)
+
+    nested["levels"].append(99)
+
+    assert list(
+        manifest.strategy_params["nested"]["levels"]
+    ) == [1, 2]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {1, 2},
+        bytearray(b"mutable"),
+        object(),
+        float("nan"),
+        float("inf"),
+    ],
+)
+def test_manifest_rejects_unsupported_or_nonfinite_strategy_values(value):
+    error = ValueError if isinstance(value, float) else TypeError
+
+    with pytest.raises(error):
+        build_manifest(
+            strategy=NoopStrategy(
+                params={"unsupported": value}
+            )
+        )
+
+
+def test_manifest_rejects_custom_scalar_subclasses():
+    class CustomInt(int):
+        pass
+
+    class CustomStr(str):
+        pass
+
+    class CustomFloat(float):
+        pass
+
+    class CustomDatetime(datetime):
+        pass
+
+    values = [
+        CustomInt(7),
+        CustomStr("seven"),
+        CustomFloat(1.25),
+        CustomDatetime(
+            2026,
+            1,
+            5,
+            9,
+            15,
+            tzinfo=INDIA,
+        ),
+    ]
+
+    for value in values:
+        with pytest.raises(
+            TypeError,
+            match="unsupported strategy parameter type",
+        ):
+            build_manifest(
+                strategy=NoopStrategy(
+                    params={"custom": value}
+                )
+            )
+
+
+def test_prebuilt_frozen_list_is_recursively_resnapshotted():
+    seed = build_manifest(
+        strategy=NoopStrategy(
+            params={"levels": [1, 2]}
+        )
+    )
+
+    frozen_list_type = type(
+        seed.strategy_params["levels"]
+    )
+
+    source = [1, 2]
+    prebuilt = frozen_list_type([source])
+
+    manifest = replace(
+        seed,
+        strategy_params={
+            "nested": prebuilt,
+        },
+    )
+
+    fingerprint = backtest_configuration_fingerprint_v2(
+        manifest
+    )
+
+    source.append(3)
+
+    stored = manifest.strategy_params["nested"][0]
+
+    assert list(stored) == [1, 2]
+
+    with pytest.raises(TypeError):
+        list.append(stored, 3)
+
+    assert (
+        backtest_configuration_fingerprint_v2(manifest)
+        == fingerprint
+    )
+
+    payload = backtest_run_manifest_payload(manifest)
+
+    assert payload["strategy_params"]["nested"] == [
+        [1, 2]
+    ]
+
+
+def test_manifest_rejects_custom_mapping_key_subclasses():
+    class CustomKey(str):
+        pass
+
+    with pytest.raises(
+        TypeError,
+        match="exact string keys",
+    ):
+        build_manifest(
+            strategy=NoopStrategy(
+                params={
+                    CustomKey("alpha"): 1,
+                }
+            )
+        )
+
+
+def test_manifest_snapshots_datetime_timezone_offset():
+    class MutableTimezone(tzinfo):
+        def __init__(self, offset_minutes):
+            self.offset_minutes = offset_minutes
+
+        def utcoffset(self, dt):
+            return timedelta(
+                minutes=self.offset_minutes
+            )
+
+        def dst(self, dt):
+            return timedelta(0)
+
+        def tzname(self, dt):
+            return "MutableTimezone"
+
+    source_timezone = MutableTimezone(330)
+
+    source_datetime = datetime(
+        2026,
+        1,
+        5,
+        9,
+        15,
+        tzinfo=source_timezone,
+    )
+
+    manifest = build_manifest(
+        strategy=NoopStrategy(
+            params={
+                "timestamp": source_datetime,
+            }
+        )
+    )
+
+    stored = manifest.strategy_params["timestamp"]
+    fingerprint = backtest_configuration_fingerprint_v2(
+        manifest
+    )
+
+    assert stored is not source_datetime
+    assert stored.tzinfo is not source_timezone
+    assert stored.isoformat() == (
+        "2026-01-05T09:15:00+05:30"
+    )
+
+    source_timezone.offset_minutes = 0
+
+    assert source_datetime.isoformat() == (
+        "2026-01-05T09:15:00+00:00"
+    )
+
+    assert stored.isoformat() == (
+        "2026-01-05T09:15:00+05:30"
+    )
+
+    assert (
+        backtest_configuration_fingerprint_v2(manifest)
+        == fingerprint
+    )
+
+
+def test_nested_manifest_identity_matches_d927bf2_baseline():
+    manifest = BacktestRunManifest(
+        dataset_context=DatasetContext(
+            "TEST",
+            "15m",
+            "Asia/Kolkata",
+        ),
+        requested_range=TimeRange(
+            START,
+            START + timedelta(hours=1),
+        ),
+        dataset_fingerprint="sha256:" + "0" * 64,
+        strategy_name="BaselineProbe",
+        strategy_params={
+            "nested": {
+                "levels": [1, 2],
+                "pair": (3, 4),
+            }
+        },
+        initial_capital=100_000.0,
+        effective_risk_per_trade_pct=1.0,
+        execution_config=ExecutionConfig(
+            slippage_pct=0.0,
+            slippage_enabled=False,
+            brokerage_enabled=False,
+        ),
+        economic_policy=BACKTEST_ECONOMIC_POLICY,
+    )
+
+    raw = backtest_run_manifest_bytes(manifest)
+
+    assert backtest_configuration_fingerprint_v2(manifest) == (
+        "sha256:"
+        "45eb3d565ec5a842783df6a22c4a36216d58466d0b34829e308c65de1d84f069"
+    )
+    assert hashlib.sha256(raw).hexdigest() == (
+        "a820fc0cc89031b049e89dd6fa11e08d529005c29c00c7c678cfd67b1ce4687e"
+    )
+    assert len(raw) == 2214
+
+
+def test_replace_preserves_source_list_identity_semantics():
+    manifest = build_manifest(
+        strategy=NoopStrategy(
+            params={"levels": [1, 2]}
+        )
+    )
+    fingerprint = backtest_configuration_fingerprint_v2(manifest)
+
+    replaced = replace(
+        manifest,
+        initial_capital=manifest.initial_capital,
+    )
+
+    assert backtest_configuration_fingerprint_v2(replaced) == fingerprint
+    assert isinstance(
+        backtest_run_manifest_payload(replaced)["strategy_params"]["levels"],
+        list,
+    )
 
 
 def test_shared_execution_path_does_not_implicitly_consume_backtest_policy():

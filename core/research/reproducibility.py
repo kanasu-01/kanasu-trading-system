@@ -252,7 +252,7 @@ def backtest_run_manifest_payload(
         "request": _range_payload(manifest.requested_range),
         "dataset_fingerprint": manifest.dataset_fingerprint,
         "strategy_name": manifest.strategy_name,
-        "strategy_params": dict(manifest.strategy_params),
+        "strategy_params": manifest.strategy_params_payload(),
         "initial_capital": manifest.initial_capital,
         "effective_risk_per_trade_pct": manifest.effective_risk_per_trade_pct,
         "execution": _execution_payload(manifest.execution_config),

@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from math import isfinite
 from types import MappingProxyType
 from typing import Any
@@ -16,31 +17,15 @@ from core.runtime.dataset_context import DatasetContext
 _FINGERPRINT_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-class _FrozenList(list):
-    """List-shaped immutable container for canonical type stability."""
+class _FrozenList(tuple):
+    """Immutable storage marker for source list values."""
 
-    __slots__ = ("_constructing",)
+    __slots__ = ()
 
     @staticmethod
     def _immutable(*args, **kwargs):
         raise TypeError("manifest strategy parameters are immutable")
 
-    def __new__(cls, values=()):
-        instance = super().__new__(cls)
-        list.__init__(instance, values)
-        object.__setattr__(instance, "_constructing", True)
-        return instance
-
-    def __init__(self, values=()):
-        if getattr(self, "_constructing", False):
-            object.__delattr__(self, "_constructing")
-            return
-        self._immutable()
-
-    __setattr__ = _immutable
-    __delattr__ = _immutable
-    __setitem__ = _immutable
-    __delitem__ = _immutable
     append = _immutable
     clear = _immutable
     extend = _immutable
@@ -55,9 +40,9 @@ class _FrozenList(list):
 
 def _freeze_strategy_value(value):
     if isinstance(value, Mapping):
-        if any(not isinstance(key, str) for key in value):
+        if any(type(key) is not str for key in value):
             raise TypeError(
-                "strategy parameter mappings require string keys"
+                "strategy parameter mappings require exact string keys"
             )
 
         return MappingProxyType(
@@ -65,6 +50,12 @@ def _freeze_strategy_value(value):
                 key: _freeze_strategy_value(item)
                 for key, item in value.items()
             }
+        )
+
+    if isinstance(value, _FrozenList):
+        return _FrozenList(
+            _freeze_strategy_value(item)
+            for item in value
         )
 
     if isinstance(value, list):
@@ -76,6 +67,54 @@ def _freeze_strategy_value(value):
     if isinstance(value, tuple):
         return tuple(
             _freeze_strategy_value(item)
+            for item in value
+        )
+
+    if value is None:
+        return value
+
+    if type(value) in (bool, int, str):
+        return value
+
+    if type(value) is datetime:
+        offset = value.utcoffset()
+
+        if offset is None:
+            return value.replace(tzinfo=None)
+
+        return value.replace(
+            tzinfo=timezone(offset)
+        )
+
+    if type(value) is float:
+        if not isfinite(value):
+            raise ValueError(
+                "strategy parameter floats must be finite"
+            )
+        return value
+
+    raise TypeError(
+        "unsupported strategy parameter type: "
+        f"{type(value).__name__}"
+    )
+
+
+def _strategy_value_payload(value):
+    if isinstance(value, Mapping):
+        return {
+            key: _strategy_value_payload(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, _FrozenList):
+        return [
+            _strategy_value_payload(item)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return tuple(
+            _strategy_value_payload(item)
             for item in value
         )
 
@@ -93,6 +132,14 @@ class BacktestRunManifest:
     effective_risk_per_trade_pct: float
     execution_config: ExecutionConfig
     economic_policy: BacktestEconomicPolicy
+
+    def strategy_params_payload(self) -> dict[str, Any]:
+        """Return detached values using original container semantics."""
+
+        return {
+            key: _strategy_value_payload(item)
+            for key, item in self.strategy_params.items()
+        }
 
     def __post_init__(self) -> None:
         if not isinstance(self.dataset_context, DatasetContext):
