@@ -188,6 +188,14 @@ class LiveCandleBuilder:
         if self._timezone is not None and timestamp.tzinfo != self._timezone:
             raise ValueError("live clock timezone must remain consistent")
 
+        if (
+            self._session_date is not None
+            and timestamp.date() != self._session_date
+        ):
+            raise ValueError(
+                "live candle builder is scoped to one trading session"
+            )
+
         if self._watermark is not None and timestamp < self._watermark:
             raise ValueError(
                 "live clock cannot move behind the current watermark"

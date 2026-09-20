@@ -218,3 +218,28 @@ def test_first_update_on_later_boundary_is_full_candle() -> None:
     assert candle.low == 99.0
     assert candle.close == 99.0
     assert candle.volume == pytest.approx(50.0)
+
+
+def test_advance_time_rejects_different_trading_session() -> None:
+    builder = LiveCandleBuilder("15m", SESSION_START)
+
+    assert builder.on_update(
+        _update(10, 15, 100.0, 500.0, 1)
+    ) is None
+    assert builder.on_update(
+        _update(10, 20, 101.0, 520.0, 2)
+    ) is None
+
+    next_session_time = _ts(10, 30) + timedelta(days=1)
+
+    with pytest.raises(
+        ValueError,
+        match="scoped to one trading session",
+    ):
+        builder.advance_time(next_session_time)
+
+    # Rejection must not advance the watermark or destroy the valid candle.
+    candle = builder.advance_time(_ts(10, 30))
+
+    assert candle is not None
+    assert candle.timestamp == _ts(10, 15)
