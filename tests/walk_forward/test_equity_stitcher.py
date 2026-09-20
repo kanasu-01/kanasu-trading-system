@@ -144,3 +144,44 @@ def test_stitching_cannot_continue_after_capital_is_exhausted(
         match="cannot continue after non-positive equity",
     ):
         EquityStitcher.stitch(windows)
+
+
+def test_first_window_equity_is_preserved_without_normalization():
+    curve = [
+        (START, 100_000.0),
+        (START + timedelta(minutes=15), 110_000.0),
+        (START + timedelta(minutes=30), 88_000.0),
+        (START + timedelta(minutes=45), 101_000.0),
+    ]
+
+    assert EquityStitcher.stitch(
+        [window(0, curve)]
+    ) == curve
+
+
+def test_scale_one_preserves_later_window_equity_exactly():
+    windows = [
+        window(
+            0,
+            [
+                (START, 100.0),
+                (START + timedelta(minutes=15), 110.0),
+            ],
+        ),
+        window(
+            1,
+            [
+                (START + timedelta(minutes=30), 110.0),
+                (START + timedelta(minutes=45), 88.0),
+            ],
+        ),
+    ]
+
+    stitched = EquityStitcher.stitch(windows)
+
+    assert stitched == [
+        (START, 100.0),
+        (START + timedelta(minutes=15), 110.0),
+        (START + timedelta(minutes=30), 110.0),
+        (START + timedelta(minutes=45), 88.0),
+    ]

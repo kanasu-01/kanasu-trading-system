@@ -271,3 +271,59 @@ def test_stitched_metrics_reject_non_finite_equity(equity) -> None:
                 (START + timedelta(minutes=15), equity),
             ]
         )
+
+
+@pytest.mark.parametrize(
+    "scores",
+    [
+        [1.0, float("nan")],
+        [1.0, float("inf")],
+        [1.0, float("-inf")],
+        [1e308, -1e308],
+    ],
+)
+def test_optimization_stability_rejects_non_finite_evidence(
+    scores,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="finite",
+    ):
+        WalkForwardMetrics.optimization_stability_score(
+            scores
+        )
+
+
+def test_wfa_aggregate_rejects_non_finite_derived_average() -> None:
+    with pytest.raises(
+        ValueError,
+        match="derived metrics must be finite",
+    ):
+        WalkForwardMetrics.aggregate(
+            [
+                {
+                    "account_return_pct": 1e308,
+                    "max_equity_drawdown_pct": 0.0,
+                },
+                {
+                    "account_return_pct": 1e308,
+                    "max_equity_drawdown_pct": 0.0,
+                },
+            ]
+        )
+
+
+def test_stitched_metrics_reject_non_finite_derived_return() -> None:
+    with pytest.raises(
+        ValueError,
+        match="derived metrics must be finite",
+    ):
+        WalkForwardMetrics.compute_stitched_equity_metrics(
+            [
+                (START, 1e-308),
+                (
+                    START + timedelta(minutes=15),
+                    1e308,
+                ),
+            ]
+        )

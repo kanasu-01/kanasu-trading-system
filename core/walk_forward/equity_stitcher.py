@@ -74,6 +74,17 @@ class EquityStitcher:
                 else capital_base
             )
 
+            scale = (
+                1.0
+                if window_capital_base == window_start_equity
+                else window_capital_base / window_start_equity
+            )
+
+            if not isfinite(scale):
+                raise ValueError(
+                    "WFA stitching scale must be finite"
+                )
+
             for point_index, (timestamp, raw_equity) in enumerate(
                 equity_curve
             ):
@@ -112,8 +123,9 @@ class EquityStitcher:
                         )
 
                 stitched_equity = (
-                    window_capital_base
-                    * (equity / window_start_equity)
+                    equity
+                    if scale == 1.0
+                    else equity * scale
                 )
 
                 if not isfinite(stitched_equity):

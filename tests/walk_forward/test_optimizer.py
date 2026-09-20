@@ -419,3 +419,93 @@ def test_optimizer_preserves_valid_effective_parameter_evidence(
     ].research_parameters() == params
     assert result.best_params == params
     assert result.evaluations[0].params == params
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        {
+            "account_return_pct": float("nan"),
+            "max_equity_drawdown_pct": 0.0,
+        },
+        {
+            "account_return_pct": float("inf"),
+            "max_equity_drawdown_pct": 0.0,
+        },
+        {
+            "account_return_pct": 1.0,
+            "max_equity_drawdown_pct": float("inf"),
+        },
+    ],
+)
+def test_optimizer_score_rejects_non_finite_inputs(metrics):
+    with pytest.raises(
+        ValueError,
+        match="finite",
+    ):
+        GridSearchOptimizer._score(metrics)
+
+
+def test_optimizer_score_rejects_finite_input_overflow():
+    with pytest.raises(
+        ValueError,
+        match="optimizer score must be finite",
+    ):
+        GridSearchOptimizer._score(
+            {
+                "account_return_pct": -1.7e308,
+                "max_equity_drawdown_pct": 1.7e308,
+            }
+        )
+
+
+def test_optimizer_rejects_real_engine_non_finite_account_score():
+    start = datetime(2026, 1, 2, 9, 15)
+
+    candles = [
+        Candle(
+            timestamp=start,
+            open=0.001,
+            high=0.001,
+            low=0.001,
+            close=0.001,
+            volume=1000.0,
+        ),
+        Candle(
+            timestamp=start + timedelta(minutes=15),
+            open=0.001,
+            high=0.0011,
+            low=0.001,
+            close=0.0011,
+            volume=1000.0,
+        ),
+        Candle(
+            timestamp=start + timedelta(minutes=30),
+            open=0.0011,
+            high=5e305,
+            low=0.0011,
+            close=5e305,
+            volume=1000.0,
+        ),
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match="optimizer scoring metrics must be finite",
+    ):
+        GridSearchOptimizer().optimize(
+            strategy_cls=SMACrossOverStrategy,
+            param_space=[
+                {
+                    "fast_period": 1,
+                    "slow_period": 2,
+                }
+            ],
+            train_bars=candles,
+            dataset_context=DatasetContext(
+                symbol="TEST",
+                timeframe="15m",
+            ),
+            initial_capital=1.0,
+            runtime_context=RuntimeContext(),
+        )

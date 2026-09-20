@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from types import SimpleNamespace
+
 import pytest
 
 from core.walk_forward.result import WalkForwardResult
@@ -127,3 +130,257 @@ def test_wfa_verdict_uses_unrounded_threshold_values(
         )
         == expected
     )
+
+
+START = datetime(2026, 1, 2, 9, 15)
+
+
+def result_window(
+    *,
+    index=0,
+    equities=(100.0, 101.0),
+    account_return_pct=1.0,
+    max_drawdown_pct=0.0,
+    optimization_stability_score=1.0,
+):
+    base = START + timedelta(hours=index)
+
+    return SimpleNamespace(
+        window_index=index,
+        optimization_stability_score=(
+            optimization_stability_score
+        ),
+        test_metrics={
+            "account_return_pct": account_return_pct,
+            "max_equity_drawdown_pct": max_drawdown_pct,
+        },
+        backtest_result=SimpleNamespace(
+            equity_curve=[
+                (
+                    base + timedelta(minutes=15 * point_index),
+                    equity,
+                )
+                for point_index, equity in enumerate(equities)
+            ]
+        ),
+    )
+
+
+def test_exact_first_window_drawdown_boundary_remains_pass():
+    result = WalkForwardResult.from_windows(
+        [
+            result_window(
+                equities=(
+                    100_000.0,
+                    110_000.0,
+                    88_000.0,
+                    101_000.0,
+                ),
+                account_return_pct=1.0,
+                max_drawdown_pct=20.0,
+            )
+        ]
+    )
+
+    assert result.stitched_equity_curve == [
+        (START, 100_000.0),
+        (
+            START + timedelta(minutes=15),
+            110_000.0,
+        ),
+        (
+            START + timedelta(minutes=30),
+            88_000.0,
+        ),
+        (
+            START + timedelta(minutes=45),
+            101_000.0,
+        ),
+    ]
+    assert (
+        result.stitched_equity_metrics[
+            "stitched_max_drawdown_pct"
+        ]
+        == 20.0
+    )
+    assert result.verdict == "PASS"
+
+
+def test_scaled_window_drawdown_boundary_does_not_false_fail():
+    first = result_window(
+        index=0,
+        equities=(100.0, 110.0),
+        account_return_pct=1.0,
+        max_drawdown_pct=0.0,
+    )
+
+    second = result_window(
+        index=1,
+        equities=(100.0, 80.0, 101.0),
+        account_return_pct=1.0,
+        max_drawdown_pct=20.0,
+    )
+
+    result = WalkForwardResult.from_windows(
+        [first, second]
+    )
+
+    assert (
+        result.stitched_equity_metrics[
+            "stitched_max_drawdown_pct"
+        ]
+        > 20.0
+    )
+    assert result.verdict == "PASS"
+
+
+def test_machine_noise_at_drawdown_threshold_does_not_false_fail():
+    assert (
+        evaluate(
+            stitched_overrides={
+                "stitched_max_drawdown_pct": (
+                    20.00000000000001
+                ),
+            }
+        )
+        == "PASS"
+    )
+
+
+def test_genuinely_above_drawdown_threshold_still_fails():
+    assert (
+        evaluate(
+            stitched_overrides={
+                "stitched_max_drawdown_pct": 20.000001,
+            }
+        )
+        == "FAIL"
+    )
+
+
+def test_tiny_positive_stitched_return_remains_positive():
+    assert (
+        evaluate(
+            stitched_overrides={
+                "stitched_total_return_pct": 1e-15,
+            }
+        )
+        == "PASS"
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        (
+            "min_consistency",
+            float("nan"),
+            "min_consistency must be a finite number",
+        ),
+        (
+            "min_consistency",
+            float("inf"),
+            "min_consistency must be a finite number",
+        ),
+        (
+            "min_consistency",
+            -0.01,
+            "min_consistency must be >= 0.0",
+        ),
+        (
+            "min_consistency",
+            1.01,
+            "min_consistency must be <= 1.0",
+        ),
+        (
+            "min_stability_score",
+            float("nan"),
+            "min_stability_score must be a finite number",
+        ),
+        (
+            "min_stability_score",
+            -0.01,
+            "min_stability_score must be >= 0.0",
+        ),
+        (
+            "min_stability_score",
+            1.01,
+            "min_stability_score must be <= 1.0",
+        ),
+        (
+            "max_drawdown_pct",
+            float("nan"),
+            "max_drawdown_pct must be a finite number",
+        ),
+        (
+            "max_drawdown_pct",
+            float("inf"),
+            "max_drawdown_pct must be a finite number",
+        ),
+        (
+            "max_drawdown_pct",
+            -0.01,
+            "max_drawdown_pct must be >= 0.0",
+        ),
+        (
+            "min_consistency",
+            True,
+            "min_consistency must be a finite number",
+        ),
+        (
+            "max_drawdown_pct",
+            "20",
+            "max_drawdown_pct must be a finite number",
+        ),
+    ],
+)
+def test_public_factory_rejects_invalid_verdict_thresholds(
+    name,
+    value,
+    message,
+):
+    kwargs = {name: value}
+
+    with pytest.raises(
+        ValueError,
+        match=message,
+    ):
+        WalkForwardResult.from_windows(
+            [result_window()],
+            **kwargs,
+        )
+
+
+def test_public_factory_accepts_valid_threshold_endpoints():
+    result = WalkForwardResult.from_windows(
+        [result_window()],
+        min_consistency=0.0,
+        max_drawdown_pct=0.0,
+        min_stability_score=1.0,
+    )
+
+    assert result.verdict == "PASS"
+
+
+@pytest.mark.parametrize(
+    "score",
+    [
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_result_rejects_non_finite_optimization_stability(
+    score,
+):
+    with pytest.raises(
+        ValueError,
+        match="optimization stability must be finite",
+    ):
+        WalkForwardResult.from_windows(
+            [
+                result_window(
+                    optimization_stability_score=score,
+                )
+            ]
+        )

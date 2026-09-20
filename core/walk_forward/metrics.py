@@ -97,9 +97,29 @@ class WalkForwardMetrics:
             sum(account_returns) / total_windows
         )
         worst_equity_drawdown = max(equity_drawdowns)
+
+        primary_derived_values = (
+            consistency_ratio,
+            avg_account_return,
+            worst_equity_drawdown,
+        )
+
+        if any(
+            not isfinite(value)
+            for value in primary_derived_values
+        ):
+            raise ValueError(
+                "WFA aggregate derived metrics must be finite"
+            )
+
         account_return_stability = WalkForwardMetrics._stability_score(
             account_returns
         )
+
+        if not isfinite(account_return_stability):
+            raise ValueError(
+                "WFA aggregate derived metrics must be finite"
+            )
 
         return {
             "total_windows": total_windows,
@@ -156,6 +176,11 @@ class WalkForwardMetrics:
             else 0.0
         )
 
+        if not isfinite(total_return_pct):
+            raise ValueError(
+                "stitched WFA derived metrics must be finite"
+            )
+
         # -----------------------------------------
         # Max drawdown
         # -----------------------------------------
@@ -167,7 +192,16 @@ class WalkForwardMetrics:
             if equity > peak:
                 peak = equity
 
-            drawdown = ((peak - equity) / peak) * 100 if peak != 0 else 0.0
+            drawdown = (
+                ((peak - equity) / peak) * 100
+                if peak != 0
+                else 0.0
+            )
+
+            if not isfinite(drawdown):
+                raise ValueError(
+                    "stitched WFA derived metrics must be finite"
+                )
 
             if drawdown > max_drawdown:
                 max_drawdown = drawdown
@@ -190,11 +224,58 @@ class WalkForwardMetrics:
         if not values:
             return 0.0
 
-        mean = sum(values) / len(values)
-        variance = sum((v - mean) ** 2 for v in values) / len(values)
+        normalized_values = []
 
-        # Add 1 to avoid division by zero
-        stability = 1 / (1 + variance)
+        for value in values:
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "stability values must be finite numbers"
+                ) from exc
+
+            if not isfinite(numeric_value):
+                raise ValueError(
+                    "stability values must be finite numbers"
+                )
+
+            normalized_values.append(numeric_value)
+
+        try:
+            mean = (
+                sum(normalized_values)
+                / len(normalized_values)
+            )
+
+            if not isfinite(mean):
+                raise ValueError(
+                    "stability calculation must remain finite"
+                )
+
+            variance = (
+                sum(
+                    (value - mean) ** 2
+                    for value in normalized_values
+                )
+                / len(normalized_values)
+            )
+
+            if not isfinite(variance):
+                raise ValueError(
+                    "stability calculation must remain finite"
+                )
+
+            stability = 1 / (1 + variance)
+
+        except OverflowError as exc:
+            raise ValueError(
+                "stability calculation must remain finite"
+            ) from exc
+
+        if not isfinite(stability):
+            raise ValueError(
+                "stability calculation must remain finite"
+            )
 
         return stability
 

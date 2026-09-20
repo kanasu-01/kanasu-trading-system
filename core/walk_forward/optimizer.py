@@ -1,3 +1,4 @@
+from math import isfinite
 from typing import Dict, List, Type, Any
 
 from core.backtest.backtest_engine import BacktestEngine
@@ -164,7 +165,45 @@ class GridSearchOptimizer:
         Prefer higher account return with lower equity drawdown.
         """
 
-        account_return = metrics["account_return_pct"]
-        max_drawdown = metrics["max_equity_drawdown_pct"]
+        try:
+            account_return = float(
+                metrics["account_return_pct"]
+            )
+            max_drawdown = float(
+                metrics["max_equity_drawdown_pct"]
+            )
+        except KeyError as exc:
+            raise ValueError(
+                f"optimizer scoring metric missing: {exc.args[0]}"
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "optimizer scoring metrics must be finite numbers"
+            ) from exc
 
-        return account_return - (0.5 * max_drawdown)
+        if (
+            not isfinite(account_return)
+            or not isfinite(max_drawdown)
+        ):
+            raise ValueError(
+                "optimizer scoring metrics must be finite numbers"
+            )
+
+        if max_drawdown < 0:
+            raise ValueError(
+                "optimizer equity drawdown must be non-negative"
+            )
+
+        try:
+            score = account_return - (0.5 * max_drawdown)
+        except OverflowError as exc:
+            raise ValueError(
+                "optimizer score must be finite"
+            ) from exc
+
+        if not isfinite(score):
+            raise ValueError(
+                "optimizer score must be finite"
+            )
+
+        return score
