@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
+from math import inf, nextafter
 from types import SimpleNamespace
 
 import pytest
 
+from core.backtest.backtest_result import BacktestResult
+from core.backtest.bar_record import BarRecord
+from core.walk_forward.metrics import WalkForwardMetrics
 from core.walk_forward.result import WalkForwardResult
 
 
@@ -439,3 +443,189 @@ def test_verdict_evaluator_rejects_invalid_thresholds(
             stitched_metrics=stitched_metrics,
             **thresholds,
         )
+
+
+def authoritative_window(
+    *,
+    index,
+    start_equity,
+    end_equity,
+):
+    base = START + timedelta(hours=index)
+
+    records = [
+        BarRecord(
+            timestamp=base,
+            open=100.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+            strategy="M5-exact-stitch",
+            state=None,
+            signal=None,
+            execution_event=None,
+            execution_price=None,
+            execution_quantity=None,
+            decision_snapshot={},
+            equity=start_equity,
+            cash=start_equity,
+            position_size=0,
+            drawdown=0.0,
+        ),
+        BarRecord(
+            timestamp=base + timedelta(minutes=15),
+            open=100.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+            strategy="M5-exact-stitch",
+            state=None,
+            signal=None,
+            execution_event=None,
+            execution_price=None,
+            execution_quantity=None,
+            decision_snapshot={},
+            equity=end_equity,
+            cash=end_equity,
+            position_size=0,
+            drawdown=0.0,
+        ),
+    ]
+
+    backtest_result = BacktestResult(
+        trades=[],
+        bar_records=records,
+        session_id=f"m5-exact-{index}",
+    )
+
+    return SimpleNamespace(
+        window_index=index,
+        optimization_stability_score=1.0,
+        test_metrics=WalkForwardMetrics().compute(
+            backtest_result
+        ),
+        backtest_result=backtest_result,
+    )
+
+
+def exact_compounding_windows(
+    third_end=2_048_383.0,
+):
+    return [
+        authoritative_window(
+            index=0,
+            start_equity=2_080_768.0,
+            end_equity=2_097_152.0,
+        ),
+        authoritative_window(
+            index=1,
+            start_equity=2_080_768.0,
+            end_equity=2_097_152.0,
+        ),
+        authoritative_window(
+            index=2,
+            start_equity=2_080_768.0,
+            end_equity=third_end,
+        ),
+    ]
+
+
+def test_exact_compounded_break_even_fails_positive_return_requirement():
+    result = WalkForwardResult.from_windows(
+        exact_compounding_windows()
+    )
+
+    assert result.stitched_equity_curve[0][1] == 2_080_768.0
+    assert result.stitched_equity_curve[-1][1] == 2_080_768.0
+    assert (
+        result.stitched_equity_metrics[
+            "stitched_total_return_pct"
+        ]
+        == 0.0
+    )
+
+    # All other default verdict criteria pass.
+    assert (
+        result.aggregated_metrics["consistency_ratio"]
+        >= 0.60
+    )
+    assert (
+        result.aggregated_metrics["avg_account_return_pct"]
+        > 0.0
+    )
+    assert (
+        result.aggregated_metrics[
+            "worst_equity_drawdown_pct"
+        ]
+        < 20.0
+    )
+    assert (
+        result.aggregated_metrics[
+            "account_return_stability_score"
+        ]
+        >= 0.20
+    )
+
+    assert result.verdict == "FAIL"
+
+
+def test_scaled_flat_equity_has_zero_stitched_drawdown():
+    result = WalkForwardResult.from_windows(
+        [
+            authoritative_window(
+                index=0,
+                start_equity=100.0,
+                end_equity=100.3,
+            ),
+            authoritative_window(
+                index=1,
+                start_equity=100.0,
+                end_equity=100.0,
+            ),
+        ],
+        min_consistency=0.50,
+        max_drawdown_pct=0.0,
+    )
+
+    assert (
+        result.stitched_equity_metrics[
+            "stitched_max_drawdown_pct"
+        ]
+        == 0.0
+    )
+    assert result.verdict == "PASS"
+
+
+@pytest.mark.parametrize(
+    ("direction", "expected_sign", "expected_verdict"),
+    [
+        (inf, 1, "PASS"),
+        (-inf, -1, "FAIL"),
+    ],
+)
+def test_genuinely_tiny_compounded_return_keeps_its_sign(
+    direction,
+    expected_sign,
+    expected_verdict,
+):
+    third_end = nextafter(
+        2_048_383.0,
+        direction,
+    )
+
+    result = WalkForwardResult.from_windows(
+        exact_compounding_windows(
+            third_end=third_end,
+        )
+    )
+
+    stitched_return = (
+        result.stitched_equity_metrics[
+            "stitched_total_return_pct"
+        ]
+    )
+
+    assert stitched_return * expected_sign > 0.0
+    assert result.verdict == expected_verdict

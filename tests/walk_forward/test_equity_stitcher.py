@@ -244,3 +244,82 @@ def test_stitching_rejects_positive_scale_underflow():
         match="scale must be finite and strictly positive",
     ):
         EquityStitcher.stitch(windows)
+
+
+def test_exact_compounded_break_even_stays_exactly_break_even():
+    windows = [
+        window(
+            0,
+            [
+                (START, 2_080_768.0),
+                (
+                    START + timedelta(minutes=15),
+                    2_097_152.0,
+                ),
+            ],
+        ),
+        window(
+            1,
+            [
+                (
+                    START + timedelta(minutes=30),
+                    2_080_768.0,
+                ),
+                (
+                    START + timedelta(minutes=45),
+                    2_097_152.0,
+                ),
+            ],
+        ),
+        window(
+            2,
+            [
+                (
+                    START + timedelta(minutes=60),
+                    2_080_768.0,
+                ),
+                (
+                    START + timedelta(minutes=75),
+                    2_048_383.0,
+                ),
+            ],
+        ),
+    ]
+
+    stitched = EquityStitcher.stitch(windows)
+
+    assert stitched[0][1] == 2_080_768.0
+    assert stitched[-1][1] == 2_080_768.0
+
+
+def test_scaled_flat_window_does_not_create_drawdown_noise():
+    windows = [
+        window(
+            0,
+            [
+                (START, 100.0),
+                (
+                    START + timedelta(minutes=15),
+                    100.3,
+                ),
+            ],
+        ),
+        window(
+            1,
+            [
+                (
+                    START + timedelta(minutes=30),
+                    100.0,
+                ),
+                (
+                    START + timedelta(minutes=45),
+                    100.0,
+                ),
+            ],
+        ),
+    ]
+
+    stitched = EquityStitcher.stitch(windows)
+
+    assert stitched[-2][1] == 100.3
+    assert stitched[-1][1] == 100.3

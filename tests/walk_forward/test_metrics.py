@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from fractions import Fraction
 
 import pytest
 
@@ -327,3 +328,36 @@ def test_stitched_metrics_reject_non_finite_derived_return() -> None:
                 ),
             ]
         )
+
+
+def test_exact_stitched_metrics_preserve_sub_float_return_sign():
+    tiny = Fraction(1, 10 ** 400)
+
+    positive = (
+        WalkForwardMetrics.compute_stitched_equity_metrics(
+            [
+                (START, Fraction(1, 1)),
+                (
+                    START + timedelta(minutes=15),
+                    Fraction(1, 1) + tiny,
+                ),
+            ]
+        )
+    )
+    negative = (
+        WalkForwardMetrics.compute_stitched_equity_metrics(
+            [
+                (START, Fraction(1, 1)),
+                (
+                    START + timedelta(minutes=15),
+                    Fraction(1, 1) - tiny,
+                ),
+            ]
+        )
+    )
+
+    assert positive["stitched_total_return_pct"] > 0.0
+    assert positive["stitched_max_drawdown_pct"] == 0.0
+
+    assert negative["stitched_total_return_pct"] < 0.0
+    assert negative["stitched_max_drawdown_pct"] > 0.0

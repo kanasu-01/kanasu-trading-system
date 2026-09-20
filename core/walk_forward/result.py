@@ -98,9 +98,15 @@ class WalkForwardResult:
 
         metrics = WalkForwardMetrics.aggregate([w.test_metrics for w in windows])
 
-        stitched_equity_curve = EquityStitcher.stitch(windows)
-        stitched_equity_metrics = WalkForwardMetrics.compute_stitched_equity_metrics(
-            stitched_equity_curve
+        (
+            stitched_equity_curve,
+            exact_stitched_equity_curve,
+        ) = EquityStitcher.stitch_with_exact(windows)
+
+        stitched_equity_metrics = (
+            WalkForwardMetrics.compute_stitched_equity_metrics(
+                exact_stitched_equity_curve
+            )
         )
 
         optimization_stability_scores = []

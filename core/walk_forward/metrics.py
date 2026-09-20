@@ -1,4 +1,5 @@
-from math import isfinite
+from fractions import Fraction
+from math import inf, isfinite, nextafter
 from typing import List, Dict, Any
 
 from core.backtest.backtest_result import BacktestResult
@@ -133,11 +134,61 @@ class WalkForwardMetrics:
         }
 
     @staticmethod
+    def _exact_equity_value(value) -> Fraction:
+        if isinstance(value, Fraction):
+            return value
+
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "stitched WFA equity must be finite"
+            ) from exc
+
+        if not isfinite(numeric_value):
+            raise ValueError(
+                "stitched WFA equity must be finite"
+            )
+
+        return Fraction.from_float(numeric_value)
+
+    @staticmethod
+    def _finite_fraction_metric(
+        value: Fraction,
+    ) -> float:
+        try:
+            numeric_value = float(value)
+        except OverflowError as exc:
+            raise ValueError(
+                "stitched WFA derived metrics must be finite"
+            ) from exc
+
+        if not isfinite(numeric_value):
+            raise ValueError(
+                "stitched WFA derived metrics must be finite"
+            )
+
+        # If an exact non-zero rational is smaller than the
+        # smallest representable float, preserve its sign
+        # instead of silently converting it into zero.
+        if numeric_value == 0.0 and value != 0:
+            numeric_value = nextafter(
+                0.0,
+                inf if value > 0 else -inf,
+            )
+
+        return numeric_value
+
+    @staticmethod
     def compute_stitched_equity_metrics(
         stitched_equity_curve,
     ) -> Dict[str, Any]:
         """
         Compute metrics from continuous stitched OOS equity.
+
+        Fraction inputs retain exact compounded relationships,
+        preventing reconstruction noise from changing zero-boundary
+        return or drawdown verdicts.
         """
 
         if not stitched_equity_curve:
@@ -146,18 +197,10 @@ class WalkForwardMetrics:
                 "stitched_max_drawdown_pct": 0.0,
             }
 
-        try:
-            equity_values = [
-                float(equity)
-                for _, equity in stitched_equity_curve
-            ]
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "stitched WFA equity must be finite"
-            ) from exc
-
-        if any(not isfinite(equity) for equity in equity_values):
-            raise ValueError("stitched WFA equity must be finite")
+        equity_values = [
+            WalkForwardMetrics._exact_equity_value(equity)
+            for _, equity in stitched_equity_curve
+        ]
 
         if equity_values[0] <= 0:
             raise ValueError(
@@ -166,49 +209,41 @@ class WalkForwardMetrics:
 
         start_equity = equity_values[0]
         end_equity = equity_values[-1]
+        hundred = Fraction(100, 1)
 
-        # -----------------------------------------
-        # Total return
-        # -----------------------------------------
-        total_return_pct = (
-            ((end_equity - start_equity) / start_equity) * 100
-            if start_equity != 0
-            else 0.0
+        total_return_exact = (
+            (end_equity - start_equity)
+            / start_equity
+            * hundred
         )
 
-        if not isfinite(total_return_pct):
-            raise ValueError(
-                "stitched WFA derived metrics must be finite"
-            )
-
-        # -----------------------------------------
-        # Max drawdown
-        # -----------------------------------------
         peak = equity_values[0]
-        max_drawdown = 0.0
+        max_drawdown_exact = Fraction(0, 1)
 
         for equity in equity_values:
-
             if equity > peak:
                 peak = equity
 
-            drawdown = (
-                ((peak - equity) / peak) * 100
-                if peak != 0
-                else 0.0
+            drawdown_exact = (
+                (peak - equity)
+                / peak
+                * hundred
             )
 
-            if not isfinite(drawdown):
-                raise ValueError(
-                    "stitched WFA derived metrics must be finite"
-                )
-
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
+            if drawdown_exact > max_drawdown_exact:
+                max_drawdown_exact = drawdown_exact
 
         return {
-            "stitched_total_return_pct": total_return_pct,
-            "stitched_max_drawdown_pct": max_drawdown,
+            "stitched_total_return_pct": (
+                WalkForwardMetrics._finite_fraction_metric(
+                    total_return_exact
+                )
+            ),
+            "stitched_max_drawdown_pct": (
+                WalkForwardMetrics._finite_fraction_metric(
+                    max_drawdown_exact
+                )
+            ),
         }
 
     # ------------------------------------------------------
