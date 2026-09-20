@@ -1,13 +1,17 @@
 import time
-from typing import List, Callable
+from typing import List
 
 from core.entities.candle import Candle
-from core.market_data.base_feed import BaseFeed
+from core.market_data.completed_candle_delivery import CompletedCandleDelivery
+from core.market_data.live_candle_feed import (
+    CompletedCandleHandler,
+    LiveCandleFeed,
+)
 
 
-class MockLiveFeed(BaseFeed):
+class MockLiveFeed(LiveCandleFeed):
     """
-    Simulated live feed using historical candles.
+    Simulated live feed using already-completed historical candles.
     """
 
     def __init__(
@@ -17,10 +21,13 @@ class MockLiveFeed(BaseFeed):
     ):
         self.candles = candles
         self.interval_seconds = interval_seconds
+        self._delivery = CompletedCandleDelivery()
 
-    def subscribe(self, on_candle: Callable[[Candle], None]) -> None:
+    def subscribe(self, on_candle: CompletedCandleHandler) -> None:
         for candle in self.candles:
-            on_candle(candle)
+            if self._delivery.accept(candle):
+                on_candle(candle)
+
             time.sleep(self.interval_seconds)
 
     def load(
@@ -30,4 +37,9 @@ class MockLiveFeed(BaseFeed):
         start,
         end,
     ):
+        """
+        Preserve the existing replay accessor during the M6 transition.
+
+        This method is not part of the live-feed contract.
+        """
         return self.candles
