@@ -80,9 +80,10 @@ class EquityStitcher:
                 else window_capital_base / window_start_equity
             )
 
-            if not isfinite(scale):
+            if not isfinite(scale) or scale <= 0:
                 raise ValueError(
-                    "WFA stitching scale must be finite"
+                    "WFA stitching scale must be finite "
+                    "and strictly positive"
                 )
 
             for point_index, (timestamp, raw_equity) in enumerate(
@@ -122,11 +123,12 @@ class EquityStitcher:
                             "strictly increasing and non-overlapping"
                         )
 
-                stitched_equity = (
-                    equity
-                    if scale == 1.0
-                    else equity * scale
-                )
+                if point_index == 0:
+                    stitched_equity = window_capital_base
+                elif scale == 1.0:
+                    stitched_equity = equity
+                else:
+                    stitched_equity = equity * scale
 
                 if not isfinite(stitched_equity):
                     raise ValueError(

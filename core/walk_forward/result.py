@@ -254,6 +254,24 @@ class WalkForwardResult:
         min_stability_score: float,
     ) -> Literal["PASS", "FAIL"]:
 
+        min_consistency = WalkForwardResult._validated_threshold(
+            name="min_consistency",
+            value=min_consistency,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        max_drawdown_pct = WalkForwardResult._validated_threshold(
+            name="max_drawdown_pct",
+            value=max_drawdown_pct,
+            minimum=0.0,
+        )
+        min_stability_score = WalkForwardResult._validated_threshold(
+            name="min_stability_score",
+            value=min_stability_score,
+            minimum=0.0,
+            maximum=1.0,
+        )
+
         if WalkForwardResult._below_minimum(
             metrics["consistency_ratio"],
             min_consistency,

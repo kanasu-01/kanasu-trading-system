@@ -229,7 +229,7 @@ def test_scaled_window_drawdown_boundary_does_not_false_fail():
         result.stitched_equity_metrics[
             "stitched_max_drawdown_pct"
         ]
-        > 20.0
+        == 20.0
     )
     assert result.verdict == "PASS"
 
@@ -383,4 +383,59 @@ def test_result_rejects_non_finite_optimization_stability(
                     optimization_stability_score=score,
                 )
             ]
+        )
+
+
+@pytest.mark.parametrize(
+    ("thresholds", "message"),
+    [
+        (
+            {
+                "min_consistency": float("nan"),
+                "max_drawdown_pct": 20.0,
+                "min_stability_score": 0.20,
+            },
+            "min_consistency must be a finite number",
+        ),
+        (
+            {
+                "min_consistency": 0.60,
+                "max_drawdown_pct": float("nan"),
+                "min_stability_score": 0.20,
+            },
+            "max_drawdown_pct must be a finite number",
+        ),
+        (
+            {
+                "min_consistency": 0.60,
+                "max_drawdown_pct": 20.0,
+                "min_stability_score": float("nan"),
+            },
+            "min_stability_score must be a finite number",
+        ),
+    ],
+)
+def test_verdict_evaluator_rejects_invalid_thresholds(
+    thresholds,
+    message,
+):
+    metrics = {
+        "consistency_ratio": 0.75,
+        "avg_account_return_pct": 1.0,
+        "worst_equity_drawdown_pct": 10.0,
+        "account_return_stability_score": 0.50,
+    }
+    stitched_metrics = {
+        "stitched_total_return_pct": 4.0,
+        "stitched_max_drawdown_pct": 12.0,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=message,
+    ):
+        WalkForwardResult._evaluate_verdict(
+            metrics=metrics,
+            stitched_metrics=stitched_metrics,
+            **thresholds,
         )

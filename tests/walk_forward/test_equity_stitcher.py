@@ -185,3 +185,62 @@ def test_scale_one_preserves_later_window_equity_exactly():
         (START + timedelta(minutes=30), 110.0),
         (START + timedelta(minutes=45), 88.0),
     ]
+
+
+def test_scaled_window_starts_at_exact_prior_capital():
+    windows = [
+        window(
+            0,
+            [
+                (START, 100.0),
+                (
+                    START + timedelta(minutes=15),
+                    110.1,
+                ),
+            ],
+        ),
+        window(
+            1,
+            [
+                (
+                    START + timedelta(minutes=30),
+                    1.3,
+                ),
+                (
+                    START + timedelta(minutes=45),
+                    1.4,
+                ),
+            ],
+        ),
+    ]
+
+    stitched = EquityStitcher.stitch(windows)
+
+    assert stitched[1][1] == 110.1
+    assert stitched[2][1] == stitched[1][1]
+
+
+def test_stitching_rejects_positive_scale_underflow():
+    windows = [
+        window(
+            0,
+            [
+                (START, 1e-308),
+            ],
+        ),
+        window(
+            1,
+            [
+                (
+                    START + timedelta(minutes=15),
+                    1e308,
+                ),
+            ],
+        ),
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match="scale must be finite and strictly positive",
+    ):
+        EquityStitcher.stitch(windows)
