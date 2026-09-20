@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from datetime import datetime
-import pytz
+from functools import partial
 from typing import Any
 
+import pytz
 from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 
 from core.broker.angelone_config import AngelOneConfig
@@ -11,6 +12,7 @@ from core.market_data.live_market_update import LiveMarketUpdate
 
 
 LiveMarketUpdateHandler = Callable[[LiveMarketUpdate], None]
+ConnectionLostHandler = Callable[[], None]
 WebSocketFactory = Callable[..., Any]
 
 _IST = pytz.timezone("Asia/Kolkata")
@@ -36,6 +38,7 @@ class AngelOneLiveMarketDataAdapter:
         symbol: str,
         on_update: LiveMarketUpdateHandler,
         websocket_factory: WebSocketFactory = SmartWebSocketV2,
+        on_disconnect: ConnectionLostHandler | None = None,
     ) -> None:
         if config.exchange.upper() != "NSE":
             raise ValueError(
@@ -66,21 +69,25 @@ class AngelOneLiveMarketDataAdapter:
         self.symbol = symbol
         self.token = token
         self.on_update = on_update
+        self.on_disconnect = on_disconnect
         self._websocket_factory = websocket_factory
         self._socket: Any | None = None
+        self._disconnect_notified = False
         self.logger = get_logger(__name__)
 
     def connect(self) -> None:
         """
         Open the provider socket.
 
-        SmartWebSocketV2.connect() is blocking. M6.3 does not create a
+        SmartWebSocketV2.connect() is blocking. M6.4 does not create a
         background thread; runtime ownership belongs to a later milestone.
         """
         if self._socket is not None:
             raise RuntimeError(
                 "AngelOne live market-data socket is already initialized"
             )
+
+        self._disconnect_notified = False
 
         socket = self._websocket_factory(
             self.auth_token,
@@ -90,21 +97,36 @@ class AngelOneLiveMarketDataAdapter:
             max_retry_attempt=0,
         )
 
-        socket.on_open = self._handle_open
-        socket.on_data = self._handle_data
-        socket.on_error = self._handle_error
-        socket.on_close = self._handle_close
+        # Capture the provider socket in each callback. A late callback from
+        # an older connection epoch must never affect a newer socket.
+        socket.on_open = partial(self._handle_open, socket)
+        socket.on_data = partial(self._handle_data, socket)
+        socket.on_error = partial(self._handle_error, socket)
+        socket.on_close = partial(self._handle_close, socket)
 
         self._socket = socket
-        socket.connect()
+
+        try:
+            socket.connect()
+        except Exception:
+            if self._socket is socket:
+                self._socket = None
+
+            self._notify_disconnect()
+            raise
 
     def close(self) -> None:
-        """Close the provider socket if one has been initialized."""
+        """Close the currently active provider socket."""
         if self._socket is None:
             return
 
         socket = self._socket
+
+        # Detach before closing so any asynchronous close callback from this
+        # socket is recognized as stale.
         self._socket = None
+        self._disconnect_notified = True
+
         socket.close_connection()
 
     def normalize_message(
@@ -186,13 +208,15 @@ class AngelOneLiveMarketDataAdapter:
             sequence=sequence,
         )
 
-    def _handle_open(self, _wsapp: object) -> None:
-        if self._socket is None:
-            raise RuntimeError(
-                "AngelOne live market-data socket is not initialized"
-            )
+    def _handle_open(
+        self,
+        socket: Any,
+        _wsapp: object,
+    ) -> None:
+        if self._socket is not socket:
+            return
 
-        self._socket.subscribe(
+        socket.subscribe(
             _CORRELATION_ID,
             _QUOTE_MODE,
             [
@@ -205,9 +229,13 @@ class AngelOneLiveMarketDataAdapter:
 
     def _handle_data(
         self,
+        socket: Any,
         _wsapp: object,
         message: object,
     ) -> None:
+        if self._socket is not socket:
+            return
+
         try:
             update = self.normalize_message(message)
         except Exception:
@@ -221,19 +249,49 @@ class AngelOneLiveMarketDataAdapter:
 
     def _handle_error(
         self,
+        socket: Any,
         _wsapp: object,
         error: object,
     ) -> None:
+        if self._socket is not socket:
+            return
+
+        # Detach immediately. No update from this failed connection epoch may
+        # reach the downstream candle pipeline after an error.
+        self._socket = None
+
         self.logger.error(
             f"AngelOne live market-data socket error | "
             f"Symbol={self.symbol} | Error={error}"
         )
 
-    def _handle_close(self, _wsapp: object) -> None:
+        self._notify_disconnect()
+
+    def _handle_close(
+        self,
+        socket: Any,
+        _wsapp: object,
+    ) -> None:
+        if self._socket is not socket:
+            return
+
+        self._socket = None
+
         self.logger.info(
             f"AngelOne live market-data socket closed | "
             f"Symbol={self.symbol}"
         )
+
+        self._notify_disconnect()
+
+    def _notify_disconnect(self) -> None:
+        if self._disconnect_notified:
+            return
+
+        self._disconnect_notified = True
+
+        if self.on_disconnect is not None:
+            self.on_disconnect()
 
     @staticmethod
     def _required_int(

@@ -30,6 +30,7 @@ class LiveCandleBuilder:
         self,
         timeframe: str,
         session_start: time,
+        allow_first_boundary_candle: bool = True,
     ) -> None:
         if timeframe not in _TIMEFRAME_MINUTES:
             raise ValueError(f"unsupported live timeframe: {timeframe}")
@@ -39,6 +40,7 @@ class LiveCandleBuilder:
 
         self.timeframe = timeframe
         self.session_start = session_start
+        self._allow_first_boundary_candle = allow_first_boundary_candle
         self._interval = timedelta(minutes=_TIMEFRAME_MINUTES[timeframe])
 
         self._timezone = None
@@ -138,7 +140,10 @@ class LiveCandleBuilder:
                 self._last_update is None
                 and update.timestamp == bucket_start
             )
-            eligible = self._warmed or first_observation_on_boundary
+            eligible = self._warmed or (
+                self._allow_first_boundary_candle
+                and first_observation_on_boundary
+            )
 
             self._start_active(
                 start=bucket_start,
