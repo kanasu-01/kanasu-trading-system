@@ -55,13 +55,20 @@ class BacktestEngine:
     # Internal engine (used by both batch & stream)
     # -------------------------------------------------
 
-    def _run_internal(self, candles) -> BacktestResult:
+    def _run_internal(
+        self,
+        candles,
+        *,
+        history_bars=None,
+    ) -> BacktestResult:
         self.logger.info(
             f"BACKTEST STARTED | "
             f"Session={self.session_id} | "
             f"Strategy={self.strategy.name}"
         )
-        series = CandleSeries([])
+        series = CandleSeries(
+            list(history_bars or [])
+        )
         self.runner.start(series)
         pending_intent = None
 
@@ -149,11 +156,23 @@ class BacktestEngine:
     # Public APIs
     # -------------------------------------------------
 
-    def run(self, candles: List[Candle]) -> BacktestResult:
+    def run(
+        self,
+        candles: List[Candle],
+        *,
+        history_bars=None,
+    ) -> BacktestResult:
         """
         Backward-compatible bulk backtest method.
+
+        history_bars preload historical candle context without
+        invoking strategy callbacks, execution, portfolio mutation
+        or result recording.
         """
-        return self._run_internal(candles)
+        return self._run_internal(
+            candles,
+            history_bars=history_bars,
+        )
 
     def run_stream(self, candle_stream) -> BacktestResult:
         """

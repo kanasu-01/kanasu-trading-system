@@ -129,7 +129,12 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
     metric_inputs = []
 
     class SingleWindowGenerator:
-        def generate(self, source_candles):
+        def generate(
+            self,
+            source_candles,
+            *,
+            prehistory_bars=0,
+        ):
             yield runner_module.WalkForwardWindow(
                 train_bars=source_candles[:1],
                 test_bars=source_candles[1:],
@@ -146,6 +151,7 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
             dataset_context,
             initial_capital,
             runtime_context,
+            history_bars=None,
         ):
             optimizer_calls.append(
                 (
@@ -187,7 +193,12 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
                 )
             )
 
-        def run(self, source_candles):
+        def run(
+            self,
+            source_candles,
+            *,
+            history_bars=None,
+        ):
             result = SimpleNamespace(trades=[])
             out_of_sample_results.append(result)
             return result
@@ -236,3 +247,196 @@ def test_walk_forward_runner_propagates_effective_settings(monkeypatch):
     assert optimizer_calls == expected
     assert out_of_sample_calls == expected
     assert metric_inputs == out_of_sample_results
+
+
+def test_runner_uses_common_candidate_warmup_before_scored_windows(
+    monkeypatch,
+):
+    candles = build_dummy_candles(20)
+    optimizer_calls = []
+    oos_calls = []
+
+    class WarmupStrategy:
+        def __init__(self, params):
+            self.params = params
+
+        def warmup_bars(self):
+            return self.params["warmup"]
+
+    class RecordingOptimizer:
+        def optimize(
+            self,
+            *,
+            strategy_cls,
+            param_space,
+            train_bars,
+            dataset_context,
+            initial_capital,
+            runtime_context,
+            history_bars=None,
+        ):
+            optimizer_calls.append(
+                {
+                    "train_bars": list(train_bars),
+                    "history_bars": list(
+                        history_bars or []
+                    ),
+                }
+            )
+            return OptimizationResult(
+                best_params=param_space[0],
+                best_score=1.0,
+                evaluations=[
+                    OptimizationEvaluation(
+                        params=param_space[0],
+                        score=1.0,
+                        metrics={},
+                    )
+                ],
+            )
+
+    class RecordingBacktestEngine:
+        def __init__(self, **kwargs):
+            pass
+
+        def run(
+            self,
+            scored_bars,
+            *,
+            history_bars=None,
+        ):
+            oos_calls.append(
+                {
+                    "scored_bars": list(scored_bars),
+                    "history_bars": list(
+                        history_bars or []
+                    ),
+                }
+            )
+            return SimpleNamespace(
+                trades=[],
+                bar_records=[],
+            )
+
+    monkeypatch.setattr(
+        runner_module,
+        "BacktestEngine",
+        RecordingBacktestEngine,
+    )
+    monkeypatch.setattr(
+        runner_module.WalkForwardResult,
+        "from_windows",
+        classmethod(
+            lambda cls, windows: SimpleNamespace(
+                windows=windows
+            )
+        ),
+    )
+
+    class StubMetrics:
+        def compute(self, result):
+            return {}
+
+    runner = WalkForwardRunner(
+        window_generator=WalkForwardWindowGenerator(
+            in_sample_bars=5,
+            out_sample_bars=3,
+            step_bars=3,
+            mode="rolling",
+        ),
+        optimizer=RecordingOptimizer(),
+        metrics=StubMetrics(),
+    )
+
+    runner.run(
+        strategy_cls=WarmupStrategy,
+        param_space=[
+            {"warmup": 2},
+            {"warmup": 4},
+        ],
+        candles=candles,
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+        ),
+        initial_capital=100_000.0,
+        runtime_context=RuntimeContext(),
+    )
+
+    first_is = optimizer_calls[0]
+    first_oos = oos_calls[0]
+
+    assert first_is["history_bars"] == candles[0:3]
+    assert first_is["train_bars"] == candles[3:8]
+
+    assert first_oos["history_bars"] == candles[5:8]
+    assert first_oos["scored_bars"] == candles[8:11]
+
+
+def test_runner_accepts_exact_minimum_strategy_prehistory():
+    runner = WalkForwardRunner(
+        window_generator=WalkForwardWindowGenerator(
+            in_sample_bars=5,
+            out_sample_bars=3,
+            step_bars=3,
+            mode="rolling",
+        ),
+        optimizer=GridSearchOptimizer(),
+        metrics=WalkForwardMetrics(),
+    )
+
+    result = runner.run(
+        strategy_cls=SMACrossOverStrategy,
+        param_space=[
+            {
+                "fast_period": 10,
+                "slow_period": 30,
+            }
+        ],
+        candles=build_dummy_candles(37),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+        ),
+        initial_capital=100_000.0,
+        runtime_context=RuntimeContext(),
+    )
+
+    assert len(result.windows) == 1
+
+
+def test_runner_rejects_insufficient_strategy_prehistory():
+    runner = WalkForwardRunner(
+        window_generator=WalkForwardWindowGenerator(
+            in_sample_bars=5,
+            out_sample_bars=3,
+            step_bars=3,
+            mode="rolling",
+        ),
+        optimizer=GridSearchOptimizer(),
+        metrics=WalkForwardMetrics(),
+    )
+
+    try:
+        runner.run(
+            strategy_cls=SMACrossOverStrategy,
+            param_space=[
+                {
+                    "fast_period": 10,
+                    "slow_period": 30,
+                }
+            ],
+            candles=build_dummy_candles(36),
+            dataset_context=DatasetContext(
+                symbol="RELIANCE",
+                timeframe="15m",
+            ),
+            initial_capital=100_000.0,
+            runtime_context=RuntimeContext(),
+        )
+    except ValueError as exc:
+        assert "prehistory" in str(exc)
+    else:
+        raise AssertionError(
+            "insufficient WFA prehistory was accepted"
+        )

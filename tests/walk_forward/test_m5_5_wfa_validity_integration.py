@@ -81,7 +81,12 @@ class StaticWindowGenerator:
     def __init__(self, count: int):
         self.count = count
 
-    def generate(self, source_candles):
+    def generate(
+        self,
+        source_candles,
+        *,
+        prehistory_bars=0,
+    ):
         for index in range(self.count):
             base = START + timedelta(hours=index)
             yield WalkForwardWindow(
@@ -107,6 +112,7 @@ class RecordingOptimizer:
         dataset_context,
         initial_capital,
         runtime_context,
+        history_bars=None,
     ):
         index = len(self.calls)
         best_params = param_space[index % len(param_space)]
@@ -119,6 +125,9 @@ class RecordingOptimizer:
                 "dataset_context": dataset_context,
                 "initial_capital": initial_capital,
                 "runtime_context": runtime_context,
+                "history_bars": list(
+                    history_bars or []
+                ),
             }
         )
 
@@ -166,7 +175,12 @@ def build_runner(monkeypatch, results):
                 }
             )
 
-        def run(self, source_candles):
+        def run(
+            self,
+            source_candles,
+            *,
+            history_bars=None,
+        ):
             if not queue:
                 raise AssertionError(
                     "unexpected extra OOS backtest"

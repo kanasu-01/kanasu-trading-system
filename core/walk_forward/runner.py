@@ -61,7 +61,15 @@ class WalkForwardRunner:
 
         window_results: List[WalkWindowResult] = []
 
-        for window in self.window_generator.generate(candles):
+        prehistory_bars = self._required_prehistory_bars(
+            strategy_cls=strategy_cls,
+            param_space=param_space,
+        )
+
+        for window in self.window_generator.generate(
+            candles,
+            prehistory_bars=prehistory_bars,
+        ):
             window_result = self._run_single_window(
                 strategy_cls=strategy_cls,
                 param_space=param_space,
@@ -72,11 +80,63 @@ class WalkForwardRunner:
             )
             window_results.append(window_result)
 
+        if not window_results:
+            raise ValueError(
+                "WFA requires enough candles for strategy "
+                "prehistory, in-sample and out-of-sample bars"
+            )
+
         return WalkForwardResult.from_windows(window_results)
 
     # ------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------
+
+    @staticmethod
+    def _required_prehistory_bars(
+        *,
+        strategy_cls: Type,
+        param_space: List[Dict[str, Any]],
+    ) -> int:
+        """
+        Use one common scored boundary for every candidate.
+        """
+
+        required = 0
+
+        for params in param_space:
+            strategy = strategy_cls(params=params)
+            warmup_method = getattr(
+                strategy,
+                "warmup_bars",
+                None,
+            )
+            warmup = (
+                warmup_method()
+                if callable(warmup_method)
+                else 0
+            )
+
+            if (
+                not isinstance(warmup, int)
+                or isinstance(warmup, bool)
+                or warmup < 0
+            ):
+                raise ValueError(
+                    "strategy warmup_bars must return a "
+                    "non-negative integer"
+                )
+
+            # StrategyRunner appends the current scored candle
+            # before evaluating the warm-up requirement. Therefore
+            # W - 1 preceding bars make the first scored candle
+            # decision-eligible.
+            required = max(
+                required,
+                max(0, warmup - 1),
+            )
+
+        return required
 
     def _run_single_window(
         self,
@@ -98,6 +158,7 @@ class WalkForwardRunner:
             dataset_context=dataset_context,
             initial_capital=initial_capital,
             runtime_context=runtime_context,
+            history_bars=window.train_history_bars,
         )
 
         # -----------------------------
@@ -111,7 +172,10 @@ class WalkForwardRunner:
             dataset_context=dataset_context,
         )
 
-        backtest_result = engine.run(window.test_bars)
+        backtest_result = engine.run(
+            window.test_bars,
+            history_bars=window.test_history_bars,
+        )
 
         test_metrics = self.metrics.compute(backtest_result)
 

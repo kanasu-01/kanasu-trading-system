@@ -112,7 +112,12 @@ def test_optimizer_propagates_caller_effective_settings(monkeypatch):
             received_initial_capitals.append(initial_capital)
             received_runtime_contexts.append(runtime_context)
 
-        def run(self, candles):
+        def run(
+            self,
+            candles,
+            *,
+            history_bars=None,
+        ):
             return SimpleNamespace(trades=[])
 
     monkeypatch.setattr(

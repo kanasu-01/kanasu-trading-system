@@ -212,3 +212,60 @@ def test_feedback_handler_failure_aborts_backtest():
 
     with pytest.raises(RuntimeError, match="feedback handler failed"):
         engine.run(build_dummy_candles(2))
+
+
+def test_history_bars_preload_series_without_execution_or_records():
+    history = [
+        Candle(
+            timestamp=datetime(2020, 1, 1)
+            + timedelta(minutes=index),
+            open=100.0 + index,
+            high=101.0 + index,
+            low=99.0 + index,
+            close=100.0 + index,
+            volume=1000.0,
+        )
+        for index in range(3)
+    ]
+    scored = [
+        Candle(
+            timestamp=datetime(2020, 1, 1)
+            + timedelta(minutes=3 + index),
+            open=103.0 + index,
+            high=104.0 + index,
+            low=102.0 + index,
+            close=103.0 + index,
+            volume=1000.0,
+        )
+        for index in range(2)
+    ]
+
+    engine = BacktestEngine(
+        strategy=SMACrossOverStrategy(
+            params={
+                "fast_period": 1,
+                "slow_period": 3,
+            }
+        ),
+        initial_capital=100000,
+        runtime_context=RuntimeContext(),
+        dataset_context=DatasetContext(symbol="TEST"),
+    )
+
+    result = engine.run(
+        scored,
+        history_bars=history,
+    )
+
+    assert len(result.bar_records) == 2
+    assert result.bar_records[0].timestamp == scored[0].timestamp
+    assert result.bar_records[0].signal == "BUY"
+    assert result.bar_records[0].execution_event is None
+    assert result.bar_records[0].cash == 100000
+    assert result.bar_records[0].equity == 100000
+
+    assert result.bar_records[1].execution_event == "BUY"
+    assert engine.execution_engine.get_runtime_position(
+        "TEST"
+    ) is not None
+    assert result.trades == []
