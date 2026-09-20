@@ -34,6 +34,8 @@ class AngelOneBroker(BaseBroker):
 
         self._logged_in = False
         self._api: Optional[SmartConnect] = None
+        self._auth_token: Optional[str] = None
+        self._feed_token: Optional[str] = None
         self.logger = get_logger(__name__)
 
     # --------------------------------------------------
@@ -94,11 +96,39 @@ class AngelOneBroker(BaseBroker):
         if "data" not in session or not isinstance(session["data"], dict):
             raise RuntimeError("AngelOne login failed: data block missing")
 
-        if "jwtToken" not in session["data"]:
+        jwt_token = session["data"].get("jwtToken")
+        if not isinstance(jwt_token, str) or not jwt_token:
             raise RuntimeError("AngelOne login failed: jwtToken missing")
 
+        try:
+            feed_token = self._api.getfeedToken()
+        except Exception as e:
+            raise RuntimeError(
+                "AngelOne login failed: feed token unavailable"
+            ) from e
+
+        if not isinstance(feed_token, str) or not feed_token:
+            raise RuntimeError(
+                "AngelOne login failed: feed token unavailable"
+            )
+
+        self._auth_token = jwt_token
+        self._feed_token = feed_token
         self._logged_in = True
         return True
+
+    def get_live_market_data_session(self) -> tuple[str, str]:
+        """Return authenticated material required by SmartWebSocketV2."""
+        if (
+            not self._logged_in
+            or self._auth_token is None
+            or self._feed_token is None
+        ):
+            raise RuntimeError(
+                "AngelOne live market-data session unavailable"
+            )
+
+        return self._auth_token, self._feed_token
 
     # --------------------------------------------------
     # ORDERS (PAPER ONLY)
