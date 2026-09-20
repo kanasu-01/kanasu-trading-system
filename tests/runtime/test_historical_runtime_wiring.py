@@ -168,6 +168,47 @@ def test_walk_forward_runtime_retrieves_through_same_historical_source(
     assert captured["runtime_context"] is runtime_context
 
 
+
+
+def test_walk_forward_runtime_rejects_unvalidated_strategy_before_retrieval(
+    monkeypatch,
+):
+    source = SpyHistoricalSource([candle()])
+
+    unsupported = BacktestConfig(
+        symbol="RELIANCE",
+        timeframe="15m",
+        strategy_name="pivotboss",
+        start=START,
+        end=START + timedelta(hours=1),
+        initial_capital=100000,
+        enable_replay=False,
+        enable_visualization=False,
+        enable_exports=False,
+        timezone="Asia/Kolkata",
+    )
+
+    monkeypatch.setattr(
+        walk_forward_runtime_module,
+        "get_strategy_class",
+        lambda value: pytest.fail(
+            "unsupported WFA strategy reached strategy factory"
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="only the validated sma_crossover strategy",
+    ):
+        walk_forward_runtime_module.run_walk_forward(
+            historical_source=source,
+            config=unsupported,
+            runtime_context=RuntimeContext(),
+        )
+
+    assert source.requests == []
+
+
 def test_main_backtest_composes_and_passes_historical_source(monkeypatch):
     source = object()
     captured = {}

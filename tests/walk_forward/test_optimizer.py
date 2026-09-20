@@ -16,6 +16,9 @@ from core.walk_forward.optimizer import (
 from core.strategies.sma_crossover_strategy import (
     SMACrossOverStrategy,
 )
+from core.strategies.pivotboss_swing_strategy import (
+    PivotBossSwingStrategy,
+)
 
 
 def build_dummy_candles(count: int):
@@ -186,3 +189,233 @@ def test_optimizer_score_uses_account_return_and_equity_drawdown():
             "max_equity_drawdown_pct": 10.0,
         }
     ) == pytest.approx(0.0)
+
+
+def test_optimizer_rejects_candidate_keys_ignored_by_strategy(
+    monkeypatch,
+):
+    class ForbiddenBacktestEngine:
+        def __init__(self, **kwargs):
+            raise AssertionError(
+                "invalid candidate reached BacktestEngine"
+            )
+
+    monkeypatch.setattr(
+        optimizer_module,
+        "BacktestEngine",
+        ForbiddenBacktestEngine,
+    )
+
+    optimizer = GridSearchOptimizer()
+
+    with pytest.raises(
+        ValueError,
+        match="not effective strategy parameters: ignored",
+    ):
+        optimizer.optimize(
+            strategy_cls=SMACrossOverStrategy,
+            param_space=[
+                {
+                    "fast_period": 10,
+                    "slow_period": 30,
+                    "ignored": 123,
+                }
+            ],
+            train_bars=[],
+            dataset_context=DatasetContext(
+                symbol="RELIANCE",
+                timeframe="15m",
+            ),
+            initial_capital=100_000.0,
+            runtime_context=RuntimeContext(),
+        )
+
+
+def test_optimizer_rejects_sma_grid_for_pivotboss(
+    monkeypatch,
+):
+    class ForbiddenBacktestEngine:
+        def __init__(self, **kwargs):
+            raise AssertionError(
+                "invalid PivotBoss candidate reached BacktestEngine"
+            )
+
+    monkeypatch.setattr(
+        optimizer_module,
+        "BacktestEngine",
+        ForbiddenBacktestEngine,
+    )
+
+    optimizer = GridSearchOptimizer()
+
+    with pytest.raises(
+        ValueError,
+        match="not effective strategy parameters",
+    ):
+        optimizer.optimize(
+            strategy_cls=PivotBossSwingStrategy,
+            param_space=[
+                {
+                    "fast_period": 10,
+                    "slow_period": 30,
+                }
+            ],
+            train_bars=[],
+            dataset_context=DatasetContext(
+                symbol="RELIANCE",
+                timeframe="15m",
+            ),
+            initial_capital=100_000.0,
+            runtime_context=RuntimeContext(),
+        )
+
+
+def test_optimizer_rejects_candidate_missing_effective_parameters(
+    monkeypatch,
+):
+    class ForbiddenBacktestEngine:
+        def __init__(self, **kwargs):
+            raise AssertionError(
+                "incomplete candidate reached BacktestEngine"
+            )
+
+    monkeypatch.setattr(
+        optimizer_module,
+        "BacktestEngine",
+        ForbiddenBacktestEngine,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "omit effective strategy parameters: "
+            "slow_period"
+        ),
+    ):
+        GridSearchOptimizer().optimize(
+            strategy_cls=SMACrossOverStrategy,
+            param_space=[
+                {
+                    "fast_period": 10,
+                }
+            ],
+            train_bars=[],
+            dataset_context=DatasetContext(
+                symbol="RELIANCE",
+                timeframe="15m",
+            ),
+            initial_capital=100_000.0,
+            runtime_context=RuntimeContext(),
+        )
+
+
+def test_optimizer_rejects_parameter_evidence_that_resolves_differently(
+    monkeypatch,
+):
+    class NormalizingStrategy:
+        def __init__(self, params):
+            self.params = params
+
+        def research_parameters(self):
+            return {
+                "period": self.params["period"] + 1,
+            }
+
+    class ForbiddenBacktestEngine:
+        def __init__(self, **kwargs):
+            raise AssertionError(
+                "mismatched candidate reached BacktestEngine"
+            )
+
+    monkeypatch.setattr(
+        optimizer_module,
+        "BacktestEngine",
+        ForbiddenBacktestEngine,
+    )
+
+    optimizer = GridSearchOptimizer()
+
+    with pytest.raises(
+        ValueError,
+        match="do not match resolved effective values: period",
+    ):
+        optimizer.optimize(
+            strategy_cls=NormalizingStrategy,
+            param_space=[
+                {
+                    "period": 10,
+                }
+            ],
+            train_bars=[],
+            dataset_context=DatasetContext(
+                symbol="RELIANCE",
+                timeframe="15m",
+            ),
+            initial_capital=100_000.0,
+            runtime_context=RuntimeContext(),
+        )
+
+
+def test_optimizer_preserves_valid_effective_parameter_evidence(
+    monkeypatch,
+):
+    captured_strategies = []
+
+    class SpyBacktestEngine:
+        def __init__(
+            self,
+            *,
+            strategy,
+            initial_capital,
+            runtime_context,
+            dataset_context,
+        ):
+            captured_strategies.append(strategy)
+
+        def run(
+            self,
+            candles,
+            *,
+            history_bars=None,
+        ):
+            return SimpleNamespace(trades=[])
+
+    monkeypatch.setattr(
+        optimizer_module,
+        "BacktestEngine",
+        SpyBacktestEngine,
+    )
+    monkeypatch.setattr(
+        optimizer_module.PerformanceMetrics,
+        "summarize_backtest",
+        staticmethod(
+            lambda _result: {
+                "account_return_pct": 1.0,
+                "max_equity_drawdown_pct": 0.0,
+            }
+        ),
+    )
+
+    params = {
+        "fast_period": 10,
+        "slow_period": 30,
+    }
+
+    result = GridSearchOptimizer().optimize(
+        strategy_cls=SMACrossOverStrategy,
+        param_space=[params],
+        train_bars=[],
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+        ),
+        initial_capital=100_000.0,
+        runtime_context=RuntimeContext(),
+    )
+
+    assert len(captured_strategies) == 1
+    assert captured_strategies[
+        0
+    ].research_parameters() == params
+    assert result.best_params == params
+    assert result.evaluations[0].params == params

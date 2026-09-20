@@ -53,6 +53,12 @@ def run_walk_forward(
     runtime_context: RuntimeContext,
 ) -> None:
 
+    if config.strategy_name != "sma_crossover":
+        raise ValueError(
+            "WFA currently supports only the validated "
+            "sma_crossover strategy"
+        )
+
     logger.info(
         f"WALK-FORWARD STARTED | "
         f"Symbol={config.symbol} | "

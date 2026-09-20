@@ -55,6 +55,11 @@ class GridSearchOptimizer:
             # Instantiate fresh strategy & engine (MANDATORY)
             # --------------------------------------------------
             strategy = strategy_cls(params=params)
+            self._validate_candidate_parameters(
+                strategy=strategy,
+                params=params,
+            )
+
             engine = BacktestEngine(
                 strategy=strategy,
                 initial_capital=initial_capital,
@@ -92,6 +97,62 @@ class GridSearchOptimizer:
             best_score=best_score,
             evaluations=evaluations,
         )
+
+    @staticmethod
+    def _validate_candidate_parameters(
+        *,
+        strategy,
+        params: Dict[str, Any],
+    ) -> None:
+        """
+        Require optimization evidence to describe what ran.
+        """
+
+        effective = strategy.research_parameters()
+
+        if not isinstance(effective, dict):
+            raise ValueError(
+                "strategy research_parameters() must return a dict"
+            )
+
+        ineffective_keys = sorted(
+            key
+            for key in params
+            if key not in effective
+        )
+
+        if ineffective_keys:
+            raise ValueError(
+                "WFA candidate parameters are not effective "
+                "strategy parameters: "
+                + ", ".join(ineffective_keys)
+            )
+
+        missing_keys = sorted(
+            key
+            for key in effective
+            if key not in params
+        )
+
+        if missing_keys:
+            raise ValueError(
+                "WFA candidate parameters omit effective "
+                "strategy parameters: "
+                + ", ".join(missing_keys)
+            )
+
+        mismatched_keys = sorted(
+            key
+            for key, value in params.items()
+            if effective[key] != value
+        )
+
+        if mismatched_keys:
+            raise ValueError(
+                "WFA candidate parameters do not match "
+                "resolved effective values: "
+                + ", ".join(mismatched_keys)
+            )
 
     # ------------------------------------------------------
     # Scoring logic (simple & transparent)
