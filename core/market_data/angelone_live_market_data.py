@@ -4,9 +4,11 @@ from functools import partial
 from typing import Any
 
 import pytz
-from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 
 from core.broker.angelone_config import AngelOneConfig
+from core.market_data.angelone_verified_websocket import (
+    VerifiedSmartWebSocketV2,
+)
 from core.logging.logger import get_logger
 from core.market_data.live_market_update import LiveMarketUpdate
 
@@ -37,7 +39,7 @@ class AngelOneLiveMarketDataAdapter:
         feed_token: str,
         symbol: str,
         on_update: LiveMarketUpdateHandler,
-        websocket_factory: WebSocketFactory = SmartWebSocketV2,
+        websocket_factory: WebSocketFactory = VerifiedSmartWebSocketV2,
         on_disconnect: ConnectionLostHandler | None = None,
     ) -> None:
         if config.exchange.upper() != "NSE":
