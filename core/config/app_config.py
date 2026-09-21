@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+from datetime import time
+
 from core.config.historical_source_policy import HistoricalSourcePolicy
+from core.config.paper_data_source import PaperDataSource
 from core.config.runtime_mode import RuntimeMode
 
 
@@ -17,6 +20,12 @@ class AppConfig:
 
     # Safety
     enable_live_trading: bool = False
+
+    # Paper trading
+    paper_data_source: PaperDataSource = PaperDataSource.MOCK
+    paper_session_start: time = time(9, 15)
+    paper_session_end: time = time(15, 30)
+    paper_clock_interval_sec: float = 1.0
 
     # Costs
     slippage_pct: float = 0.05

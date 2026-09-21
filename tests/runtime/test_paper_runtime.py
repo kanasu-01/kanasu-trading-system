@@ -5,7 +5,11 @@ from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.market_data.mock_live_feed import MockLiveFeed
 from core.runtime.dataset_context import DatasetContext
-from core.runtime.paper_runtime import run_paper_trading
+import core.runtime.paper_runtime as paper_runtime_module
+from core.runtime.paper_runtime import (
+    run_live_paper_trading,
+    run_paper_trading,
+)
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
 from core.strategies.signal import SignalType
@@ -283,3 +287,87 @@ def test_paper_honors_runtime_risk_per_trade_percentage() -> None:
     assert position is not None
     assert position.quantity == 41
     assert session.execution_engine.risk_manager.risk_per_trade_pct == 0.5
+
+
+
+def test_live_paper_runtime_uses_same_next_bar_processor(
+    monkeypatch,
+) -> None:
+    candles = [
+        Candle(
+            timestamp=START,
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        ),
+        Candle(
+            timestamp=START + timedelta(minutes=15),
+            open=110.0,
+            high=112.0,
+            low=109.0,
+            close=111.0,
+            volume=1_100.0,
+        ),
+    ]
+    feed = object()
+    captured = {}
+
+    class SpyLivePaperRuntime:
+        def __init__(self, **kwargs):
+            captured["supervisor_kwargs"] = kwargs
+            self.on_candle = kwargs["on_candle"]
+
+        def run_until(self, **kwargs):
+            captured["run_until_kwargs"] = kwargs
+            for candle in candles:
+                self.on_candle(candle)
+
+    monkeypatch.setattr(
+        paper_runtime_module,
+        "LivePaperRuntime",
+        SpyLivePaperRuntime,
+    )
+
+    session = run_live_paper_trading(
+        feed=feed,
+        strategy=BuyFirstCandleStrategy(),
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_enabled=False,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        session_end=START + timedelta(hours=6),
+        now=lambda: START,
+        reconnect_attempts=3,
+        reconnect_delay_seconds=1.5,
+        clock_interval_seconds=0.5,
+        initial_capital=100_000.0,
+    )
+
+    assert captured["supervisor_kwargs"]["feed"] is feed
+    assert captured["supervisor_kwargs"]["reconnect_attempts"] == 3
+    assert (
+        captured["supervisor_kwargs"]["reconnect_delay_seconds"]
+        == 1.5
+    )
+    assert (
+        captured["run_until_kwargs"]["clock_interval_seconds"]
+        == 0.5
+    )
+
+    position = session.execution_engine.get_runtime_position(
+        "RELIANCE"
+    )
+
+    assert position is not None
+    assert position.entry_time == candles[1].timestamp
+    assert position.entry_price == candles[1].open
+    assert position.entry_index == 1
