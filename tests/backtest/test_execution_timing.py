@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from core.backtest.backtest_engine import BacktestEngine
-from core.backtest.pending_intent import PendingIntent
+from core.execution.pending_intent import PendingIntent
 from core.config.execution_config import ExecutionConfig
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries

@@ -16,7 +16,7 @@ from core.runtime.dataset_context import (
 from core.entities.trade import Trade
 from core.logging.logger import get_logger
 from core.backtest.backtest_result import BacktestResult
-from core.backtest.pending_intent import PendingIntent
+from core.execution.pending_intent import PendingIntent
 
 
 class BacktestEngine:
