@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, time
 
 import pytz
@@ -321,3 +322,66 @@ def test_adapter_connect_failure_is_reusable_and_reports_disconnect() -> None:
     assert factory.sockets[1].connected is True
 
     adapter.close()
+
+
+def test_provider_delivery_and_clock_advance_are_serialized() -> None:
+    factory = ScriptedSocketFactory(
+        [
+            (
+                [
+                    _message(10, 15, 10000, 500, 1),
+                    _message(10, 20, 10100, 520, 2),
+                    _message(10, 30, 10200, 530, 3),
+                ],
+                None,
+            )
+        ]
+    )
+
+    feed = _feed(factory)
+    delivery_entered = threading.Event()
+    release_delivery = threading.Event()
+    clock_completed = threading.Event()
+    delivered = []
+
+    def on_candle(candle) -> None:
+        delivered.append(candle)
+
+        if len(delivered) == 1:
+            delivery_entered.set()
+            assert release_delivery.wait(timeout=1.0)
+
+    provider_thread = threading.Thread(
+        target=feed.subscribe,
+        args=(on_candle,),
+    )
+    provider_thread.start()
+
+    assert delivery_entered.wait(timeout=1.0)
+
+    def advance_clock() -> None:
+        feed.advance_time(_ts(10, 45))
+        clock_completed.set()
+
+    clock_thread = threading.Thread(
+        target=advance_clock,
+    )
+    clock_thread.start()
+
+    try:
+        assert not clock_completed.wait(timeout=0.05)
+    finally:
+        release_delivery.set()
+
+    provider_thread.join(timeout=1.0)
+    clock_thread.join(timeout=1.0)
+
+    assert not provider_thread.is_alive()
+    assert not clock_thread.is_alive()
+    assert clock_completed.is_set()
+    assert [candle.timestamp for candle in delivered] == [
+        _ts(10, 15),
+        _ts(10, 30),
+    ]
+
+    feed.close()

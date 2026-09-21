@@ -24,6 +24,10 @@ _NSE_PRICE_DIVISOR = 100.0
 _CORRELATION_ID = "kanasuM630"
 
 
+class FatalLiveMarketDataCallbackError(RuntimeError):
+    """Fatal failure while processing a provider callback."""
+
+
 class AngelOneLiveMarketDataAdapter:
     """
     One-symbol AngelOne SmartWebSocketV2 market-data adapter.
@@ -75,6 +79,7 @@ class AngelOneLiveMarketDataAdapter:
         self._websocket_factory = websocket_factory
         self._socket: Any | None = None
         self._disconnect_notified = False
+        self._callback_failure: Exception | None = None
         self.logger = get_logger(__name__)
 
     def connect(self) -> None:
@@ -90,6 +95,7 @@ class AngelOneLiveMarketDataAdapter:
             )
 
         self._disconnect_notified = False
+        self._callback_failure = None
 
         socket = self._websocket_factory(
             self.auth_token,
@@ -115,7 +121,15 @@ class AngelOneLiveMarketDataAdapter:
                 self._socket = None
 
             self._notify_disconnect()
+            self._raise_callback_failure()
             raise
+
+        if self._callback_failure is not None:
+            if self._socket is socket:
+                self._socket = None
+
+            self._notify_disconnect()
+            self._raise_callback_failure()
 
     def close(self) -> None:
         """Close the currently active provider socket."""
@@ -240,14 +254,48 @@ class AngelOneLiveMarketDataAdapter:
 
         try:
             update = self.normalize_message(message)
-        except Exception:
+            self.on_update(update)
+        except Exception as exc:
             self.logger.exception(
-                f"AngelOne live market-data message rejected | "
+                f"AngelOne live market-data callback failed | "
                 f"Symbol={self.symbol}"
+            )
+            self._record_callback_failure(
+                socket,
+                exc,
             )
             raise
 
-        self.on_update(update)
+    def _record_callback_failure(
+        self,
+        socket: Any,
+        failure: Exception,
+    ) -> None:
+        if self._callback_failure is None:
+            self._callback_failure = failure
+
+        if self._socket is socket:
+            self._socket = None
+
+        self._notify_disconnect()
+
+        try:
+            socket.close_connection()
+        except Exception:
+            self.logger.exception(
+                f"AngelOne live market-data socket close failed after "
+                f"fatal callback | Symbol={self.symbol}"
+            )
+
+    def _raise_callback_failure(self) -> None:
+        failure = self._callback_failure
+
+        if failure is None:
+            return
+
+        raise FatalLiveMarketDataCallbackError(
+            "AngelOne live market-data callback processing failed"
+        ) from failure
 
     def _handle_error(
         self,

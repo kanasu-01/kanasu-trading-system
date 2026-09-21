@@ -212,7 +212,7 @@ class LivePaperRuntime:
 
                 try:
                     self._feed.reconnect()
-                except Exception as exc:
+                except ConnectionError as exc:
                     last_failure = exc
 
                     has_retry_remaining = (
@@ -228,6 +228,9 @@ class LivePaperRuntime:
                         return
 
                     continue
+                except Exception as exc:
+                    self._record_provider_failure(exc)
+                    return
 
                 # The reconnect epoch ran successfully until the provider
                 # returned again. A future disconnect gets a fresh budget.

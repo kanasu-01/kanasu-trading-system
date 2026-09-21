@@ -401,3 +401,115 @@ def test_live_paper_runtime_retries_after_initial_subscribe_failure() -> None:
 
     assert feed.closed.is_set()
     assert not runtime.provider_thread.is_alive()
+
+
+class FatalReconnectFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.closed = threading.Event()
+        self.reconnect_calls = 0
+
+    def subscribe(self, on_candle) -> None:
+        self.subscribed.set()
+
+    def reconnect(self) -> None:
+        self.reconnect_calls += 1
+        raise ValueError(
+            "fatal reconnect failure"
+        )
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def advance_time(self, timestamp) -> None:
+        pass
+
+
+def test_live_paper_runtime_does_not_retry_fatal_reconnect_failure() -> None:
+    feed = FatalReconnectFeed()
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=lambda candle: None,
+        reconnect_attempts=5,
+    )
+
+    runtime.start()
+
+    assert feed.subscribed.wait(timeout=1.0)
+
+    runtime.provider_thread.join(timeout=1.0)
+
+    assert not runtime.provider_thread.is_alive()
+    assert feed.reconnect_calls == 1
+
+    with pytest.raises(
+        RuntimeError,
+        match="Live paper provider thread failed",
+    ) as exc_info:
+        runtime.raise_if_failed()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        ValueError,
+    )
+    assert str(
+        exc_info.value.__cause__
+    ) == "fatal reconnect failure"
+
+    runtime.stop()
+    assert feed.closed.is_set()
+
+
+class FatalClockFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.closed = threading.Event()
+        self.advance_calls = 0
+
+    def subscribe(self, on_candle) -> None:
+        self.subscribed.set()
+        self.closed.wait(timeout=1.0)
+
+    def reconnect(self) -> None:
+        self.closed.wait(timeout=1.0)
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def advance_time(self, timestamp) -> None:
+        self.advance_calls += 1
+        raise ValueError(
+            "fatal clock failure"
+        )
+
+
+def test_live_paper_runtime_surfaces_clock_failure_without_reconnect() -> None:
+    feed = FatalClockFeed()
+    now_value = datetime(
+        2026,
+        1,
+        2,
+        9,
+        15,
+        tzinfo=timezone.utc,
+    )
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=lambda candle: None,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="fatal clock failure",
+    ):
+        runtime.run_until(
+            session_end=now_value + timedelta(hours=1),
+            now=lambda: now_value,
+            clock_interval_seconds=0.0,
+        )
+
+    assert feed.advance_calls == 1
+    assert feed.closed.is_set()
+    assert not runtime.provider_thread.is_alive()

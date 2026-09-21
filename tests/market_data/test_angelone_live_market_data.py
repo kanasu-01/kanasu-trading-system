@@ -8,6 +8,7 @@ from core.broker.angelone import AngelOneBroker
 from core.broker.angelone_config import AngelOneConfig
 from core.market_data.angelone_live_market_data import (
     AngelOneLiveMarketDataAdapter,
+    FatalLiveMarketDataCallbackError,
 )
 from core.market_data.live_market_update import LiveMarketUpdate
 
@@ -329,3 +330,144 @@ def test_invalid_exchange_timestamp_is_rejected():
         match="timestamp must be positive",
     ):
         adapter.normalize_message(message)
+
+
+class SwallowingDataSocket(FakeSocket):
+    def __init__(
+        self,
+        message,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.message = message
+        self.callback_error = None
+
+    def connect(self):
+        self.connected = True
+        self.on_open(self)
+
+        try:
+            self.on_data(
+                self,
+                self.message,
+            )
+        except Exception as exc:
+            self.callback_error = exc
+            self.on_error(
+                self,
+                exc,
+            )
+
+
+def test_adapter_surfaces_malformed_callback_even_if_provider_swallows_exception():
+    created = []
+
+    def factory(*args, **kwargs):
+        socket = SwallowingDataSocket(
+            "not-a-message",
+            *args,
+            **kwargs,
+        )
+        created.append(socket)
+        return socket
+
+    adapter = _adapter(
+        websocket_factory=factory,
+    )
+
+    with pytest.raises(
+        FatalLiveMarketDataCallbackError,
+        match="callback processing failed",
+    ) as exc_info:
+        adapter.connect()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        ValueError,
+    )
+    assert isinstance(
+        created[0].callback_error,
+        ValueError,
+    )
+    assert created[0].closed is True
+
+
+def test_adapter_surfaces_downstream_callback_failure_even_if_provider_swallows_exception():
+    created = []
+
+    def fail_downstream(_update):
+        raise RuntimeError(
+            "downstream pipeline failed"
+        )
+
+    def factory(*args, **kwargs):
+        socket = SwallowingDataSocket(
+            _message(),
+            *args,
+            **kwargs,
+        )
+        created.append(socket)
+        return socket
+
+    adapter = _adapter(
+        on_update=fail_downstream,
+        websocket_factory=factory,
+    )
+
+    with pytest.raises(
+        FatalLiveMarketDataCallbackError,
+        match="callback processing failed",
+    ) as exc_info:
+        adapter.connect()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        RuntimeError,
+    )
+    assert str(
+        exc_info.value.__cause__
+    ) == "downstream pipeline failed"
+    assert isinstance(
+        created[0].callback_error,
+        RuntimeError,
+    )
+    assert created[0].closed is True
+
+
+def test_downstream_connection_error_is_still_fatal_not_reconnectable():
+    created = []
+
+    def fail_downstream(_update):
+        raise ConnectionError(
+            "strategy callback connection-shaped failure"
+        )
+
+    def factory(*args, **kwargs):
+        socket = SwallowingDataSocket(
+            _message(),
+            *args,
+            **kwargs,
+        )
+        created.append(socket)
+        return socket
+
+    adapter = _adapter(
+        on_update=fail_downstream,
+        websocket_factory=factory,
+    )
+
+    with pytest.raises(
+        FatalLiveMarketDataCallbackError,
+        match="callback processing failed",
+    ) as exc_info:
+        adapter.connect()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        ConnectionError,
+    )
+    assert str(
+        exc_info.value.__cause__
+    ) == "strategy callback connection-shaped failure"
+    assert created[0].closed is True

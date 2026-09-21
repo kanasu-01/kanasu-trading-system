@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, time
 
 from core.broker.angelone_config import AngelOneConfig
@@ -36,6 +37,7 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
             timeframe=timeframe,
             session_start=session_start,
         )
+        self._pipeline_lock = threading.RLock()
 
         self._on_candle: CompletedCandleHandler | None = None
 
@@ -61,7 +63,8 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
 
     @property
     def connected(self) -> bool:
-        return self._pipeline.connected
+        with self._pipeline_lock:
+            return self._pipeline.connected
 
     def subscribe(
         self,
@@ -87,44 +90,54 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
                 "AngelOne live candle feed must be subscribed before reconnect"
             )
 
-        self._pipeline.mark_disconnected()
+        with self._pipeline_lock:
+            self._pipeline.mark_disconnected()
+
         self._adapter.close()
 
         self._connect_epoch()
 
     def close(self) -> None:
-        self._pipeline.mark_disconnected()
+        with self._pipeline_lock:
+            self._pipeline.mark_disconnected()
+
         self._adapter.close()
 
     def advance_time(
         self,
         timestamp: datetime,
     ) -> None:
-        candle = self._pipeline.advance_time(timestamp)
+        with self._pipeline_lock:
+            candle = self._pipeline.advance_time(timestamp)
 
-        if candle is not None:
-            self._emit(candle)
+            if candle is not None:
+                self._emit(candle)
 
     def _connect_epoch(self) -> None:
-        self._pipeline.begin_connection()
+        with self._pipeline_lock:
+            self._pipeline.begin_connection()
 
         try:
             self._adapter.connect()
         except Exception:
-            self._pipeline.mark_disconnected()
+            with self._pipeline_lock:
+                self._pipeline.mark_disconnected()
+
             raise
 
     def _handle_update(
         self,
         update: LiveMarketUpdate,
     ) -> None:
-        candle = self._pipeline.on_update(update)
+        with self._pipeline_lock:
+            candle = self._pipeline.on_update(update)
 
-        if candle is not None:
-            self._emit(candle)
+            if candle is not None:
+                self._emit(candle)
 
     def _handle_disconnect(self) -> None:
-        self._pipeline.mark_disconnected()
+        with self._pipeline_lock:
+            self._pipeline.mark_disconnected()
 
     def _emit(
         self,
