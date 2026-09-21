@@ -7,6 +7,7 @@ from core.runtime.walk_forward_runtime import (
     run_walk_forward,
 )
 from core.config.app_config import AppConfig
+from core.config.loaders import load_app_config
 from core.config.paper_data_source import PaperDataSource
 from core.config.runtime_mode import RuntimeMode
 import logging
@@ -23,6 +24,9 @@ from core.strategies.strategy_factory import (
 from core.runtime.runtime_context import RuntimeContext
 
 from core.runtime.dataset_context import DatasetContext
+from core.runtime.live_paper_session import (
+    resolve_live_paper_session_window,
+)
 from dotenv import load_dotenv
 from core.runtime.paper_runtime import (
     run_live_paper_trading,
@@ -122,6 +126,14 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
             )
 
         elif app_config.paper_data_source == PaperDataSource.ANGELONE:
+            ist = pytz.timezone("Asia/Kolkata")
+            current_time = datetime.now(ist)
+            session_window = resolve_live_paper_session_window(
+                current_time=current_time,
+                session_start=app_config.paper_session_start,
+                session_end=app_config.paper_session_end,
+            )
+
             angelone_config = AngelOneConfig.load_from_env()
 
             broker = AngelOneBroker(
@@ -144,21 +156,12 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
                 session_start=app_config.paper_session_start,
             )
 
-            ist = pytz.timezone("Asia/Kolkata")
-            current_time = datetime.now(ist)
-            session_end = ist.localize(
-                datetime.combine(
-                    current_time.date(),
-                    app_config.paper_session_end,
-                )
-            )
-
             run_live_paper_trading(
                 feed=feed,
                 strategy=strategy,
                 runtime_context=runtime_context,
                 dataset_context=dataset_context,
-                session_end=session_end,
+                session_end=session_window.end,
                 now=lambda: datetime.now(ist),
                 reconnect_attempts=app_config.broker_retry_attempts,
                 reconnect_delay_seconds=(
@@ -190,14 +193,18 @@ def run_live_trading():
     print("\n=== LIVE MODE NOT IMPLEMENTED ===")
 
 
+def run_configured_application() -> None:
+    main(
+        app_config=load_app_config(),
+        backtest_config=BACKTEST_CONFIG,
+    )
+
+
 if __name__ == "__main__":
 
     try:
 
-        main(
-            app_config=AppConfig(),
-            backtest_config=BACKTEST_CONFIG,
-        )
+        run_configured_application()
 
     except Exception as e:
 

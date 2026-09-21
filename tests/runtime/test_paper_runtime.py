@@ -371,3 +371,4 @@ def test_live_paper_runtime_uses_same_next_bar_processor(
     assert position.entry_time == candles[1].timestamp
     assert position.entry_price == candles[1].open
     assert position.entry_index == 1
+    assert session.status == "STOPPED"

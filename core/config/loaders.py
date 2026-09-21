@@ -12,7 +12,7 @@ def load_app_config() -> AppConfig:
     Load application config from environment variables.
     """
 
-    mode = os.getenv("TRADING_MODE", "DEV").upper()
+    mode = os.getenv("TRADING_MODE", "BACKTEST").upper()
 
     return AppConfig(
         runtime_mode=RuntimeMode(mode),

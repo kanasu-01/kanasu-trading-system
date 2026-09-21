@@ -477,3 +477,111 @@ def test_main_paper_angelone_composes_live_feed_and_supervisor(
     assert runtime_kwargs["reconnect_delay_seconds"] == 1.5
     assert runtime_kwargs["clock_interval_seconds"] == 0.5
     assert runtime_kwargs["initial_capital"] == 100000
+
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "match"),
+    [
+        (9, 14, "has not started"),
+        (15, 30, "already ended"),
+    ],
+)
+def test_main_paper_angelone_rejects_outside_session_before_provider_setup(
+    monkeypatch,
+    hour,
+    minute,
+    match,
+):
+    import pytz
+
+    ist = pytz.timezone("Asia/Kolkata")
+    fixed_now = ist.localize(
+        datetime(
+            2026,
+            1,
+            2,
+            hour,
+            minute,
+        )
+    )
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    class ForbiddenAngelOneConfig:
+        @classmethod
+        def load_from_env(cls):
+            pytest.fail(
+                "AngelOne provider setup reached outside session"
+            )
+
+    monkeypatch.setattr(
+        main_module,
+        "datetime",
+        FixedDateTime,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneConfig",
+        ForbiddenAngelOneConfig,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_strategy",
+        lambda value: object(),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=match,
+    ):
+        main_module.main(
+            AppConfig(
+                runtime_mode=RuntimeMode.PAPER,
+                paper_data_source=PaperDataSource.ANGELONE,
+            ),
+            config(),
+        )
+
+
+
+def test_configured_application_uses_loaded_app_config(
+    monkeypatch,
+):
+    app_config = AppConfig(
+        runtime_mode=RuntimeMode.PAPER,
+        paper_data_source=PaperDataSource.ANGELONE,
+    )
+    backtest_config = object()
+    captured = {}
+
+    monkeypatch.setattr(
+        main_module,
+        "load_app_config",
+        lambda: app_config,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "BACKTEST_CONFIG",
+        backtest_config,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "main",
+        lambda app_config, backtest_config: captured.update(
+            app_config=app_config,
+            backtest_config=backtest_config,
+        ),
+    )
+
+    main_module.run_configured_application()
+
+    assert captured == {
+        "app_config": app_config,
+        "backtest_config": backtest_config,
+    }

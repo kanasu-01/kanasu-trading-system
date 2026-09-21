@@ -35,3 +35,22 @@ def test_load_app_config_reads_paper_runtime_settings(
     assert config.paper_session_end == time(15, 25)
     assert config.paper_clock_interval_sec == 0.5
     assert config.enable_live_trading is False
+
+
+
+def test_load_app_config_defaults_to_backtest_and_mock(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv(
+        "TRADING_MODE",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "PAPER_DATA_SOURCE",
+        raising=False,
+    )
+
+    config = load_app_config()
+
+    assert config.runtime_mode is RuntimeMode.BACKTEST
+    assert config.paper_data_source is PaperDataSource.MOCK

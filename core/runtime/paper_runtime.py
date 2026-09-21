@@ -118,11 +118,14 @@ def run_live_paper_trading(
         reconnect_delay_seconds=reconnect_delay_seconds,
     )
 
-    supervisor.run_until(
-        session_end=session_end,
-        now=now,
-        clock_interval_seconds=clock_interval_seconds,
-    )
+    try:
+        supervisor.run_until(
+            session_end=session_end,
+            now=now,
+            clock_interval_seconds=clock_interval_seconds,
+        )
+    finally:
+        session.stop()
 
     logger.info(
         f"LIVE PAPER TRADING COMPLETED | "
