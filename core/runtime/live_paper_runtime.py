@@ -2,7 +2,10 @@ import threading
 from datetime import datetime
 from typing import Protocol
 
-from core.market_data.live_candle_feed import CompletedCandleHandler
+from core.market_data.live_candle_feed import (
+    CompletedCandleHandler,
+    LiveMarketUpdateHandler,
+)
 
 
 class ManagedLiveCandleFeed(Protocol):
@@ -11,6 +14,7 @@ class ManagedLiveCandleFeed(Protocol):
     def subscribe(
         self,
         on_candle: CompletedCandleHandler,
+        on_market_update: LiveMarketUpdateHandler | None = None,
     ) -> None:
         ...
 
@@ -40,6 +44,7 @@ class LivePaperRuntime:
         *,
         feed: ManagedLiveCandleFeed,
         on_candle: CompletedCandleHandler,
+        on_market_update: LiveMarketUpdateHandler | None = None,
         reconnect_attempts: int = 2,
         reconnect_delay_seconds: float = 0.0,
         join_timeout_seconds: float = 5.0,
@@ -67,6 +72,7 @@ class LivePaperRuntime:
 
         self._feed = feed
         self._on_candle = on_candle
+        self._on_market_update = on_market_update
         self._reconnect_attempts = reconnect_attempts
         self._reconnect_delay_seconds = float(
             reconnect_delay_seconds
@@ -74,6 +80,10 @@ class LivePaperRuntime:
         self._join_timeout_seconds = join_timeout_seconds
 
         self._stop_event = threading.Event()
+        self._completed_state_started = threading.Event()
+        self._callback_lock = threading.Lock()
+        self._callbacks_open = False
+        self._session_end: datetime | None = None
         self._failure_lock = threading.Lock()
 
         self._provider_thread: threading.Thread | None = None
@@ -95,6 +105,10 @@ class LivePaperRuntime:
             )
 
         self._stop_event.clear()
+        self._completed_state_started.clear()
+
+        with self._callback_lock:
+            self._callbacks_open = True
 
         with self._failure_lock:
             self._provider_failure = None
@@ -115,6 +129,7 @@ class LivePaperRuntime:
             return
 
         self._stop_event.set()
+        self._close_callback_admission()
         self._feed.close()
 
         thread.join(
@@ -148,6 +163,9 @@ class LivePaperRuntime:
                 "clock_interval_seconds must be non-negative"
             )
 
+        with self._callback_lock:
+            self._session_end = session_end
+
         self.start()
 
         try:
@@ -157,6 +175,11 @@ class LivePaperRuntime:
                 timestamp = now()
 
                 if timestamp >= session_end:
+                    # Session lifecycle owns the admission boundary. Close
+                    # callbacks before the final lifecycle observation so a
+                    # racing provider event cannot mutate paper state after
+                    # the configured session end.
+                    self._close_callback_admission()
                     self.advance_time(session_end)
                     self.raise_if_failed()
                     break
@@ -182,6 +205,61 @@ class LivePaperRuntime:
                 "Live paper provider thread failed"
             ) from failure
 
+    def _close_callback_admission(self) -> None:
+        with self._callback_lock:
+            self._callbacks_open = False
+
+    def _handle_market_update(
+        self,
+        update,
+        opens_new_bar: bool,
+    ) -> None:
+        with self._callback_lock:
+            if not self._callbacks_open:
+                return
+
+            if self._on_market_update is None:
+                return
+
+            effective_opens_new_bar = opens_new_bar
+
+            if (
+                effective_opens_new_bar
+                and self._session_end is not None
+                and update.timestamp >= self._session_end
+            ):
+                # A closing-boundary observation may validly complete the
+                # final session candle, but it cannot authorize execution
+                # in a non-existent next tradable bar.
+                effective_opens_new_bar = False
+
+            self._on_market_update(
+                update,
+                effective_opens_new_bar,
+            )
+
+    def _handle_completed_candle(
+        self,
+        candle,
+    ) -> None:
+        with self._callback_lock:
+            if not self._callbacks_open:
+                return
+
+            # Once a completed candle enters strategy/execution state, a
+            # later provider gap cannot be resumed causally without
+            # authoritative reconciliation/backfill.
+            self._completed_state_started.set()
+            self._on_candle(candle)
+
+    def _record_reconciliation_failure(self) -> None:
+        self._record_provider_failure(
+            RuntimeError(
+                "Live paper reconnect requires reconciliation after "
+                "completed candle state begins"
+            )
+        )
+
     def _record_provider_failure(
         self,
         failure: Exception,
@@ -193,8 +271,20 @@ class LivePaperRuntime:
 
     def _run_provider(self) -> None:
         try:
-            self._feed.subscribe(self._on_candle)
+            if self._on_market_update is None:
+                self._feed.subscribe(
+                    self._handle_completed_candle
+                )
+            else:
+                self._feed.subscribe(
+                    self._handle_completed_candle,
+                    self._handle_market_update,
+                )
         except ConnectionError:
+            if self._completed_state_started.is_set():
+                self._record_reconciliation_failure()
+                return
+
             if self._stop_event.wait(
                 self._reconnect_delay_seconds
             ):
@@ -202,17 +292,36 @@ class LivePaperRuntime:
         except Exception as exc:
             self._record_provider_failure(exc)
             return
+        else:
+            if (
+                self._completed_state_started.is_set()
+                and not self._stop_event.is_set()
+            ):
+                self._record_reconciliation_failure()
+                return
 
         while not self._stop_event.is_set():
+            if self._completed_state_started.is_set():
+                self._record_reconciliation_failure()
+                return
+
             last_failure: Exception | None = None
 
             for attempt in range(self._reconnect_attempts):
                 if self._stop_event.is_set():
                     return
 
+                if self._completed_state_started.is_set():
+                    self._record_reconciliation_failure()
+                    return
+
                 try:
                     self._feed.reconnect()
                 except ConnectionError as exc:
+                    if self._completed_state_started.is_set():
+                        self._record_reconciliation_failure()
+                        return
+
                     last_failure = exc
 
                     has_retry_remaining = (
@@ -232,8 +341,16 @@ class LivePaperRuntime:
                     self._record_provider_failure(exc)
                     return
 
-                # The reconnect epoch ran successfully until the provider
-                # returned again. A future disconnect gets a fresh budget.
+                if (
+                    self._completed_state_started.is_set()
+                    and not self._stop_event.is_set()
+                ):
+                    self._record_reconciliation_failure()
+                    return
+
+                # A pre-state reconnect epoch ran until the provider
+                # returned. It may receive a fresh retry budget because
+                # no strategy/execution candle state exists yet.
                 last_failure = None
                 break
 

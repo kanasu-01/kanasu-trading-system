@@ -76,6 +76,22 @@ class LiveCandlePipeline:
         self,
         update: LiveMarketUpdate,
     ) -> Candle | None:
+        candle, _accepted = (
+            self.on_update_with_acceptance(update)
+        )
+        return candle
+
+    def on_update_with_acceptance(
+        self,
+        update: LiveMarketUpdate,
+    ) -> tuple[Candle | None, bool]:
+        """
+        Accept one source observation.
+
+        The boolean distinguishes an accepted update that produced no
+        completed candle from an exact retransmission that was ignored
+        idempotently.
+        """
         if not self._connected or self._builder is None:
             raise RuntimeError(
                 "live market update received without an active connection"
@@ -83,8 +99,11 @@ class LiveCandlePipeline:
 
         # An exact retransmission of the latest accepted source update is
         # idempotent even when it appears immediately after reconnect.
-        if self._latest_update is not None and update == self._latest_update:
-            return None
+        if (
+            self._latest_update is not None
+            and update == self._latest_update
+        ):
+            return None, False
 
         self._validate_timestamp(update.timestamp)
 
@@ -102,29 +121,47 @@ class LiveCandlePipeline:
         self._record_timestamp(update.timestamp)
         self._latest_update = update
 
-        return self._accept_completed(completed)
+        return self._accept_completed(completed), True
 
     def advance_time(
         self,
         timestamp: datetime,
     ) -> Candle | None:
         """
-        Advance the session clock.
+        Observe the caller wall clock without changing source-event ordering.
 
-        While disconnected, the watermark may advance but no candle may be
-        emitted because the interrupted interval is not provably complete.
+        Exchange-event timestamps are the only authority for intraday candle
+        completion and the source watermark. The caller clock owns session
+        lifecycle only; transport latency must not make a legitimate source
+        update stale or prematurely finalize a candle.
         """
-        self._validate_timestamp(timestamp)
+        self._validate_clock_timestamp(timestamp)
+        return None
 
-        if not self._connected or self._builder is None:
-            self._record_timestamp(timestamp)
-            return None
+    def _validate_clock_timestamp(
+        self,
+        timestamp: datetime,
+    ) -> None:
+        if timestamp.utcoffset() is None:
+            raise ValueError(
+                "live pipeline clock timestamp must be timezone-aware"
+            )
 
-        completed = self._builder.advance_time(timestamp)
+        if (
+            self._timezone is not None
+            and timestamp.tzinfo != self._timezone
+        ):
+            raise ValueError(
+                "live pipeline timezone must remain consistent"
+            )
 
-        self._record_timestamp(timestamp)
-
-        return self._accept_completed(completed)
+        if (
+            self._session_date is not None
+            and timestamp.date() != self._session_date
+        ):
+            raise ValueError(
+                "live pipeline is scoped to one trading session"
+            )
 
     def _validate_timestamp(
         self,

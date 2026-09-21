@@ -78,6 +78,7 @@ def run_live_paper_trading(
     reconnect_delay_seconds: float,
     clock_interval_seconds: float,
     initial_capital: float = 100000,
+    history_bars=None,
 ) -> PaperTradingSession:
     """Run one supervised live-market-data paper session."""
 
@@ -104,6 +105,7 @@ def run_live_paper_trading(
         dataset_context=dataset_context,
         initial_capital=initial_capital,
         session_id=session.session_id,
+        history_bars=history_bars,
     )
 
     session.strategy_runner = processor.strategy_runner
@@ -113,7 +115,8 @@ def run_live_paper_trading(
 
     supervisor = LivePaperRuntime(
         feed=feed,
-        on_candle=processor.on_candle,
+        on_candle=processor.on_live_completed_candle,
+        on_market_update=processor.on_live_market_update,
         reconnect_attempts=reconnect_attempts,
         reconnect_delay_seconds=reconnect_delay_seconds,
     )

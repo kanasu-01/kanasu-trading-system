@@ -224,7 +224,7 @@ def test_latest_update_retransmission_after_reconnect_is_idempotent() -> None:
     ) is None
 
 
-def test_disconnected_clock_never_emits_and_advances_watermark() -> None:
+def test_disconnected_clock_never_emits_or_advances_source_watermark() -> None:
     pipeline = LiveCandlePipeline(
         timeframe="15m",
         session_start=SESSION_START,
@@ -240,15 +240,14 @@ def test_disconnected_clock_never_emits_and_advances_watermark() -> None:
 
     pipeline.mark_disconnected()
 
-    # The interrupted candle must not be completed by the wall clock.
+    # The interrupted candle must not be completed by the wall clock, and
+    # wall time must not become source-event ordering state.
     assert pipeline.advance_time(_ts(10, 30)) is None
 
     pipeline.begin_connection()
 
-    with pytest.raises(
-        ValueError,
-        match="older than the current watermark",
-    ):
-        pipeline.on_update(
-            _update(10, 29, 102.0, 530.0, 1)
-        )
+    # This event is newer than the last accepted source event even though
+    # its exchange timestamp is behind the caller wall clock.
+    assert pipeline.on_update(
+        _update(10, 29, 102.0, 530.0, 1)
+    ) is None

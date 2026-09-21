@@ -585,3 +585,266 @@ def test_configured_application_uses_loaded_app_config(
         "app_config": app_config,
         "backtest_config": backtest_config,
     }
+
+
+def test_main_paper_angelone_retrieves_strategy_warmup_before_live_session(
+    monkeypatch,
+):
+    import pytz
+
+    captured = {}
+    ist = pytz.timezone("Asia/Kolkata")
+    fixed_now = ist.localize(
+        datetime(2026, 1, 2, 10, 7)
+    )
+    history_end = ist.localize(
+        datetime(2026, 1, 2, 10, 0)
+    )
+
+    warmup = [
+        Candle(
+            timestamp=ist.localize(
+                datetime(2026, 1, 1, 14, 45)
+            ),
+            open=97.0,
+            high=99.0,
+            low=96.0,
+            close=98.0,
+            volume=900.0,
+        ),
+        Candle(
+            timestamp=ist.localize(
+                datetime(2026, 1, 1, 15, 0)
+            ),
+            open=98.0,
+            high=100.0,
+            low=97.0,
+            close=99.0,
+            volume=950.0,
+        ),
+        Candle(
+            timestamp=ist.localize(
+                datetime(2026, 1, 1, 15, 15)
+            ),
+            open=99.0,
+            high=101.0,
+            low=98.0,
+            close=100.0,
+            volume=1_000.0,
+        ),
+    ]
+
+    class WarmupStrategy:
+        name = "warmup-strategy"
+
+        @staticmethod
+        def warmup_bars():
+            return 3
+
+    strategy = WarmupStrategy()
+    source = SpyHistoricalSource(warmup)
+    angelone_config = object()
+    feed = object()
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    class StubAngelOneConfig:
+        @classmethod
+        def load_from_env(cls):
+            return angelone_config
+
+    class StubBroker:
+        def __init__(
+            self,
+            *,
+            config,
+            paper_mode,
+            enable_historical_api,
+        ):
+            pass
+
+        def login(self):
+            return True
+
+        def get_live_market_data_session(self):
+            return (
+                "Bearer jwt-token",
+                "feed-token",
+            )
+
+    monkeypatch.setattr(
+        main_module,
+        "datetime",
+        FixedDateTime,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_strategy",
+        lambda _config: strategy,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_historical_source",
+        lambda app_config: source,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneConfig",
+        StubAngelOneConfig,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneBroker",
+        StubBroker,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneLiveCandleFeed",
+        lambda **kwargs: feed,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "run_live_paper_trading",
+        lambda **kwargs: captured.update(
+            live_runtime_kwargs=kwargs
+        ),
+    )
+
+    app_config = AppConfig(
+        runtime_mode=RuntimeMode.PAPER,
+        paper_data_source=PaperDataSource.ANGELONE,
+    )
+
+    main_module.main(
+        app_config,
+        config(),
+    )
+
+    assert len(source.requests) == 1
+
+    requested_context, request = source.requests[0]
+
+    assert requested_context == DatasetContext(
+        symbol="RELIANCE",
+        timeframe="15m",
+        timezone="Asia/Kolkata",
+    )
+
+    # Warm-up includes every historically completed bar before the
+    # current live bucket while excluding the in-progress bucket itself.
+    assert request.end == history_end
+    assert request.start < request.end
+
+    assert (
+        captured["live_runtime_kwargs"]["history_bars"]
+        == warmup
+    )
+
+
+def test_main_paper_angelone_revalidates_session_after_provider_setup(
+    monkeypatch,
+):
+    import pytz
+
+    ist = pytz.timezone("Asia/Kolkata")
+    times = iter(
+        [
+            ist.localize(
+                datetime(2026, 1, 2, 15, 29, 59)
+            ),
+            ist.localize(
+                datetime(2026, 1, 2, 15, 30, 0)
+            ),
+        ]
+    )
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            value = next(times)
+            if tz is None:
+                return value.replace(tzinfo=None)
+            return value.astimezone(tz)
+
+    class ZeroWarmupStrategy:
+        name = "zero-warmup"
+
+        @staticmethod
+        def warmup_bars():
+            return 0
+
+    class StubAngelOneConfig:
+        @classmethod
+        def load_from_env(cls):
+            return object()
+
+    class StubBroker:
+        def __init__(
+            self,
+            *,
+            config,
+            paper_mode,
+            enable_historical_api,
+        ):
+            pass
+
+        def login(self):
+            return True
+
+        def get_live_market_data_session(self):
+            return (
+                "Bearer jwt-token",
+                "feed-token",
+            )
+
+    monkeypatch.setattr(
+        main_module,
+        "datetime",
+        FixedDateTime,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_strategy",
+        lambda _config: ZeroWarmupStrategy(),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneConfig",
+        StubAngelOneConfig,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneBroker",
+        StubBroker,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneLiveCandleFeed",
+        lambda **kwargs: pytest.fail(
+            "live feed started after session close"
+        ),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "run_live_paper_trading",
+        lambda **kwargs: pytest.fail(
+            "live runtime started after session close"
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="already ended",
+    ):
+        main_module.main(
+            AppConfig(
+                runtime_mode=RuntimeMode.PAPER,
+                paper_data_source=PaperDataSource.ANGELONE,
+            ),
+            config(),
+        )

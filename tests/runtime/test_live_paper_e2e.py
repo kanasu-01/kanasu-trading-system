@@ -171,7 +171,7 @@ class BuyFirstDeliveredCandleStrategy(BaseStrategy):
         self.seen_timestamps.clear()
 
 
-def test_live_paper_reconnect_preserves_next_bar_execution_and_discards_gap():
+def test_live_paper_pre_state_reconnect_preserves_causal_execution_and_discards_gap():
     second_epoch_ready = threading.Event()
 
     factory = ScriptedEpochFactory(
@@ -192,13 +192,6 @@ def test_live_paper_reconnect_preserves_next_bar_execution_and_discards_gap():
                         520,
                         2,
                     ),
-                    _message(
-                        10,
-                        30,
-                        10200,
-                        530,
-                        3,
-                    ),
                 ],
                 "terminal_error": ConnectionError(
                     "transport lost"
@@ -206,33 +199,52 @@ def test_live_paper_reconnect_preserves_next_bar_execution_and_discards_gap():
             },
             {
                 "script": [
+                    # Reconnect begins inside the interrupted 10:15 bar.
+                    # That interval must remain suppressed.
                     _message(
                         10,
-                        35,
-                        10300,
+                        25,
+                        10200,
                         540,
                         1,
                     ),
                     _message(
                         10,
+                        30,
+                        10200,
+                        545,
+                        2,
+                    ),
+                    _message(
+                        10,
+                        35,
+                        10300,
+                        550,
+                        3,
+                    ),
+                    # This source observation completes the first valid
+                    # post-reconnect candle (10:30) and is simultaneously
+                    # the causal opening observation for the 10:45 bar.
+                    _message(
+                        10,
                         45,
                         12000,
-                        550,
-                        2,
+                        560,
+                        4,
                     ),
                     _message(
                         10,
                         50,
                         12100,
-                        560,
-                        3,
+                        570,
+                        5,
                     ),
                     _message(
                         11,
                         0,
                         12200,
-                        570,
-                        4,
+                        580,
+                        6,
                     ),
                 ],
                 "ready_event": second_epoch_ready,
@@ -285,10 +297,11 @@ def test_live_paper_reconnect_preserves_next_bar_execution_and_discards_gap():
     assert len(factory.sockets) == 2
     assert factory.plans == []
 
+    # The interrupted 10:15 interval is never delivered. Wall clock also
+    # does not synthesize an 11:00 candle at session close.
     assert strategy.seen_timestamps == [
-        _ts(10, 15),
+        _ts(10, 30),
         _ts(10, 45),
-        _ts(11, 0),
     ]
 
     position = (
@@ -297,6 +310,8 @@ def test_live_paper_reconnect_preserves_next_bar_execution_and_discards_gap():
     )
 
     assert position is not None
+    # The BUY decided from completed 10:30 executes immediately on the
+    # observed 10:45 opening update, not after the 10:45 candle completes.
     assert position.entry_time == _ts(10, 45)
     assert position.entry_price == 120.0
     assert position.entry_index == 1

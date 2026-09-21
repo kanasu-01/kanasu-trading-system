@@ -513,3 +513,225 @@ def test_live_paper_runtime_surfaces_clock_failure_without_reconnect() -> None:
     assert feed.advance_calls == 1
     assert feed.closed.is_set()
     assert not runtime.provider_thread.is_alive()
+
+
+class StateThenDisconnectFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.closed = threading.Event()
+        self.reconnect_calls = 0
+
+    def subscribe(
+        self,
+        on_candle,
+        on_market_update=None,
+    ) -> None:
+        self.subscribed.set()
+
+        # One completed candle has now entered strategy/execution state.
+        on_candle(object())
+
+        # Returning simulates transport loss/provider termination after
+        # authoritative paper state has begun.
+
+    def reconnect(self) -> None:
+        self.reconnect_calls += 1
+        raise ConnectionError("reconnect should not be attempted")
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def advance_time(self, timestamp) -> None:
+        pass
+
+
+def test_runtime_refuses_reconnect_after_completed_candle_state_begins() -> None:
+    feed = StateThenDisconnectFeed()
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=lambda _candle: None,
+        reconnect_attempts=1,
+        reconnect_delay_seconds=0.0,
+    )
+
+    runtime.start()
+
+    assert feed.subscribed.wait(timeout=1.0)
+
+    runtime.provider_thread.join(timeout=1.0)
+    assert not runtime.provider_thread.is_alive()
+
+    with pytest.raises(
+        RuntimeError,
+        match="Live paper provider thread failed",
+    ) as exc_info:
+        runtime.raise_if_failed()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        RuntimeError,
+    )
+    assert "reconciliation" in str(
+        exc_info.value.__cause__
+    )
+    assert feed.reconnect_calls == 0
+
+    runtime.stop()
+    assert feed.closed.is_set()
+
+
+class SessionEndRaceFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.closed = threading.Event()
+        self.on_candle = None
+        self.on_market_update = None
+
+    def subscribe(
+        self,
+        on_candle,
+        on_market_update=None,
+    ) -> None:
+        self.on_candle = on_candle
+        self.on_market_update = on_market_update
+        self.subscribed.set()
+        self.closed.wait(timeout=1.0)
+
+    def reconnect(self) -> None:
+        self.closed.wait(timeout=1.0)
+
+    def advance_time(self, timestamp) -> None:
+        # Simulate source callbacks racing exactly with caller-side session
+        # shutdown. Once session_end is observed, neither callback may mutate
+        # paper strategy/execution state.
+        self.on_candle(object())
+
+        if self.on_market_update is not None:
+            self.on_market_update(
+                object(),
+                True,
+            )
+
+    def close(self) -> None:
+        self.closed.set()
+
+
+def test_session_end_rejects_racing_provider_callbacks() -> None:
+    feed = SessionEndRaceFeed()
+    completed = []
+    updates = []
+
+    session_end = datetime(
+        2026,
+        1,
+        2,
+        15,
+        30,
+        tzinfo=timezone.utc,
+    )
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=completed.append,
+        on_market_update=(
+            lambda update, opens_new_bar: updates.append(
+                (update, opens_new_bar)
+            )
+        ),
+    )
+
+    def now():
+        assert feed.subscribed.wait(timeout=1.0)
+        return session_end
+
+    runtime.run_until(
+        session_end=session_end,
+        now=now,
+        clock_interval_seconds=0.0,
+    )
+
+    assert completed == []
+    assert updates == []
+    assert feed.closed.is_set()
+    assert not runtime.provider_thread.is_alive()
+
+
+class SessionEndSourceBoundaryFeed:
+    def __init__(self, session_end) -> None:
+        self.session_end = session_end
+        self.boundary_sent = threading.Event()
+        self.closed = threading.Event()
+
+    def subscribe(
+        self,
+        on_candle,
+        on_market_update=None,
+    ) -> None:
+        # Model the provider boundary observation arriving just before the
+        # caller observes wall-clock session end. The final completed candle
+        # is valid, but there is no tradable next bar after session close.
+        on_candle(object())
+
+        if on_market_update is not None:
+            class BoundaryUpdate:
+                timestamp = self.session_end
+
+            on_market_update(
+                BoundaryUpdate(),
+                True,
+            )
+
+        self.boundary_sent.set()
+        self.closed.wait(timeout=1.0)
+
+    def reconnect(self) -> None:
+        self.closed.wait(timeout=1.0)
+
+    def advance_time(self, timestamp) -> None:
+        pass
+
+    def close(self) -> None:
+        self.closed.set()
+
+
+def test_session_end_source_boundary_cannot_open_next_bar_execution() -> None:
+    session_end = datetime(
+        2026,
+        1,
+        2,
+        15,
+        30,
+        tzinfo=timezone.utc,
+    )
+    feed = SessionEndSourceBoundaryFeed(session_end)
+
+    completed = []
+    opens_new_bar_values = []
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=completed.append,
+        on_market_update=(
+            lambda _update, opens_new_bar: (
+                opens_new_bar_values.append(
+                    opens_new_bar
+                )
+            )
+        ),
+    )
+
+    def now():
+        assert feed.boundary_sent.wait(timeout=1.0)
+        return session_end
+
+    runtime.run_until(
+        session_end=session_end,
+        now=now,
+        clock_interval_seconds=0.0,
+    )
+
+    assert len(completed) == 1
+    assert opens_new_bar_values == [False]
+    assert feed.closed.is_set()
+    assert not runtime.provider_thread.is_alive()

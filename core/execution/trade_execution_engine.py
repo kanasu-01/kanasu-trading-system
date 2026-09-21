@@ -7,6 +7,7 @@ from core.risk.portfolio_risk_manager import PortfolioRiskManager
 from core.risk.drawdown_risk_manager import DrawdownRiskManager
 
 from core.entities.candle import Candle
+from core.market_data.live_market_update import LiveMarketUpdate
 from core.entities.trade import Trade
 from core.strategies.signal import SignalType
 
@@ -505,6 +506,42 @@ class TradeExecutionEngine:
             )
             return entry_feedback + (protective_feedback,)
         return entry_feedback
+
+    def process_live_market_update(
+        self,
+        *,
+        pending_signal: Optional[SignalType],
+        decision_close: Optional[float],
+        rejection_midpoint: Optional[float],
+        update: LiveMarketUpdate,
+        execution_index: int,
+        symbol: str,
+    ) -> tuple[ExecutionFeedback, ...]:
+        """
+        Process one authoritative live source observation causally.
+
+        The observation contains no future bar information: open/high/low/
+        close are all the currently observed price. This preserves canonical
+        execution, risk, cost, and feedback rules without retrospectively
+        using a completed future candle.
+        """
+        observed = Candle(
+            timestamp=update.timestamp,
+            open=update.price,
+            high=update.price,
+            low=update.price,
+            close=update.price,
+            volume=0.0,
+        )
+
+        return self.process_backtest_candle(
+            pending_signal=pending_signal,
+            decision_close=decision_close,
+            rejection_midpoint=rejection_midpoint,
+            candle=observed,
+            execution_index=execution_index,
+            symbol=symbol,
+        )
 
     def mark_open_position_to_market(self, *, symbol: str, price: float) -> None:
         """Mark an existing position after current-bar execution processing."""

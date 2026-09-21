@@ -1,11 +1,15 @@
-﻿from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from core.config.execution_config import ExecutionConfig
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.market_data.mock_live_feed import MockLiveFeed
+from core.market_data.live_market_update import LiveMarketUpdate
 from core.runtime.dataset_context import DatasetContext
 import core.runtime.paper_runtime as paper_runtime_module
+from core.runtime.paper_candle_processor import (
+    PaperCandleProcessor,
+)
 from core.runtime.paper_runtime import (
     run_live_paper_trading,
     run_paper_trading,
@@ -290,7 +294,7 @@ def test_paper_honors_runtime_risk_per_trade_percentage() -> None:
 
 
 
-def test_live_paper_runtime_uses_same_next_bar_processor(
+def test_live_paper_runtime_executes_at_observed_next_bar_open(
     monkeypatch,
 ) -> None:
     candles = [
@@ -318,11 +322,21 @@ def test_live_paper_runtime_uses_same_next_bar_processor(
         def __init__(self, **kwargs):
             captured["supervisor_kwargs"] = kwargs
             self.on_candle = kwargs["on_candle"]
+            self.on_market_update = kwargs["on_market_update"]
 
         def run_until(self, **kwargs):
             captured["run_until_kwargs"] = kwargs
-            for candle in candles:
-                self.on_candle(candle)
+
+            self.on_candle(candles[0])
+            self.on_market_update(
+                LiveMarketUpdate(
+                    timestamp=candles[1].timestamp,
+                    price=candles[1].open,
+                    cumulative_volume=1_100.0,
+                    sequence=1,
+                ),
+                True,
+            )
 
     monkeypatch.setattr(
         paper_runtime_module,
@@ -372,3 +386,86 @@ def test_live_paper_runtime_uses_same_next_bar_processor(
     assert position.entry_price == candles[1].open
     assert position.entry_index == 1
     assert session.status == "STOPPED"
+
+
+class WarmupRecordingStrategy(BaseStrategy):
+    def __init__(self) -> None:
+        super().__init__(name="warmup_recording")
+        self.decision_lengths = []
+
+    def warmup_bars(self) -> int:
+        return 3
+
+    def on_new_candle(
+        self,
+        series: CandleSeries,
+    ) -> SignalType | None:
+        self.decision_lengths.append(len(series))
+        return None
+
+    def reset(self) -> None:
+        self.decision_lengths.clear()
+
+
+def test_live_processor_seeds_history_without_replaying_decisions() -> None:
+    history = [
+        Candle(
+            timestamp=START - timedelta(minutes=30),
+            open=97.0,
+            high=99.0,
+            low=96.0,
+            close=98.0,
+            volume=900.0,
+        ),
+        Candle(
+            timestamp=START - timedelta(minutes=15),
+            open=98.0,
+            high=100.0,
+            low=97.0,
+            close=99.0,
+            volume=950.0,
+        ),
+    ]
+    strategy = WarmupRecordingStrategy()
+
+    processor = PaperCandleProcessor(
+        strategy=strategy,
+        runtime_context=RuntimeContext(),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="warmup-test",
+        history_bars=history,
+    )
+
+    # Historical bars establish indicator context only. They must not replay
+    # decisions, signals, execution feedback, or portfolio mutations.
+    assert len(processor.series) == 2
+    assert list(processor.series) == history
+    assert strategy.decision_lengths == []
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+    live_candle = Candle(
+        timestamp=START,
+        open=99.0,
+        high=102.0,
+        low=98.0,
+        close=101.0,
+        volume=1_000.0,
+    )
+
+    processor.on_live_completed_candle(
+        live_candle
+    )
+
+    # The first actual live completed candle becomes the first strategy
+    # decision callback, with historical context already present.
+    assert len(processor.series) == 3
+    assert strategy.decision_lengths == [3]

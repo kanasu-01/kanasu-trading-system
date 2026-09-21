@@ -2,9 +2,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 from core.entities.candle import Candle
+from core.market_data.live_market_update import LiveMarketUpdate
 
 
 CompletedCandleHandler = Callable[[Candle], None]
+LiveMarketUpdateHandler = Callable[[LiveMarketUpdate, bool], None]
 
 
 class LiveCandleFeed(ABC):

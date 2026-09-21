@@ -10,6 +10,7 @@ from core.market_data.angelone_live_market_data import (
 from core.market_data.live_candle_feed import (
     CompletedCandleHandler,
     LiveCandleFeed,
+    LiveMarketUpdateHandler,
 )
 from core.market_data.live_candle_pipeline import LiveCandlePipeline
 from core.market_data.live_market_update import LiveMarketUpdate
@@ -40,6 +41,7 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
         self._pipeline_lock = threading.RLock()
 
         self._on_candle: CompletedCandleHandler | None = None
+        self._on_market_update: LiveMarketUpdateHandler | None = None
 
         if websocket_factory is None:
             self._adapter = AngelOneLiveMarketDataAdapter(
@@ -69,6 +71,7 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
     def subscribe(
         self,
         on_candle: CompletedCandleHandler,
+        on_market_update: LiveMarketUpdateHandler | None = None,
     ) -> None:
         if self._on_candle is not None:
             raise RuntimeError(
@@ -76,6 +79,7 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
             )
 
         self._on_candle = on_candle
+        self._on_market_update = on_market_update
         self._connect_epoch()
 
     def reconnect(self) -> None:
@@ -130,10 +134,28 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
         update: LiveMarketUpdate,
     ) -> None:
         with self._pipeline_lock:
-            candle = self._pipeline.on_update(update)
+            candle, accepted = (
+                self._pipeline.on_update_with_acceptance(
+                    update
+                )
+            )
 
+            if not accepted:
+                return
+
+            opens_new_bar = candle is not None
+
+            # The boundary source update first proves the prior candle
+            # complete. Strategy decision therefore happens before the
+            # same observation becomes the causal next-bar execution price.
             if candle is not None:
                 self._emit(candle)
+
+            if self._on_market_update is not None:
+                self._on_market_update(
+                    update,
+                    opens_new_bar,
+                )
 
     def _handle_disconnect(self) -> None:
         with self._pipeline_lock:

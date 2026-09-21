@@ -199,7 +199,7 @@ def test_provider_messages_flow_to_one_completed_candle() -> None:
     feed.close()
 
 
-def test_connected_clock_can_complete_valid_candle() -> None:
+def test_connected_clock_does_not_complete_without_source_boundary() -> None:
     factory = ScriptedSocketFactory(
         [
             (
@@ -220,6 +220,16 @@ def test_connected_clock_can_complete_valid_candle() -> None:
     assert delivered == []
 
     feed.advance_time(_ts(10, 30))
+
+    # Caller wall time is not proof that all exchange events from the
+    # interval have arrived.
+    assert delivered == []
+
+    socket = factory.sockets[0]
+    socket.on_data(
+        socket,
+        _message(10, 30, 10300, 530, 3),
+    )
 
     assert len(delivered) == 1
     assert delivered[0].timestamp == _ts(10, 15)
@@ -381,7 +391,46 @@ def test_provider_delivery_and_clock_advance_are_serialized() -> None:
     assert clock_completed.is_set()
     assert [candle.timestamp for candle in delivered] == [
         _ts(10, 15),
-        _ts(10, 30),
+    ]
+
+    feed.close()
+
+
+def test_exact_retransmission_does_not_reach_market_update_consumer() -> None:
+    first = _message(10, 15, 10000, 500, 1)
+
+    factory = ScriptedSocketFactory(
+        [
+            (
+                [
+                    first,
+                    dict(first),
+                    _message(10, 20, 10100, 520, 2),
+                ],
+                None,
+            )
+        ]
+    )
+
+    feed = _feed(factory)
+    observed = []
+
+    feed.subscribe(
+        lambda _candle: None,
+        lambda update, opens_new_bar: observed.append(
+            (
+                update.sequence,
+                opens_new_bar,
+            )
+        ),
+    )
+
+    # The pipeline already defines an exact retransmission of the latest
+    # accepted source update as idempotent. Execution/MTM must therefore
+    # see each accepted source observation only once.
+    assert observed == [
+        (1, False),
+        (2, False),
     ]
 
     feed.close()
