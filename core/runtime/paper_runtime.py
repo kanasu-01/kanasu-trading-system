@@ -1,4 +1,7 @@
+import re
 import threading
+import uuid
+from datetime import datetime
 
 from core.logging.logger import get_logger
 from core.market_data.historical_coverage import TimeRange
@@ -15,6 +18,44 @@ from core.strategies.base_strategy import BaseStrategy
 
 
 logger = get_logger(__name__)
+
+
+def _create_paper_session_id(
+    *,
+    source: str,
+    symbol: str,
+) -> str:
+    """Return one human-readable, filesystem-safe paper session id."""
+
+    source_token = source.strip().lower()
+
+    if source_token not in {"mock", "live"}:
+        raise ValueError(
+            f"unsupported paper session source: {source!r}"
+        )
+
+    symbol_token = re.sub(
+        r"[^A-Za-z0-9]+",
+        "-",
+        symbol.strip().upper(),
+    ).strip("-")
+
+    if not symbol_token:
+        raise ValueError(
+            "paper session symbol must contain an alphanumeric character"
+        )
+
+    started_token = (
+        datetime.now()
+        .astimezone()
+        .strftime("%Y%m%d-%H%M%S")
+    )
+    unique_token = uuid.uuid4().hex[:8]
+
+    return (
+        f"paper-{source_token}-{started_token}-"
+        f"{symbol_token}-{unique_token}"
+    )
 
 
 def run_paper_trading(
@@ -34,7 +75,10 @@ def run_paper_trading(
     )
 
     session = PaperTradingSession(
-        session_id="paper_session",
+        session_id=_create_paper_session_id(
+            source="mock",
+            symbol=dataset_context.symbol,
+        ),
         strategy_name=strategy.name,
         symbol=dataset_context.symbol,
         initial_capital=initial_capital,
@@ -58,7 +102,16 @@ def run_paper_trading(
 
     session.start()
 
-    feed.subscribe(processor.on_candle)
+    try:
+        feed.subscribe(processor.on_candle)
+    except Exception as exc:
+        session.fail(exc)
+        logger.exception(
+            f"PAPER TRADING FAILED | Symbol={dataset_context.symbol}"
+        )
+        raise
+    else:
+        session.stop()
 
     logger.info(
         f"PAPER TRADING COMPLETED | "
@@ -92,7 +145,10 @@ def run_live_paper_trading(
     )
 
     session = PaperTradingSession(
-        session_id="paper_session",
+        session_id=_create_paper_session_id(
+            source="live",
+            symbol=dataset_context.symbol,
+        ),
         strategy_name=strategy.name,
         symbol=dataset_context.symbol,
         initial_capital=initial_capital,
@@ -270,7 +326,13 @@ def run_live_paper_trading(
             now=now,
             clock_interval_seconds=clock_interval_seconds,
         )
-    finally:
+    except Exception as exc:
+        session.fail(exc)
+        logger.exception(
+            f"LIVE PAPER TRADING FAILED | Symbol={dataset_context.symbol}"
+        )
+        raise
+    else:
         session.stop()
 
     logger.info(

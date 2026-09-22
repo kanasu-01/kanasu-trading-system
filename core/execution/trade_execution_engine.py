@@ -93,6 +93,7 @@ class TradeExecutionEngine:
         self.last_execution_price = None
 
         self.last_execution_quantity = None
+        self.most_recent_execution = None
         self.last_transaction_cost = 0.0
 
         if economic_policy is None:
@@ -336,6 +337,7 @@ class TradeExecutionEngine:
         self.last_execution_event = "BUY"
         self.last_execution_price = entry_price
         self.last_execution_quantity = qty
+        self.most_recent_execution = ("BUY", entry_price, qty)
         self.logger.info(
             f"LONG ENTRY | Price={entry_price:.2f} | "
             f"Qty={qty} | Stop={stop_price:.2f}"
@@ -382,6 +384,11 @@ class TradeExecutionEngine:
         self.last_execution_event = diagnostic_event
         self.last_execution_price = exit_price
         self.last_execution_quantity = exit_quantity
+        self.most_recent_execution = (
+            diagnostic_event,
+            exit_price,
+            exit_quantity,
+        )
         return ExecutionFeedback(
             event_type=event_type,
             symbol=symbol,
