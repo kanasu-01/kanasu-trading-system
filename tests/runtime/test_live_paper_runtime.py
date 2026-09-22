@@ -735,3 +735,124 @@ def test_session_end_source_boundary_cannot_open_next_bar_execution() -> None:
     assert opens_new_bar_values == [False]
     assert feed.closed.is_set()
     assert not runtime.provider_thread.is_alive()
+
+
+class ReconciliationReconnectFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.reconnect_started = threading.Event()
+        self.closed = threading.Event()
+        self.reconnect_calls = 0
+
+    def subscribe(
+        self,
+        on_candle,
+        on_market_update=None,
+    ) -> None:
+        self.subscribed.set()
+        on_candle(object())
+        # Returning models provider loss after strategy state has begun.
+
+    def reconnect(self) -> None:
+        self.reconnect_calls += 1
+        self.reconnect_started.set()
+        self.closed.wait(timeout=1.0)
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def advance_time(self, timestamp) -> None:
+        pass
+
+
+def test_runtime_begins_reconciliation_before_post_state_reconnect() -> None:
+    feed = ReconciliationReconnectFeed()
+    reconciliation_calls = []
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=lambda _candle: None,
+        on_reconciliation_required=lambda: (
+            reconciliation_calls.append("gap")
+        ),
+        reconnect_attempts=1,
+        reconnect_delay_seconds=0.0,
+    )
+
+    runtime.start()
+
+    try:
+        assert feed.subscribed.wait(timeout=1.0)
+        assert feed.reconnect_started.wait(timeout=1.0)
+        assert reconciliation_calls == ["gap"]
+        assert feed.reconnect_calls == 1
+        runtime.raise_if_failed()
+    finally:
+        runtime.stop()
+
+    assert feed.closed.is_set()
+    assert not runtime.provider_thread.is_alive()
+
+class RepeatedPostStateDisconnectFeed:
+    def __init__(self) -> None:
+        self.subscribed = threading.Event()
+        self.second_reconnect_started = threading.Event()
+        self.closed = threading.Event()
+        self.reconnect_calls = 0
+
+    def subscribe(
+        self,
+        on_candle,
+        on_market_update=None,
+    ) -> None:
+        self.subscribed.set()
+        on_candle(object())
+        # First provider connection ends after strategy state exists.
+
+    def reconnect(self) -> None:
+        self.reconnect_calls += 1
+
+        if self.reconnect_calls == 1:
+            # First recovery connection also drops immediately.
+            return
+
+        self.second_reconnect_started.set()
+        self.closed.wait(timeout=1.0)
+
+    def close(self) -> None:
+        self.closed.set()
+
+    def advance_time(self, timestamp) -> None:
+        pass
+
+
+def test_runtime_reconciles_each_repeated_post_state_disconnect() -> None:
+    feed = RepeatedPostStateDisconnectFeed()
+    reconciliation_calls = []
+
+    runtime = LivePaperRuntime(
+        feed=feed,
+        on_candle=lambda _candle: None,
+        on_reconciliation_required=lambda: (
+            reconciliation_calls.append("gap")
+        ),
+        reconnect_attempts=1,
+        reconnect_delay_seconds=0.0,
+    )
+
+    runtime.start()
+
+    try:
+        assert feed.subscribed.wait(timeout=1.0)
+        assert feed.second_reconnect_started.wait(timeout=1.0)
+        assert feed.reconnect_calls == 2
+        assert reconciliation_calls == [
+            "gap",
+            "gap",
+        ]
+        runtime.raise_if_failed()
+    finally:
+        runtime.stop()
+
+    assert feed.closed.is_set()
+    assert not runtime.provider_thread.is_alive()

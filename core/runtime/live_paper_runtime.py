@@ -1,4 +1,5 @@
 import threading
+from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 
@@ -45,6 +46,8 @@ class LivePaperRuntime:
         feed: ManagedLiveCandleFeed,
         on_candle: CompletedCandleHandler,
         on_market_update: LiveMarketUpdateHandler | None = None,
+        on_reconciliation_required: Callable[[], None] | None = None,
+        on_clock: Callable[[], None] | None = None,
         reconnect_attempts: int = 2,
         reconnect_delay_seconds: float = 0.0,
         join_timeout_seconds: float = 5.0,
@@ -73,6 +76,8 @@ class LivePaperRuntime:
         self._feed = feed
         self._on_candle = on_candle
         self._on_market_update = on_market_update
+        self._on_reconciliation_required = on_reconciliation_required
+        self._on_clock = on_clock
         self._reconnect_attempts = reconnect_attempts
         self._reconnect_delay_seconds = float(
             reconnect_delay_seconds
@@ -187,6 +192,10 @@ class LivePaperRuntime:
                 self.advance_time(timestamp)
                 self.raise_if_failed()
 
+                if self._on_clock is not None:
+                    self._on_clock()
+                    self.raise_if_failed()
+
                 if self._stop_event.wait(
                     float(clock_interval_seconds)
                 ):
@@ -260,6 +269,28 @@ class LivePaperRuntime:
             )
         )
 
+    def _prepare_reconnect_after_gap(self) -> bool:
+        """
+        Reconcile persistent paper state before reconnecting after a gap.
+
+        Once completed strategy state has begun, every later provider loss
+        remains stateful for the rest of the live-paper session.
+        """
+        if not self._completed_state_started.is_set():
+            return True
+
+        if self._on_reconciliation_required is None:
+            self._record_reconciliation_failure()
+            return False
+
+        try:
+            self._on_reconciliation_required()
+        except Exception as exc:
+            self._record_provider_failure(exc)
+            return False
+
+        return True
+
     def _record_provider_failure(
         self,
         failure: Exception,
@@ -281,8 +312,7 @@ class LivePaperRuntime:
                     self._handle_market_update,
                 )
         except ConnectionError:
-            if self._completed_state_started.is_set():
-                self._record_reconciliation_failure()
+            if not self._prepare_reconnect_after_gap():
                 return
 
             if self._stop_event.wait(
@@ -294,32 +324,22 @@ class LivePaperRuntime:
             return
         else:
             if (
-                self._completed_state_started.is_set()
-                and not self._stop_event.is_set()
+                not self._stop_event.is_set()
+                and not self._prepare_reconnect_after_gap()
             ):
-                self._record_reconciliation_failure()
                 return
 
         while not self._stop_event.is_set():
-            if self._completed_state_started.is_set():
-                self._record_reconciliation_failure()
-                return
-
             last_failure: Exception | None = None
 
             for attempt in range(self._reconnect_attempts):
                 if self._stop_event.is_set():
                     return
 
-                if self._completed_state_started.is_set():
-                    self._record_reconciliation_failure()
-                    return
-
                 try:
                     self._feed.reconnect()
                 except ConnectionError as exc:
-                    if self._completed_state_started.is_set():
-                        self._record_reconciliation_failure()
+                    if not self._prepare_reconnect_after_gap():
                         return
 
                     last_failure = exc
@@ -342,15 +362,11 @@ class LivePaperRuntime:
                     return
 
                 if (
-                    self._completed_state_started.is_set()
-                    and not self._stop_event.is_set()
+                    not self._stop_event.is_set()
+                    and not self._prepare_reconnect_after_gap()
                 ):
-                    self._record_reconciliation_failure()
                     return
 
-                # A pre-state reconnect epoch ran until the provider
-                # returned. It may receive a fresh retry budget because
-                # no strategy/execution candle state exists yet.
                 last_failure = None
                 break
 

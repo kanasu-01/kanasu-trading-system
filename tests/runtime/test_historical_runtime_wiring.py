@@ -848,3 +848,116 @@ def test_main_paper_angelone_revalidates_session_after_provider_setup(
             ),
             config(),
         )
+
+
+def test_main_paper_angelone_passes_historical_source_to_live_runtime(
+    monkeypatch,
+):
+    import pytz
+
+    captured = {}
+    source = SpyHistoricalSource()
+    angelone_config = object()
+    feed = object()
+    ist = pytz.timezone("Asia/Kolkata")
+    fixed_now = ist.localize(
+        datetime(2026, 1, 2, 10, 0)
+    )
+
+    class ZeroWarmupStrategy:
+        name = "zero-warmup"
+
+        @staticmethod
+        def warmup_bars():
+            return 0
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    class StubAngelOneConfig:
+        @classmethod
+        def load_from_env(cls):
+            return angelone_config
+
+    class StubBroker:
+        def __init__(
+            self,
+            *,
+            config,
+            paper_mode,
+            enable_historical_api,
+        ):
+            pass
+
+        def login(self):
+            return True
+
+        def get_live_market_data_session(self):
+            return (
+                "Bearer jwt-token",
+                "feed-token",
+            )
+
+    source_factory_calls = []
+
+    def create_source(app_config):
+        source_factory_calls.append(app_config)
+        return source
+
+    monkeypatch.setattr(
+        main_module,
+        "datetime",
+        FixedDateTime,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_strategy",
+        lambda _config: ZeroWarmupStrategy(),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "create_historical_source",
+        create_source,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneConfig",
+        StubAngelOneConfig,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneBroker",
+        StubBroker,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "AngelOneLiveCandleFeed",
+        lambda **kwargs: feed,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "run_live_paper_trading",
+        lambda **kwargs: captured.update(
+            live_runtime_kwargs=kwargs
+        ),
+    )
+
+    app_config = AppConfig(
+        runtime_mode=RuntimeMode.PAPER,
+        paper_data_source=PaperDataSource.ANGELONE,
+    )
+
+    main_module.main(
+        app_config,
+        config(),
+    )
+
+    assert source_factory_calls == [app_config]
+    assert (
+        captured["live_runtime_kwargs"]["historical_source"]
+        is source
+    )

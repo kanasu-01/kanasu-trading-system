@@ -72,6 +72,7 @@ _LIVE_TIMEFRAME_MINUTES = {
 def _load_live_paper_warmup(
     *,
     app_config: AppConfig,
+    historical_source,
     strategy,
     dataset_context: DatasetContext,
     current_time: datetime,
@@ -166,9 +167,7 @@ def _load_live_paper_warmup(
         end=history_end,
     )
 
-    history = create_historical_source(
-        app_config
-    ).retrieve(
+    history = historical_source.retrieve(
         dataset_context,
         request,
     )
@@ -259,8 +258,13 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
                 session_end=app_config.paper_session_end,
             )
 
+            historical_source = create_historical_source(
+                app_config
+            )
+
             history_bars = _load_live_paper_warmup(
                 app_config=app_config,
+                historical_source=historical_source,
                 strategy=strategy,
                 dataset_context=dataset_context,
                 current_time=current_time,
@@ -315,6 +319,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
                 ),
                 initial_capital=backtest_config.initial_capital,
                 history_bars=history_bars,
+                historical_source=historical_source,
             )
 
         else:

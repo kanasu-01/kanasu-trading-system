@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from core.execution.pending_intent import PendingIntent
 from core.entities.candle import Candle
@@ -50,6 +50,8 @@ class PaperCandleProcessor:
         )
 
         self._pending_intent: PendingIntent | None = None
+        self._live_reconciliation_start: datetime | None = None
+        self._live_reconciliation_first_interval_start: datetime | None = None
 
     def on_candle(self, candle: Candle) -> None:
         pending_intent = self._pending_intent
@@ -102,6 +104,81 @@ class PaperCandleProcessor:
         )
 
         self._record_strategy_decision(candle)
+
+    def begin_live_reconciliation(self) -> None:
+        """
+        Enter restricted live reconciliation after a provider-data gap.
+
+        Any pending next-bar intent is no longer causally executable after
+        the gap. An already-open position is preserved and may be protected
+        only by newly observed live source prices after reconnect.
+        """
+        if len(self.series) == 0:
+            raise RuntimeError(
+                "live reconciliation requires completed strategy state"
+            )
+
+        self._pending_intent = None
+        self._live_reconciliation_start = (
+            self.series[-1].timestamp
+            + self._live_interval()
+        )
+        self._live_reconciliation_first_interval_start = None
+
+    def apply_live_reconciliation_candles(
+        self,
+        candles: list[Candle],
+        *,
+        expected_start: datetime | None = None,
+        expected_end: datetime | None = None,
+    ) -> None:
+        """
+        Replay authoritative completed gap candles into strategy state only.
+
+        Recovered history may rebuild indicator/strategy context, but signals
+        produced from those candles are not causally executable and therefore
+        must never become pending live intents. Historical OHLC must not
+        retrospectively mutate an already-open position.
+        """
+        if (expected_start is None) != (expected_end is None):
+            raise ValueError(
+                "live reconciliation history bounds must be provided together"
+            )
+
+        recovered = list(candles)
+
+        if expected_start is not None and expected_end is not None:
+            if expected_end <= expected_start:
+                raise ValueError(
+                    "live reconciliation history range must be non-empty"
+                )
+
+            interval = self._live_interval()
+            expected_timestamps = []
+            timestamp = expected_start
+
+            while timestamp < expected_end:
+                expected_timestamps.append(timestamp)
+                timestamp += interval
+
+            recovered_timestamps = [
+                candle.timestamp
+                for candle in recovered
+            ]
+
+            if recovered_timestamps != expected_timestamps:
+                raise RuntimeError(
+                    "incomplete live reconciliation history: "
+                    "expected exact timeframe coverage "
+                    f"for [{expected_start!s}, {expected_end!s})"
+                )
+
+        self._pending_intent = None
+
+        for candle in recovered:
+            self.strategy_runner.on_new_candle(candle)
+
+        self._pending_intent = None
 
     def on_live_market_update(
         self,
@@ -164,6 +241,83 @@ class PaperCandleProcessor:
             price=update.price,
         )
 
+    def observe_live_reconciliation_update(
+        self,
+        update: LiveMarketUpdate,
+        opens_new_bar: bool,
+    ) -> tuple[datetime, datetime] | None:
+        """
+        Observe reconnect events without authorizing live execution.
+
+        The first interval observed after reconnect is quarantined. The next
+        real interval transition proves the completed historical gap range.
+        """
+        reconciliation_start = self._live_reconciliation_start
+
+        if reconciliation_start is None:
+            raise RuntimeError(
+                "live reconciliation has not begun"
+            )
+
+        if not opens_new_bar:
+            return None
+
+        interval = self._live_interval()
+        elapsed = update.timestamp - reconciliation_start
+
+        if elapsed.total_seconds() < 0:
+            raise ValueError(
+                "live reconciliation update precedes recovery start"
+            )
+
+        bucket_index = int(
+            elapsed.total_seconds()
+            // interval.total_seconds()
+        )
+        interval_start = (
+            reconciliation_start
+            + interval * bucket_index
+        )
+
+        if self._live_reconciliation_first_interval_start is None:
+            self._live_reconciliation_first_interval_start = (
+                interval_start
+            )
+            return None
+
+        if (
+            interval_start
+            <= self._live_reconciliation_first_interval_start
+        ):
+            return None
+
+        return (
+            reconciliation_start,
+            interval_start,
+        )
+
+    def _live_interval(self) -> timedelta:
+        timeframe_minutes = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "10m": 10,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+        }.get(self.dataset_context.timeframe)
+
+        if timeframe_minutes is None:
+            raise RuntimeError(
+                "live reconciliation requires a supported "
+                f"intraday timeframe, got "
+                f"{self.dataset_context.timeframe!r}"
+            )
+
+        return timedelta(
+            minutes=timeframe_minutes
+        )
+
     def _is_immediate_next_live_interval(
         self,
         *,
@@ -177,26 +331,7 @@ class PaperCandleProcessor:
         must not reinterpret it as the immediate next bar; reconciliation
         policy is intentionally deferred to M7.7.
         """
-        timeframe_minutes = {
-            "1m": 1,
-            "3m": 3,
-            "5m": 5,
-            "10m": 10,
-            "15m": 15,
-            "30m": 30,
-            "1h": 60,
-        }.get(self.dataset_context.timeframe)
-
-        if timeframe_minutes is None:
-            raise RuntimeError(
-                "live pending-intent execution requires a supported "
-                f"intraday timeframe, got "
-                f"{self.dataset_context.timeframe!r}"
-            )
-
-        interval = timedelta(
-            minutes=timeframe_minutes
-        )
+        interval = self._live_interval()
         expected_start = (
             pending_intent.decision_timestamp
             + interval

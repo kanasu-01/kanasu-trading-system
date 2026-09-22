@@ -1,4 +1,7 @@
+import threading
+
 from core.logging.logger import get_logger
+from core.market_data.historical_coverage import TimeRange
 from core.market_data.live_candle_feed import LiveCandleFeed
 from core.paper_trading.paper_trading_session import PaperTradingSession
 from core.runtime.dataset_context import DatasetContext
@@ -79,6 +82,7 @@ def run_live_paper_trading(
     clock_interval_seconds: float,
     initial_capital: float = 100000,
     history_bars=None,
+    historical_source=None,
 ) -> PaperTradingSession:
     """Run one supervised live-market-data paper session."""
 
@@ -113,10 +117,149 @@ def run_live_paper_trading(
 
     session.start()
 
+    reconciliation_active = False
+    reconciliation_lock = threading.Lock()
+    pending_recovery_range = None
+    reconciliation_generation = 0
+
+    def begin_reconciliation() -> None:
+        nonlocal reconciliation_active
+        nonlocal pending_recovery_range
+        nonlocal reconciliation_generation
+
+        with reconciliation_lock:
+            processor.begin_live_reconciliation()
+            reconciliation_generation += 1
+            reconciliation_active = True
+            pending_recovery_range = None
+
+    def handle_completed_candle(candle) -> None:
+        with reconciliation_lock:
+            if reconciliation_active:
+                return
+
+            processor.on_live_completed_candle(candle)
+
+    def handle_reconciliation_market_update(
+        update,
+        opens_new_bar: bool,
+    ) -> None:
+        nonlocal pending_recovery_range
+
+        with reconciliation_lock:
+            if not reconciliation_active:
+                processor.on_live_market_update(
+                    update,
+                    opens_new_bar,
+                )
+                return
+
+            # Reconciliation freezes new strategy execution, but newly
+            # observed live prices must immediately protect existing exposure.
+            processor.on_live_market_update(
+                update,
+                False,
+            )
+
+            recovery_range = (
+                processor.observe_live_reconciliation_update(
+                    update,
+                    opens_new_bar,
+                )
+            )
+
+            if recovery_range is not None:
+                pending_recovery_range = recovery_range
+
+    def process_reconciliation_work() -> None:
+        nonlocal reconciliation_active
+        nonlocal pending_recovery_range
+
+        with reconciliation_lock:
+            if (
+                not reconciliation_active
+                or pending_recovery_range is None
+            ):
+                return
+
+            recovery_range = pending_recovery_range
+            recovery_generation = reconciliation_generation
+
+        recovery_start, recovery_end = recovery_range
+
+        try:
+            if historical_source is None:
+                raise RuntimeError(
+                    "live paper historical source is required "
+                    "for reconnect reconciliation"
+                )
+
+            # Deliberately outside reconciliation_lock: provider callbacks
+            # must continue processing current live prices while historical
+            # retrieval is in progress.
+            recovered_candles = historical_source.retrieve(
+                dataset_context,
+                TimeRange(
+                    start=recovery_start,
+                    end=recovery_end,
+                ),
+            )
+
+            with reconciliation_lock:
+                # A newer provider gap/boundary may have superseded this
+                # request while retrieval was running.
+                if (
+                    not reconciliation_active
+                    or reconciliation_generation
+                    != recovery_generation
+                    or pending_recovery_range != recovery_range
+                ):
+                    return
+
+                processor.apply_live_reconciliation_candles(
+                    recovered_candles,
+                    expected_start=recovery_start,
+                    expected_end=recovery_end,
+                )
+
+                pending_recovery_range = None
+                reconciliation_active = False
+
+        except Exception:
+            with reconciliation_lock:
+                # Successes and failures from superseded reconciliation
+                # epochs are both causally obsolete.
+                if (
+                    not reconciliation_active
+                    or reconciliation_generation
+                    != recovery_generation
+                    or pending_recovery_range != recovery_range
+                ):
+                    return
+
+                pending_recovery_range = None
+
+                open_position = (
+                    processor.execution_engine.get_runtime_position(
+                        dataset_context.symbol
+                    )
+                )
+
+            if open_position is None:
+                raise
+
+            logger.exception(
+                f"LIVE PAPER RECONCILIATION HISTORY FAILED | "
+                f"Symbol={dataset_context.symbol} | "
+                f"Continuing restricted live protection"
+            )
+
     supervisor = LivePaperRuntime(
         feed=feed,
-        on_candle=processor.on_live_completed_candle,
-        on_market_update=processor.on_live_market_update,
+        on_candle=handle_completed_candle,
+        on_market_update=handle_reconciliation_market_update,
+        on_reconciliation_required=begin_reconciliation,
+        on_clock=process_reconciliation_work,
         reconnect_attempts=reconnect_attempts,
         reconnect_delay_seconds=reconnect_delay_seconds,
     )

@@ -1123,3 +1123,260 @@ def test_live_pending_intent_does_not_execute_after_skipped_next_interval() -> N
     # retain the unresolved intent rather than consuming it as a valid
     # immediate-next-interval execution.
     assert processor._pending_intent is not None
+
+def test_live_reconciliation_invalidates_pending_intent_while_flat() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    assert processor._pending_intent is not None
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+    processor.begin_live_reconciliation()
+
+    assert processor._pending_intent is None
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+    assert processor.execution_engine.completed_trades == []
+
+
+def test_live_reconciliation_replays_history_without_creating_trade_intent() -> None:
+    class SignalEveryCandleStrategy(BaseStrategy):
+        def __init__(self) -> None:
+            super().__init__(
+                name="signal_every_candle"
+            )
+            self.decision_lengths = []
+
+        def on_new_candle(
+            self,
+            series: CandleSeries,
+        ) -> SignalType | None:
+            self.decision_lengths.append(len(series))
+            return SignalType.BUY
+
+        def reset(self) -> None:
+            self.decision_lengths.clear()
+
+    strategy = SignalEveryCandleStrategy()
+
+    processor = PaperCandleProcessor(
+        strategy=strategy,
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_enabled=False,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="m77-reconciliation",
+    )
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    assert processor._pending_intent is not None
+
+    processor.begin_live_reconciliation()
+
+    recovered = [
+        Candle(
+            timestamp=_ts(10, 30),
+            open=101.0,
+            high=103.0,
+            low=100.0,
+            close=102.0,
+            volume=1_100.0,
+        ),
+        Candle(
+            timestamp=_ts(10, 45),
+            open=102.0,
+            high=104.0,
+            low=101.0,
+            close=103.0,
+            volume=1_200.0,
+        ),
+    ]
+
+    processor.apply_live_reconciliation_candles(
+        recovered
+    )
+
+    assert list(processor.series) == [
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        ),
+        *recovered,
+    ]
+    assert strategy.decision_lengths == [1, 2, 3]
+    assert processor._pending_intent is None
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+    assert processor.execution_engine.completed_trades == []
+
+def test_live_reconciliation_quarantines_first_epoch_interval_and_requests_gap() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    processor.begin_live_reconciliation()
+
+    # Reconnect first observes the already-in-progress 10:45 interval.
+    # That interval is quarantined; no historical request is ready yet.
+    request = processor.observe_live_reconciliation_update(
+        _update(
+            hour=10,
+            minute=47,
+            price=110.0,
+            cumulative_volume=1_150.0,
+            sequence=20,
+        ),
+        True,
+    )
+
+    assert request is None
+
+    assert processor.observe_live_reconciliation_update(
+        _update(
+            hour=10,
+            minute=50,
+            price=111.0,
+            cumulative_volume=1_170.0,
+            sequence=21,
+        ),
+        False,
+    ) is None
+
+    # The first real later interval transition is 11:00. At this point
+    # 10:30 and the quarantined 10:45 interval are historically complete.
+    request = processor.observe_live_reconciliation_update(
+        _update(
+            hour=11,
+            minute=0,
+            price=112.0,
+            cumulative_volume=1_200.0,
+            sequence=22,
+        ),
+        True,
+    )
+
+    assert request == (
+        _ts(10, 30),
+        _ts(11, 0),
+    )
+    assert processor._pending_intent is None
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+def test_live_reconciliation_with_open_position_uses_history_for_state_only() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            price=110.0,
+            cumulative_volume=1_100.0,
+            sequence=10,
+        ),
+        True,
+    )
+
+    position_before = (
+        processor.execution_engine.get_runtime_position(
+            "RELIANCE"
+        )
+    )
+
+    assert position_before is not None
+    stop_price = position_before.stop_price
+
+    processor.begin_live_reconciliation()
+
+    # Historical OHLC proves that price traded below the stop while the
+    # provider was unavailable. That information repairs strategy state
+    # only; it must never manufacture a retrospective protective exit.
+    processor.apply_live_reconciliation_candles(
+        [
+            Candle(
+                timestamp=_ts(10, 30),
+                open=110.0,
+                high=112.0,
+                low=stop_price - 5.0,
+                close=108.0,
+                volume=1_200.0,
+            )
+        ],
+        expected_start=_ts(10, 30),
+        expected_end=_ts(10, 45),
+    )
+
+    position_after = (
+        processor.execution_engine.get_runtime_position(
+            "RELIANCE"
+        )
+    )
+
+    assert position_after is position_before
+    assert position_after.stop_price == stop_price
+    assert processor.execution_engine.completed_trades == []
