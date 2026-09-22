@@ -31,6 +31,12 @@ def load_app_config() -> AppConfig:
         paper_clock_interval_sec=float(
             os.getenv("PAPER_CLOCK_INTERVAL_SEC", 1.0)
         ),
+        broker_retry_attempts=int(
+            os.getenv("BROKER_RETRY_ATTEMPTS", 2)
+        ),
+        broker_retry_delay_sec=float(
+            os.getenv("BROKER_RETRY_DELAY_SEC", 2.0)
+        ),
         slippage_pct=float(os.getenv("SLIPPAGE_PCT", 0.05)),
         brokerage_pct=float(os.getenv("BROKERAGE_PCT", 0.01)),
         journal_dir=os.getenv("JOURNAL_DIR", "journals"),
