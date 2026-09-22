@@ -2,90 +2,162 @@
 
 ## Purpose
 
-This document owns the current and target V1 paper-runtime design. V1 paper trading consumes real market data and simulates orders; it does not place real-money broker orders.
+This document owns the accepted M7 paper-runtime design and its remaining V1 application boundaries. V1 paper trading may consume real AngelOne market data while simulating execution; it cannot place real-money broker orders.
 
 ## CURRENT STATE
 
-Kanasu already has:
+Kanasu has two paper data-source modes:
 
-- strategy and StrategyRunner components;
-- TradeExecutionEngine simulated fills and events;
-- PortfolioManager authoritative simulated account state;
-- position, trade, risk and journal-related components;
-- a PaperRuntime composition;
-- MockLiveFeed callback delivery; and
-- API routes and frontend pages for paper-session controls/status.
+- `MOCK` — deterministic CSV/`MockLiveFeed` operation for development and regression.
+- `ANGELONE` — real market-data paper operation through the AngelOne live market-data session/feed.
 
-The principal paper entry flow in main currently loads a CSV and replays it through MockLiveFeed. That is useful for deterministic runtime development, but it is not operational real-market-data paper trading.
-
-The API paper start route creates a session metadata object. Start/stop/status operations update or expose session metadata; they do not start and own the complete feed, strategy, execution, portfolio and journal runtime. The API service currently uses process-level singleton state.
-
-At the end of a synchronous mock feed, API-style session lifecycle and runtime completion are not unified. Current UI state therefore must not be treated as proof of a running simulated trading session.
-
-## TARGET V1 STATE
+Both use simulated `TradeExecutionEngine` execution and authoritative `PortfolioManager` accounting.
 
 ~~~text
-Real market data
+AngelOne live market data
         ↓
-Paper runtime/session
+AngelOneLiveCandleFeed
         ↓
-Strategy
+LivePaperRuntime
         ↓
-Risk and simulated execution
+PaperCandleProcessor
         ↓
-Authoritative PortfolioManager state
+StrategyRunner
         ↓
-Journal and snapshot
+simulated TradeExecutionEngine
         ↓
-API
+authoritative PortfolioManager
         ↓
-Responsive frontend
+PaperTradingSession snapshot + session journal
 ~~~
 
-The session owns the lifecycle and references needed for one running paper workflow. It does not duplicate execution or portfolio state.
+Real-money order routing is not part of this workflow.
 
-### Ownership
+## Ownership
 
 | Component | Authority |
 |---|---|
-| Live market-data provider/feed | Provider connectivity, completed-candle delivery, freshness and connection state. |
-| Paper session/runtime | Start/stop/failure lifecycle and references to the active runtime components. |
-| Strategy/StrategyRunner | Strategy state and signals under the shared strategy contract. |
-| TradeExecutionEngine | Simulated trade lifecycle, fill events and completed trades. |
-| PortfolioManager/PositionBook | Cash, open positions, market value, equity and P&L. |
-| Journal/result store | Durable append-oriented evidence and session identity. |
-| API | Validated commands and authoritative snapshots. |
-| Frontend | Controls, status and presentation only. |
+| AngelOne live market-data session/feed | Provider connectivity and accepted market observations/completed candles. |
+| LivePaperRuntime | Provider thread, callback admission, session boundary, reconnect policy and failure propagation. |
+| PaperCandleProcessor | Strategy/execution sequencing, pending intent and reconciliation state. |
+| Strategy/StrategyRunner | Strategy state and completed-candle decisions. |
+| TradeExecutionEngine | Simulated fills, protection and execution feedback. |
+| PortfolioManager/PositionBook | Cash, position, equity and P&L authority. |
+| PaperTradingSession | Runtime lifecycle, failure state and read-only authoritative snapshot. |
+| TradeJournal | Per-session completed-trade evidence. |
+| API/frontend | Not yet authoritative; M8 must connect them to this runtime. |
 
-The backend remains authoritative for trading and account state. The frontend must not reconstruct positions, equity or P&L from partial events.
+## Causal live execution
 
-### Session behavior
+A decision made from completed candle N creates at most one pending intent.
 
-A target V1 session needs explicit states such as starting, running, stopping, stopped and failed. State must reflect actual feed/runtime activity. Start must initialize and own the runtime; stop must terminate delivery and release resources; feed exhaustion or failure must transition truthfully.
+The live path does not execute that intent from candle N, from wall-clock passage, or retrospectively from a later completed candle.
 
-Snapshots should include session identity, status, dataset/source identity, selected strategy and effective configuration, feed freshness, current authoritative portfolio state, last execution information, completed trades or journal references, and current failure information.
+The intent may execute only when an accepted live source observation proves that the immediate N+1 interval has opened.
 
-### Live-data boundary
+If the next observed interval skips N+1, the pending intent cannot be reinterpreted as executable at the later interval.
 
-The live provider must emit canonical completed Candle objects under declared timestamp and ordering semantics. Duplicate, conflict, regression, staleness, disconnect and partial-candle behavior must be explicit. Real-data paper operation should be recordable for deterministic diagnosis and replay.
+Every accepted live market update may protect an already-open position. The source observation that creates a new position is not reused retrospectively as a post-entry protective observation.
 
-## KNOWN DIVERGENCES
+Completed live candles mark authoritative close state before strategy evaluation. Execution feedback is delivered before the next completed-candle decision.
 
-- AngelOne live subscription is not implemented.
-- Main paper mode uses CSV replay.
-- API session creation is disconnected from PaperRuntime execution.
-- Stop/status behavior manages metadata rather than a complete running runtime.
-- Strategy-local position state lacks a complete execution feedback contract.
-- Journal/session recovery and durable runtime identity are incomplete.
-- Frontend paper data is not yet a full authoritative runtime snapshot.
-- The dormant live broker-execution path is not compatible enough to serve as a V1 paper dependency.
+## Provider supervision
 
-These divergences are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md), especially DW-004. M6 and M7 are reserved roadmap milestones for real market-data ingestion and paper-session integration.
+`LivePaperRuntime` owns the provider thread and joins it on stop. Provider failures are surfaced rather than leaving a false healthy session.
 
-## V1 acceptance
+Relevant configuration includes:
 
-The paper runtime is complete only when it satisfies the applicable requirements in the [Validation Plan](../validation/VALIDATION_PLAN.md#paper-runtime). This includes real market data, simulated execution, authoritative portfolio snapshots, truthful lifecycle states, failure handling, journals and an explicit guarantee that V1 cannot route a real-money order.
+- `PAPER_DATA_SOURCE`
+- `PAPER_SESSION_START`
+- `PAPER_SESSION_END`
+- `PAPER_CLOCK_INTERVAL_SEC`
+- `BROKER_RETRY_ATTEMPTS`
+- `BROKER_RETRY_DELAY_SEC`
+
+Defaults for the retry settings are two attempts and two seconds delay.
+
+At session end, callback admission closes before shutdown. A racing provider event cannot mutate paper state after the configured boundary, and no execution may be opened in a bar beginning at or after session end.
+
+## Reconnect and reconciliation
+
+A provider-data gap after strategy state exists cannot be treated as continuous live execution.
+
+The accepted policy is:
+
+1. invalidate the pending next-bar intent before reconnect;
+2. preserve an already-open authoritative position;
+3. quarantine the first observed reconnect interval;
+4. use the next real interval transition to identify the completed historical gap;
+5. recover that exact gap with canonical historical candles;
+6. replay recovered candles into strategy state only; and
+7. resume unrestricted live processing only after successful reconciliation.
+
+Recovered historical OHLC cannot retrospectively create an entry, create a pending live intent, or mutate an already-open position.
+
+Newly observed live prices remain authoritative for protection during restricted reconciliation.
+
+Incomplete recovery is a runtime failure.
+
+## Lifecycle and observability
+
+Runtime-created paper sessions use human-readable unique IDs and propagate the same identity into the execution engine and session journal.
+
+The accepted implementation lifecycle is:
+
+~~~text
+CREATED → RUNNING → STOPPED
+                  ↘ FAILED
+~~~
+
+`FAILED` preserves failure type and message. `STOPPED` and `FAILED` are terminal.
+
+The current implementation does not expose distinct public `STARTING` or `STOPPING` states. M8/M9 must either add them or explicitly validate/document the accepted public lifecycle.
+
+`PaperTradingSession.snapshot()` reads authoritative execution and portfolio state. Its immutable snapshot includes:
+
+- session identity and status;
+- strategy and symbol;
+- start/stop times;
+- initial capital;
+- cash, position value and equity;
+- realized, unrealized and total P&L;
+- peak equity and drawdown;
+- active-position details;
+- completed-trade count;
+- most recent execution information; and
+- failure type/message.
+
+## Journaling
+
+Each runtime-created session receives its own journal directory keyed by session ID. Completed trades are appended to CSV and JSONL with that identity.
+
+Process-restart recovery of an interrupted session is not implemented.
+
+## M8 application boundary
+
+The accepted M7 runtime is not yet the application control plane.
+
+Current `api/routes/paper_trading_routes.py` still creates singleton metadata-only session state and does not start or own `run_live_paper_trading()`.
+
+The frontend therefore does not yet consume the authoritative M7 snapshot.
+
+The backtest API likewise still returns a fixed mock result.
+
+M8 must replace those placeholders with actual backend workflows and authoritative snapshots rather than duplicating trading/account state in the API or frontend.
+
+## Remaining V1 boundaries
+
+M7 is complete at its accepted scope, but V1 still requires:
+
+- M8 authoritative research and paper API workflows;
+- responsive frontend integration;
+- explicit disposition of remaining operational-hardening items;
+- final failure-scenario and observation evidence;
+- final documentation synchronization; and
+- M9 V1 acceptance/release validation.
+
+See [Deferred Work](../roadmap/DEFERRED_WORK.md) and the [Validation Plan](../validation/VALIDATION_PLAN.md).
 
 ## Future live execution
 
-V2 may reuse validated strategy, data, session-observability and account-domain concepts, but live execution additionally requires durable order/fill identity, idempotency, broker reconciliation, partial fills, restart recovery and operational safety. It is not enabled by swapping a simulated engine for a broker call.
+V2 may reuse validated strategy, data, session-observability and account-domain concepts, but real-money execution additionally requires durable order/fill identity, idempotency, broker reconciliation, partial-fill/cancellation semantics, restart recovery and operational safety.

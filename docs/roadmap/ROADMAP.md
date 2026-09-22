@@ -61,33 +61,25 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 ### P2 — Trusted Research Engine
 
-- **M4 — IN_PROGRESS** — Backtest validity.
-  - **M4.1 — DONE** — Backtest economic contract at design-contract scope.
-  - **M4.2 — DONE** — Signal/execution state agreement at accepted implementation/validation scope.
-  - **M4.3 — DONE** — Execution timing and stop/fill validity at accepted implementation/validation scope.
-  - **M4.4 — DONE** — Account returns and performance metrics at accepted implementation/validation scope.
-  - **M4.5 — DONE/CLOSED** — Risk sizing and drawdown validity at accepted implementation/validation scope.
-  - **M4.6 — PLANNED** — Research manifest and deterministic references.
-  - **M4.7 — PLANNED** — Backtest validity integration.
-- **M5 — RESERVED** — WFA validity.
+- **M4 — DONE** — Backtest validity.
+- **M5 — DONE** — WFA validity.
 
 ### P3 — Real-Market-Data Paper Runtime
 
-- **M6 — RESERVED** — Live market-data foundation.
-- **M7 — RESERVED** — Paper-session integration.
+- **M6 — DONE** — Live market-data foundation.
+- **M7 — DONE** — Paper-session integration through M7.9.
 
 ### P4 — Research and Paper Application
 
-- **M8 — RESERVED** — Research and paper application.
+- **M8 — NEXT** — Research and paper application.
 
 ### P5 — V1 Acceptance and Release
 
 - **M9 — RESERVED** — V1 validation and release.
 
-M3.1 through M3.8 are complete at their accepted scopes, so M3 is DONE at its accepted historical-data foundation scope. M4 is IN_PROGRESS following completed M4.2 through M4.5 implementation and validation. M4.1 is complete only at design-contract scope, M4.2–M4.5 are DONE at their accepted scopes, M4.6 is READY at accepted design scope under AD-019 with implementation not yet authorized, and M4.7 remains PLANNED. M5–M9 remain RESERVED proposals.
+M3 through M7 are DONE at their accepted scopes. The current delivery boundary is M8: replace API/frontend placeholders with actual research workflows and authoritative paper-runtime workflows. M9 remains the final V1 acceptance/release milestone. Real-money broker execution remains outside V1.
 
 ## Near-term detailed work
-
 ### M3.6b — Coverage and missing-range planning
 
 **Outcome:** Represent trusted retrieval coverage and calculate deterministic missing request ranges.
@@ -385,11 +377,11 @@ End-to-end means this historical-source/research-runtime boundary. It does not i
 - `git diff --check`: passed
 - Production corrections: none
 
-This evidence validates the accepted M3.7d matrix through the actual research-runtime/source-composition boundary. M3.7a–M3.7d are complete at their accepted scopes, so M3.7 is DONE. DW-011 is resolved at the M3.7 integration scope. M3.8 remains a separate RESERVED milestone.
+This evidence validates the accepted M3.7d matrix through the actual research-runtime/source-composition boundary. M3.7a–M3.7d are complete at their accepted scopes, so M3.7 is DONE. DW-011 is resolved at the M3.7 integration scope. M3.8 was subsequently completed at the accepted parity and reproducibility scope described below.
 
 ### M3.8 — Historical-path parity and reproducibility
 
-**Status:** IN_PROGRESS.
+**Status:** DONE.
 
 **Outcome:** Equivalent accepted historical data, used with the same research-relevant configuration, produces equivalent canonical historical input and deterministic stable Backtest output regardless of whether the data arrived through a provider-fresh path or an already persisted local-store path. M3.8 also establishes inspectable deterministic identity for the dataset, research-relevant configuration and stable result.
 
@@ -538,7 +530,7 @@ M3.8a through M3.8d are complete at their accepted scopes; therefore M3.8 is DON
 
 ### M4 — Backtest validity
 
-**Status:** IN_PROGRESS through completed M4.2, M4.3 and M4.4 implementation and validation.
+**Status:** DONE at accepted implementation/validation scope through M4.7 integration.
 
 **Outcome:** Establish deterministic and economically coherent bar-based Backtest semantics, authoritative strategy/execution state agreement, account-based reporting and risk controls, versioned research identity for the new economic policy, and integrated reference evidence.
 
@@ -651,39 +643,52 @@ M4.5 does not migrate WFA-specific risk/configuration, metrics, scoring, stitchi
 - **M4.3 — Execution timing and stop/fill validity:** DONE at accepted implementation/validation scope; validates next-open action timing, ordinary and gap stops, single slippage application, event priority, entry-stop validity, no-lookahead marking and end-of-data behavior for Backtest.
 - **M4.4 — Account returns and performance metrics:** DONE/CLOSED at accepted implementation/validation scope; preserves instrument-return meaning while deriving account return, drawdown and performance from authoritative portfolio/equity state through a result-aware API.
 - **M4.5 — Risk sizing and drawdown validity:** DONE/CLOSED at accepted implementation/validation scope under AD-018; uses current pre-entry equity, transaction-cost-aware cash affordability, sticky period-start-equity entry guards and represented candle-calendar resets.
-- **M4.6 — Research manifest and deterministic references:** READY at accepted design scope under AD-019; introduce a versioned effective-input Backtest run manifest, shared Backtest economic-policy contract, successor configuration identity and hand-calculated deterministic references without changing frozen AD-015 v1.
-- **M4.7 — Backtest validity integration:** validate the complete accepted M4 contract with deterministic reference, boundary, failure, regression and full-suite evidence before milestone closure.
+- **M4.6 — Research manifest and deterministic references:** DONE at accepted implementation/validation scope; the effective-input manifest, shared economic-policy contract and successor configuration identity are implemented and hardened.
+- **M4.7 — Backtest validity integration:** DONE; integrated Backtest validity closed at `ac8aca6`.
 
 **M4.6 accepted design:** `BacktestEconomicPolicy` is the shared source of fixed M4 Backtest economic values used by execution and manifest identity. `BacktestRunManifest` records the effective dataset linkage, strategy, capital, runtime execution/risk inputs and policy. `kanasu.backtest-config.v2` fingerprints the effective configuration projection under `kanasu.backtest-economics.v1`; `kanasu.dataset.v1`, `kanasu.backtest-result.v1`, canonical serialization v1 and the frozen AD-015 ResearchEvidence contract remain compatible. Inert raw configuration fields are not recorded as though they affected canonical Backtest.
 
-**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics, AD-018 owns the accepted M4.5 sizing, affordability and period-loss-guard target, and AD-019 owns the M4.6 effective-manifest/successor-identity target. Open or partially resolved deferred items DW-001, DW-002 and DW-009 retain their stated M4 ownership.
+**Dependencies:** M4 builds on M1/M2 authoritative simulated accounting and the completed M3 historical/reproducibility foundation. AD-011 and AD-016 govern its return and economic semantics, AD-018 owns the accepted M4.5 sizing, affordability and period-loss-guard target, and AD-019 owns the M4.6 effective-manifest/successor-identity target. Deferred-work status is governed by the current ledger; later M5 and M7 closure updates supersede earlier M4-era ownership statements where recorded.
 
-**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. The latest accepted full suite is 443 passed in 9.03s at `57ccfac`; M4.1 remains documentation/design evidence only.
+**Validation direction:** Use deterministic, hand-calculated scenarios and risk-proportionate success, boundary, failure and regression tests. Compare authoritative executions, cash, positions, equity, trade results, drawdown and versioned research identity. At the M4.5 checkpoint, the full suite was 443 passed in 9.03s at `57ccfac`; M4.1 remained design-contract evidence. M4 subsequently closed through M4.7 at `ac8aca6`.
 
 **Non-goals:** WFA validity (M5), live data and paper runtime (M6/M7), authoritative application workflows (M8), V1 release acceptance (M9), real-money execution (V2), exact brokerage/tax fidelity, multi-symbol portfolio semantics and calendar-derived completeness.
 
-M4 is IN_PROGRESS and is not complete. M4.2 through M4.5 are DONE/CLOSED at their accepted scopes; M4.6 is READY at accepted design scope under AD-019 with implementation NOT_STARTED / NOT AUTHORIZED; M4.7 remains PLANNED and M5 remains RESERVED. The next planned action is separate M4.6 implementation authorization/review.
+M4 is DONE at the accepted M4.7 integration scope. M5, M6 and M7 were subsequently implemented and validated.
 
 ### M5 — WFA validity
 
-Reserved scope includes finite expanding/rolling windows, complete configuration/economic propagation, leakage-resistant train/test separation, account-valid metrics, an explicit overlap/stitching policy and reproducible per-window evidence.
+**Status:** DONE.
+
+M5 validates finite walk-forward windows, effective configuration/economic propagation, account-valid metrics, explicit equity stitching and verdict semantics, strategy parameter validation, and numeric/boundary hardening. The final accepted M5 baseline is `7d74ea2`.
 
 ### M6 — Live market-data foundation
 
-Reserved scope includes one real provider, completed-candle semantics, sequence validation, freshness/disconnect behavior and diagnostic recording. It does not include real-money orders.
+**Status:** DONE.
+
+M6 establishes AngelOne live market-data delivery, canonical update/candle construction, sequence and session-boundary validity, adapter/pipeline behavior and verified WebSocket TLS. Final accepted baseline: `ffb86c2`.
 
 ### M7 — Paper-session integration
 
-Reserved scope includes a real-data feed, strategy, risk, simulated execution, authoritative portfolio, journal, snapshots, truthful start/stop/failure states, and a recovery policy.
+**Status:** DONE through M7.9.
+
+M7 integrates real AngelOne market data with simulated execution and authoritative portfolio accounting. It includes causal source-event next-bar execution, provider supervision, reconnect/reconciliation, authoritative observability, unique session/journal identity and environment-loaded retry configuration.
+
+Final accepted baseline: `7dd8e34`. Final local regression: 725 tests passed. GitHub Actions Run 92 succeeded.
+
+The current API/frontend do not yet own this authoritative runtime. That is M8 scope.
 
 ### M8 — Research and paper application
 
-Reserved scope includes actual research jobs/results, dataset/source visibility, portfolio/trade/equity views, paper controls, errors and a responsive browser interface. Delivery should use small backend-to-UI vertical slices.
+**Status:** NEXT / not yet baselined.
+
+Replace placeholders through bounded backend-to-UI vertical slices using actual research jobs/results and the authoritative M7 paper runtime/snapshot.
 
 ### M9 — V1 validation and release
 
-Reserved scope includes reproducible reference results, subsystem and workflow evidence, failure scenarios, paper observation, documentation synchronization and all mandatory V1 release gates.
+**Status:** RESERVED.
 
+M9 owns end-to-end V1 reference evidence, workflow/failure validation, paper observation, operational-hardening disposition, final documentation synchronization and mandatory V1 release gates.
 ## V2 and progressive horizons
 
 **V2 — Controlled Real-Money Execution** follows V1 acceptance. Its detailed milestone identifiers are intentionally not allocated. It requires order identity, acknowledgement/rejection/cancellation/partial-fill semantics, reconciliation, restart recovery, operational risk controls, restricted rollout and applicable external acceptance.

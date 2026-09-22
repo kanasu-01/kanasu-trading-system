@@ -120,12 +120,15 @@ M3.7a implementation evidence: `073f3e9 Add historical source policy contract`.
 
 ### AD-010 — Real-data paper with simulated authority
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
-V1 paper trading consumes real market data while using the validated simulated execution and PortfolioManager authority. The UI controls and observes the backend session; it does not own trading/account state.
+V1 paper trading consumes real market data while using simulated execution and authoritative PortfolioManager state. Trading/account authority remains in the backend runtime.
 
-Target milestones: M6 and M7.
+M6 established the live market-data foundation and M7 implemented the paper-runtime side of this decision through `7dd8e34`.
 
+The current API/frontend do not yet own or expose that authoritative runtime. AD-012 therefore remains the M8 application decision.
+
+Accepted evidence: M6 final `ffb86c2`; M7 final `7dd8e34`; final M7.9 local regression 725 passed; GitHub Actions Run 92 succeeded.
 ### AD-011 — Instrument and account returns remain distinct
 
 **Status:** ACCEPTED
@@ -421,6 +424,28 @@ Cryptographic SHA-256 values are generated from canonical serialization and test
 #### Scope
 
 M4.6 does not redesign WFA configuration/scoring/stitching or claim WFA validity; does not migrate PaperRuntime or live/broker policy; does not introduce exchange calendars, multi-symbol allocation, leverage/margin/shorts/derivatives, exact broker/exchange/tax fidelity, automatic application research jobs, or M4.7 integration closure. Existing M4.2–M4.5 behavior must remain economically unchanged except for sourcing the same accepted fixed values through the shared policy boundary.
+### AD-020 — Causal live-paper execution and provider-gap reconciliation
+
+**Status:** ACCEPTED
+
+**Target:** M7
+
+A completed live candle may create a pending strategy intent, but it is not proof of execution.
+
+The intent may execute only when an accepted live source event proves that the immediate next timeframe interval has opened. Wall-clock advancement, a later completed candle or a non-adjacent later interval cannot retrospectively authorize the missing next-bar execution.
+
+Every accepted live update may protect an already-open authoritative position.
+
+After a provider-data gap, pending intent is invalidated before reconnect. The first reconnect interval is quarantined. Exact completed historical gap candles may rebuild strategy state only; they cannot create pending live intents, execute trades or retrospectively mutate an open position.
+
+Incomplete reconciliation is a runtime failure.
+
+The supervisor owns provider-thread lifecycle, callback admission, session-end boundary, reconnect attempts/delay and provider failure propagation.
+
+This decision does not establish API/frontend ownership, process-restart recovery, reusable broker-authentication lifecycle or real-money execution.
+
+Accepted implementation evidence: `f5dff2f`, `9f25685`, `5682a19`, `52adf41`, `d836a5e`, `2ccfd89`, `06bbb93`, `4cdde0e`, `74fe936`, `7dd8e34`.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

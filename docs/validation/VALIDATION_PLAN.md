@@ -97,6 +97,10 @@ A task may be DONE only when its accepted evidence and required documentation sy
 - Restart/recovery policy and unsupported cases are explicit.
 - No real-money order route is reachable in V1.
 
+**Accepted M6/M7 evidence through `7dd8e34`:** AngelOne real market data is wired into the paper runtime; live execution obeys causal source-event next-bar semantics; provider lifecycle/failure/retry behavior is supervised; post-gap continuation requires explicit reconciliation; authoritative PortfolioManager-backed snapshots and per-session journals are available; runtime session IDs are unique; and retry settings load from environment. The final local M7.9 suite passed 725 tests and GitHub Actions Run 92 succeeded.
+
+The implementation currently exposes `CREATED`, `RUNNING`, `STOPPED` and `FAILED`; it does not expose separate `STARTING`/`STOPPING` states. M8/M9 must either add those public transitional states or explicitly validate/document the accepted lifecycle. API/frontend ownership remains M8 work.
+
 ### API
 
 - Endpoints operate real authorized workflows or identify explicit mock/development responses.

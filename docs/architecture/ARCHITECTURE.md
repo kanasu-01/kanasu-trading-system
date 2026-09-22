@@ -53,10 +53,15 @@ BacktestConfig → HistoricalSource → canonical historical candles → WalkFor
     → GridSearchOptimizer/BacktestEngine → out-of-sample BacktestEngine
     → aggregate result
 
-Principal paper entry flow:
-CSV → canonical CSV loader → MockLiveFeed
-    → PaperRuntime → StrategyRunner → TradeExecutionEngine
+Paper entry flows:
+MOCK: CSV → canonical CSV loader → MockLiveFeed
+    → PaperCandleProcessor → StrategyRunner/TradeExecutionEngine
     → authoritative PortfolioManager
+
+LIVE: AngelOne live market-data session → AngelOneLiveCandleFeed
+    → LivePaperRuntime → PaperCandleProcessor
+    → causal simulated execution → authoritative PortfolioManager
+    → PaperTradingSession snapshot/journal
 
 API/frontend:
 browser → API routes
@@ -175,7 +180,7 @@ Feedback is an ordered immutable collection rather than a one-event-per-candle s
 
 `SMACrossOverStrategy` is the reference M4.2 strategy: intent emission alone does not change its local position flag; accepted entry opens it, rejected entry leaves it flat, and strategy or protective exit closes it. PivotBoss remains unvalidated and outside M4.2 scope.
 
-This flow is implemented and validated for the Backtest/`SMACrossOverStrategy` boundary at `770d3a5`. It does not claim PivotBoss or paper-runtime feedback integration.
+This flow was implemented and validated for the Backtest/`SMACrossOverStrategy` boundary at `770d3a5`. M7 later extended the same authoritative feedback/state-convergence principle into paper processing. PivotBoss remains outside the validated reference-strategy scope.
 
 ### M4.3 CURRENT — PHASED NEXT-BAR EXECUTION
 
@@ -212,16 +217,15 @@ M4.2 contradictory-state validation remains authoritative: queued BUY while LONG
 
 A decision from the final available candle remains pending and unfilled. No synthetic candle or final-close fill is created, and an existing position is not automatically liquidated. Any position still open after final-bar execution/protection is marked to the final close so final equity includes unrealized P&L.
 
-This Backtest behavior is implemented and validated at `bc9409c`. The legacy immediate `TradeExecutionEngine.on_signal()` path remains available for non-Backtest callers, and PaperRuntime was not migrated to next-bar semantics. PivotBoss and paper-runtime feedback/state convergence remain unvalidated.
+This Backtest behavior was implemented and validated at `bc9409c`. At the M4.3 baseline PaperRuntime had not yet been migrated. M7 later added a separate causal live-paper path in which a completed-bar decision may execute only from a newly observed source event in the immediate next interval; wall-clock advancement or a later completed candle cannot authorize retrospective execution. PivotBoss remains outside the validated reference-strategy scope.
 
 M4.3 does not own current-equity sizing, affordability, final daily/weekly drawdown semantics, performance metrics, successor fingerprinting, PivotBoss, paper/live, WFA, API/frontend or release acceptance.
 
-### KNOWN DIVERGENCES
+### SUBSEQUENT CLOSURE
 
-- Execution feedback is validated for Backtest with `SMACrossOverStrategy`; PivotBoss and paper-runtime state convergence remain unvalidated.
-- Risk sizing still uses fixed initial capital, canonical Backtest risk still falls back to the execution-engine default, and production does not yet enforce AD-018 current-equity sizing or cash affordability.
-- Brokerage is a simplified research cost model, not a declaration of exact broker/product tax fidelity.
-- Daily/weekly production guards still aggregate closed-trade percentages rather than implementing AD-018 period-start-equity observation, sticky latches and represented candle-calendar resets.
+At the M4.3 baseline, paper feedback integration and current-equity risk/period-loss behavior were still future work. M4.5 subsequently implemented the accepted Backtest current-equity sizing, affordability and period-loss contract, and M7 later integrated authoritative feedback/state convergence into paper processing.
+
+The simplified brokerage model remains a research model rather than a declaration of exact broker/product/tax fidelity. PivotBoss remains unvalidated and is not the reference strategy.
 
 ## 6. Historical-data architecture
 
@@ -301,25 +305,31 @@ three fingerprints + provenance + evidence metadata
 
 The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8d validates the complete fresh/local repeated-run composition through deterministic integration tests without changing the production runtime boundaries. Automatic evidence creation remains outside Backtest, HistoricalSource, main, WFA, API and frontend composition.
 
-M4.6 must version the research-configuration identity for the accepted Backtest economic policy and its effective settings. AD-015 v1 remains an immutable historical contract and is not reinterpreted in place.
+M4.6 subsequently introduced the successor research-configuration identity and accepted Backtest economic-policy manifest without reinterpreting immutable AD-015 v1; M4.7 then integrated the complete M4 contract.
 
-### KNOWN DIVERGENCES
+### CURRENT BOUNDARIES
 
-- Expanding-window generation can fail to terminate.
-- WFA creates backtests with hardcoded capital/fresh runtime settings instead of preserving all effective economics.
-- Current WFA performance calculations remain on the explicitly bounded legacy trade-only metric path and are economically unvalidated pending M5.
-- The current AD-015 Backtest-configuration v1 identity does not encode the future M4 economic-policy semantics; M4.6 owns a versioned successor rather than changing v1.
-- Research runtimes do not yet compose the implemented fingerprints and evidence store into a complete persisted reproducibility record.
-- The PivotBoss implementation has unvalidated state/signal-contract issues and must not be treated as a validated research strategy.
+M5 subsequently resolved the WFA termination, configuration/economic propagation, account-metric, stitching and verdict issues described by the earlier baseline. M4.6/M4.7 implemented and integrated the successor Backtest economic-policy/manifest identity.
+
+Automatic application-level research job/evidence persistence is still not wired through the API, and PivotBoss remains unvalidated and must not be treated as the reference strategy.
 
 ## 8. Paper-runtime architecture
 
 ### CURRENT
 
-The simulated execution, portfolio and paper-runtime building blocks exist. The principal paper entry path replays CSV candles through MockLiveFeed. API paper endpoints create and mutate session metadata but do not start or own the complete feed/strategy/execution runtime.
+M7 provides deterministic `MOCK` paper operation and real AngelOne `ANGELONE` paper operation.
 
-See [Paper Runtime](../design/PAPER_RUNTIME.md) for the current/target lifecycle.
+The live path resolves the configured session window, loads strategy warm-up history, creates the AngelOne live market-data session/feed and runs it through `LivePaperRuntime`.
 
+`PaperCandleProcessor` owns causal strategy/execution sequencing. A completed-bar decision executes only from a newly observed market-data event in the immediate next interval. Wall-clock advancement and later completed candles cannot retrospectively authorize execution.
+
+Provider gaps invalidate pending intent and enter restricted reconciliation. Exact historical gap candles rebuild strategy state only and cannot create retrospective trades.
+
+`PaperTradingSession` exposes authoritative immutable snapshots backed by execution/PortfolioManager state. Runtime-created sessions also use unique per-session journal identity.
+
+The existing API is not yet wired to this runtime; that ownership boundary remains M8.
+
+See [Paper Runtime](../design/PAPER_RUNTIME.md) for the accepted M7 lifecycle.
 ## 9. API and frontend architecture
 
 ### CURRENT
@@ -330,15 +340,17 @@ The backend remains the intended authority for trading and account state. The fr
 
 ## 10. Known divergences
 
-Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material V1 divergences are:
+Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
 
-- M3.8a–M3.8d and M3.8 historical-path parity/reproducibility are validated at their accepted scopes, while authoritative research runtimes still do not automatically create and persist complete reproducibility evidence;
-- backtest and WFA validity work remains;
-- real live-market-data paper ingestion is absent;
-- paper API sessions and the actual runtime are disconnected;
-- the backtest API is a placeholder;
-- live subscription and real-money execution are outside V1; and
-- legacy replay/export/broker paths do not match current entities and constructors.
+- the backtest API still returns a fixed mock result;
+- the paper API still owns metadata-only singleton state rather than the authoritative M7 runtime;
+- the frontend therefore does not yet provide an authoritative research/paper control plane;
+- automatic application-level research-job/evidence persistence remains unwired;
+- reusable broker authentication/session lifecycle remains an open hardening item;
+- the paper lifecycle does not expose separate `STARTING`/`STOPPING` states;
+- PivotBoss remains unvalidated;
+- legacy replay/export/broker paths retain stale contracts; and
+- real-money execution remains outside V1.
 
 ## 11. Target architecture
 

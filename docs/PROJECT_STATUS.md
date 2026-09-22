@@ -6,19 +6,19 @@
 |---|---|
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
-| Branch | `m4.6-research-manifest` |
+| Branch | `m7-live-paper-trading` |
 | Documentation governance baseline | `2a305a5 Optimize agent context loading` |
-| Implementation verification baseline | `57ccfac Implement M4.5 risk sizing and drawdown validity` |
-| Latest reported test baseline | `443 passed in 9.03s at 57ccfac` |
-| Current source baseline | `57ccfac` — M4.5 implementation and accepted independent validation |
+| Implementation verification baseline | `7dd8e34 M7.9: add paper config loader support` |
+| Latest reported test baseline | `725 passed in 6.27s`; GitHub Actions Run 92 succeeded at `7dd8e34` |
+| Current source baseline | `7dd8e34` — accepted M7.9 implementation |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
-| Phase | P2 — Trusted Research Engine |
-| Milestone | M4 — Backtest Validity |
-| Step | M4.6 — Research manifest and deterministic references — READY at accepted design scope; implementation NOT_STARTED / NOT AUTHORIZED |
-| Lifecycle | M4 IN_PROGRESS; M4.1 through M4.5 DONE at accepted scopes; M4.6 READY at design scope; M4.7 PLANNED |
-| Next planned review | Separate M4.6 implementation authorization/review; implementation remains NOT AUTHORIZED |
+| Phase | P4 — Research and Paper Application |
+| Milestone | M8 — Research and paper application |
+| Step | M8 design/baseline and application integration — NEXT |
+| Lifecycle | M0–M7 DONE at accepted scopes; M8 NEXT; M9 RESERVED |
+| Next planned review | M8 design/baseline and backend-to-UI vertical-slice planning |
 
-The independently rerun 443-test full suite passed in 9.03s with exit code 0 at implementation commit `57ccfac`.
+The final M7.9 local full suite passed 725 tests in 6.27s with exit code 0 and `git diff --check` clean before commit. GitHub Actions Run 92 completed successfully on `7dd8e34dd6d9ce32eba7e67b3321738471253fd5`.
 
 ## Completed foundation
 
@@ -47,8 +47,12 @@ The independently rerun 443-test full suite passed in 9.03s with exit code 0 at 
 - M3.8d — Integration and repeated-run validation
 - M3.8 — Historical-path parity and reproducibility
 - M3 — Offline / Historical Market-Data Foundation
+- M4 — Backtest Validity
+- M5 — Walk-Forward Analysis Validity
+- M6 — Live Market-Data Foundation
+- M7 — Paper-Session Integration through M7.9
 
-Completion here refers to the accepted scope of each historical task. It does not imply that every component is integrated into a V1 workflow or release-ready.
+Completion here refers to each milestone's accepted scope. It does not imply that M8 application integration or M9 V1 release acceptance is complete.
 
 ## M3.6b validation evidence
 
@@ -302,41 +306,36 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M3.1 through M3.8 remain complete at their accepted scopes, and M3 — Offline / Historical Market-Data Foundation remains DONE. The latest accepted implementation evidence is `57ccfac Implement M4.5 risk sizing and drawdown validity` with an independently passing 443-test full suite.
+M0 through M7 are complete at their accepted scopes. The current implementation baseline is `7dd8e34 M7.9: add paper config loader support`.
 
-The M4 design audit used source baseline `6a0ab9a`. It confirmed that M4 owns the remaining Backtest validity contracts: completed-bar decisions and next-bar execution, protective-stop and gap behavior, deterministic event priority, strategy/execution state agreement, account-based returns and drawdown, current-equity risk sizing and affordability, simplified brokerage application, end-of-data handling, and versioned economic-policy research identity.
+M4 closed Backtest validity, M5 closed WFA validity, M6 established the AngelOne live market-data foundation, and M7 closed paper-session integration through M7.9.
 
-M4 — Backtest Validity remains IN_PROGRESS. M4.2 through M4.5 are implemented and validated at their accepted scopes. Its permanent child steps are:
+M7 now provides:
 
-- M4.1 — Backtest economic contract — DONE at accepted design-contract scope
-- M4.2 — Signal/execution state agreement — DONE at accepted implementation/validation scope
-- M4.3 — Execution timing and stop/fill validity — DONE at accepted implementation/validation scope
-- M4.4 — Account returns and performance metrics — DONE/CLOSED at accepted implementation/validation scope
-- M4.5 — Risk sizing and drawdown validity — DONE/CLOSED at accepted implementation/validation scope
-- M4.6 — Research manifest and deterministic references — READY at accepted design scope under AD-019; implementation NOT_STARTED / NOT AUTHORIZED
-- M4.7 — Backtest validity integration — PLANNED
+- AngelOne real-market-data paper operation with simulated execution;
+- causal next-bar execution from newly observed source events;
+- supervised provider lifecycle and failure propagation;
+- configurable reconnect attempts and retry delay;
+- provider-gap reconciliation without retrospective trade execution;
+- authoritative `PortfolioManager`-backed snapshots;
+- truthful terminal `STOPPED` / `FAILED` state;
+- unique runtime session identity propagated into execution and journals; and
+- environment-loaded retry configuration.
 
-M4.1 records target behavior only; it adds no implementation or validation evidence. M4.2 is implemented and validated for the Backtest/`SMACrossOverStrategy` scope under AD-017. PivotBoss and paper-runtime integration remain outside that claim.
+The deterministic `MockLiveFeed` path remains available for development and regression.
 
-M4.3 now implements and validates completed-bar decisions, one pending intent, next-open BUY/SELL execution, decision-time stop context, gap-stop/queued-SELL/ordinary-stop priority, exact single slippage, same-bar post-entry protection, execution-before-close-mark ordering, and end-of-data handling for Backtest.
-
-M4.4 now implements and validates result-aware authoritative Backtest metrics, equity-derived account return and maximum drawdown, explicit completed-trade monetary and instrument-return statistics, zero-trade/open-position behavior, failure boundaries and full-precision programmatic results while preserving the legacy WFA compatibility path.
-
-M4.5 now implements and validates AD-018 current-equity sizing, transaction-cost-aware affordability, period-start-equity guards, calendar-period transitions, mutation-free rejection behavior and effective Backtest risk propagation at the accepted Backtest scope.
-
-M4.6 design is accepted under AD-019. The target introduces a versioned `BacktestEconomicPolicy`, a complete effective-input `BacktestRunManifest`, successor `kanasu.backtest-config.v2` identity, deterministic hand-calculated references, and backward-compatible reuse of AD-015 v1 dataset/result identity and ResearchEvidence persistence. The design records what canonical Backtest actually consumes rather than copying inert configuration fields. It does not claim implementation or validation; separate implementation authorization/review remains required. Existing open and deferred concerns remain governed by the deferred-work ledger.
+The M7 application boundary remains deliberate. The current paper API still creates metadata-only singleton session state rather than starting and owning the authoritative M7 runtime. The frontend therefore does not yet consume the authoritative M7 snapshot. The backtest API also still returns a fixed mock result. These are M8 responsibilities.
 
 ## Important V1 blockers
 
-- backtest financial and economic validity;
-- WFA termination, configuration propagation, and account-metric validity;
-- real-market-data ingestion for paper trading;
-- an operational paper-session lifecycle;
-- API/frontend integration with actual runtime and research results; and
-- completion of all V1 validation and release gates.
+- replace the fixed backtest API response with a real research workflow;
+- connect paper API lifecycle to the authoritative M7 runtime;
+- expose authoritative portfolio, trade, equity and failure state through stable APIs;
+- connect the responsive frontend to those real workflows;
+- disposition remaining V1 operational-hardening items, including broker authentication/session lifecycle and unsupported restart boundaries; and
+- complete M9 end-to-end V1 acceptance and release validation.
 
-Technical findings that are deliberately unresolved are recorded in [Deferred Work](roadmap/DEFERRED_WORK.md). The ordered delivery plan is in the [Roadmap](roadmap/ROADMAP.md).
+Technical findings that remain outside the accepted M7 scope are recorded in [Deferred Work](roadmap/DEFERRED_WORK.md). The delivery plan is in the [Roadmap](roadmap/ROADMAP.md).
 
 ## Release boundary
-
 V1 does not place real-money broker orders. Live execution is deferred to V2 and requires additional execution, reconciliation, recovery, operational-safety, and external acceptance evidence.

@@ -9,28 +9,22 @@ Existing identifiers are permanent.
 ## DW-001 — Equity-Based Drawdown
 
 **Status:** PARTIALLY ADDRESSED
-**Target:** M4.5 / M5 risk and research validity; required before V2.
+**Target:** V2 broker/live risk policy; V1 research/paper shared-engine behavior accepted.
 
-Account-level net realized trade contribution was corrected in M2.3. M4.5 has now replaced canonical Backtest closed-trade-percentage aggregation with authoritative-equity observation for daily and weekly entry guards.
+M4.5 established authoritative-equity daily/weekly entry guards for canonical Backtest. M5 subsequently propagated the accepted economic/risk configuration through WFA and validated account-based research outcomes.
 
-AD-018 now defines the accepted M4.5 Backtest target. Daily and weekly entry guards use period-start authoritative equity rather than period peak-to-current drawdown. Realized P&L, unrealized marked P&L and transaction costs participate through equity; exact-threshold breaches latch against new entries for the remainder of the represented candle date or `(ISO year, ISO week)`; gains do not raise baselines; exits remain allowed; and no forced liquidation is introduced. Period baselines use authoritative equity carried from the prior completed/marked bar before the first observed candle's current-period execution. Sparse data resets on the first observed new identity without timestamp conversion, exchange calendars or synthetic sessions.
+M7 paper processing uses the shared `TradeExecutionEngine` with effective runtime risk/economic policy rather than maintaining a separate fixed-capital paper sizing implementation.
 
-The M4.5 Backtest portion is implemented and validated by `57ccface0f086dd12e38fca9cfed3b5aa92fbe9c Implement M4.5 risk sizing and drawdown validity` from design baseline `78e4493430dab2a9389bfda4e41b1149ef038f7f`. Focused M4.5/regression validation passed 193 tests in 3.01s; independent full regression passed 443 tests in 9.03s with exit code 0; and independent `git diff --check` was clean.
-
-DW-001 remains PARTIALLY ADDRESSED because M5 must establish corresponding WFA configuration propagation and economic validity, and M4.5 did not migrate or validate PaperRuntime or live/broker risk behavior. WFA may inherit corrected shared Backtest mechanics, but that inheritance is not a WFA validity claim.
+The remaining concern is future real-money broker/live risk authority: exposure, broker/account reconciliation and operational safeguards require separate V2 validation.
 
 ## DW-002 — P&L Percentage Accounting
 
-**Status:** PARTIALLY ADDRESSED
-**Target:** M4.4 / M5.
+**Status:** RESOLVED
+**Resolution scope:** V1 Backtest/WFA research metrics.
 
-M2 established explicit fill/cost ownership, gross and net monetary trade P&L, and account-level net P&L input to DrawdownRiskManager. `Trade.pnl_pct` remains instrument-price return; it is not gross or net monetary P&L and must not substitute for account/equity return.
+M2 established explicit fill/cost ownership and monetary P&L. M4.4 separated instrument return from authoritative account/equity return. M5 migrated WFA metrics, stitching and verdict semantics onto the accepted account-valid model.
 
-M4.4 implements and validates the Backtest account-performance/reporting portion through a result-aware metric path. `Trade.pnl_pct` retains instrument fill-to-fill return meaning; completed-trade gross and net outcomes remain monetary P&L; and authoritative Backtest account P&L, account return and maximum drawdown derive from recorded equity, including transaction-cost and final unrealized effects.
-
-**M4.4 evidence:** implementation commit `7102859ecb80bf932a780825f10634fd36cb0a9d Implement M4.4 account performance metrics`; focused metric/reporting, compatibility and regression validation passed; independent full suite 364 passed in 6.86s.
-
-Remaining work: M5 must migrate the bounded legacy WFA trade-only metric path and establish WFA account-metric validity. No unnecessary gross-trade-return or net-trade-return percentage concepts are required. DW-002 therefore remains PARTIALLY ADDRESSED rather than resolved.
+`Trade.pnl_pct` intentionally remains instrument fill-to-fill return. Gross/net completed-trade outcomes remain monetary P&L, while account return and drawdown derive from authoritative equity.
 
 ## DW-003 — Portfolio Accounting Consistency
 
@@ -45,13 +39,15 @@ This resolution does not claim paper API/runtime integration, broker reconciliat
 
 ## DW-004 — Paper Trading Runtime Validation
 
-**Status:** OPEN
-**Target:** V1 M6/M7.
+**Status:** RESOLVED AT ACCEPTED M7 SCOPE
 
-The current principal paper path uses CSV replay, while API paper support manages session metadata without starting the complete PaperRuntime. Real live-market-data paper operation, truthful lifecycle state, authoritative snapshots, journals, failure handling, stop behavior and recovery policy remain to be implemented and validated.
+M6 established AngelOne live market data. M7 implemented real-data paper operation with simulated execution and authoritative PortfolioManager state, causal next-bar execution, provider supervision, reconnect/reconciliation, truthful terminal state, unique session/journal identity and authoritative snapshots.
+
+Final accepted baseline: `7dd8e34`. Final local regression: 725 passed. GitHub Actions Run 92 succeeded.
+
+This resolution does not claim API/frontend ownership, process-restart recovery or real-money execution. Those remain under M8/M9, DW-013/DW-015 or V2 as applicable.
 
 See [Paper Runtime](../design/PAPER_RUNTIME.md).
-
 ## DW-005 — Live Trading
 
 **Status:** DEFERRED TO V2
@@ -70,34 +66,32 @@ PositionBook structure alone does not establish multi-symbol capital allocation,
 
 ## DW-007 — WFA Expanding-Window Termination
 
-**Status:** OPEN
-**Target:** M5.
+**Status:** RESOLVED
+**Resolution scope:** M5 WFA validity.
 
-The expanding-window generator can repeat a window indefinitely because the advancing cursor does not affect the expanding train start/end calculation after the first valid window.
+M5 made expanding/rolling window generation finite and later hardened warm-up, strategy-parameter and numeric boundary behavior.
 
-Required work: write finite deterministic rolling/expanding-window contracts, repair the generator, and test boundaries and termination without changing research policy implicitly.
+Final accepted M5 baseline: `7d74ea2`.
 
 ## DW-008 — WFA Configuration, Economics and Account Metrics
 
-**Status:** OPEN
-**Target:** M5.
+**Status:** RESOLVED
+**Resolution scope:** M5 WFA validity.
 
-Optimizer/runner paths create backtests with hardcoded capital and fresh runtime defaults. Some scoring and drawdown calculations use instrument Trade.pnl_pct or synthetic compounded trade returns instead of authoritative account outcomes.
+M5 propagated effective configuration/economics, established account-valid metrics, hardened equity stitching and verdict semantics, integrated the accepted WFA contract, and later hardened precision, warm-up, strategy parameters and numeric boundaries.
 
-Required work: propagate the effective capital, execution/risk configuration and dataset identity; define account-valid optimization metrics; define window overlap/equity-stitching semantics; preserve per-window evidence.
+Final accepted M5 baseline: `7d74ea2`.
 
 ## DW-009 — Strategy and Execution Position-State Agreement
 
-**Status:** PARTIALLY RESOLVED
-**Target:** M4.2 before strategy conclusions; M7 before paper acceptance.
+**Status:** RESOLVED AT VALIDATED REFERENCE-STRATEGY SCOPE
+**Resolution scope:** `SMACrossOverStrategy` across accepted Backtest and paper paths.
 
-A strategy can change its local position-open state after emitting BUY without a complete response for risk rejection, affordability rejection or forced stop exit. Strategy state can then disagree with the execution portfolio.
+M4.2 established typed ordered execution feedback and authoritative state convergence for Backtest. M7 paper processing delivers authoritative execution feedback before the next completed-candle decision and uses the same execution/portfolio authority.
 
-M4.2 resolves the validated Backtest/`SMACrossOverStrategy` execution-feedback and state-convergence scope. The typed ordered AD-017 contract covers accepted and rejected entries, strategy and protective exits, explicit rejection reasons, contradictory-state failures and authoritative outcome ordering without changing PortfolioManager accounting ownership.
+M7 causal-validity validation covers accepted entry feedback, duplicate/non-causal next-open protection, protective exits and ordering relative to subsequent strategy decisions. Pending intent is invalidated across provider gaps before reconciliation.
 
-**Evidence:** implementation commit `770d3a5 Implement M4.2 execution feedback contract`; focused execution/backtest validation 26 passed; independent full suite 323 passed.
-
-DW-009 remains partially resolved because paper-runtime feedback/state convergence is still required before M7 acceptance. PivotBoss and other unvalidated strategy-specific state contracts also remain outside the M4.2 resolution claim.
+PivotBoss and other independently unvalidated strategy-specific state contracts remain outside this resolution.
 
 ## DW-010 — SQLite Timestamp and Range-Bound Compatibility
 
@@ -135,12 +129,13 @@ Required work: decide which public paths remain supported, write compatibility t
 ## DW-013 — API Placeholders and Paper Runtime Disconnection
 
 **Status:** OPEN
-**Target:** M7/M8.
+**Target:** M8.
 
-The backtest run API returns a fixed mock result. Paper API endpoints create/session-stop metadata but do not own the real PaperRuntime. The frontend therefore cannot yet serve as a validated research/paper control plane.
+The authoritative M7 paper runtime now exists, but current paper API endpoints still create and stop singleton metadata state rather than starting, stopping and observing that runtime.
 
-Required work: replace placeholders through bounded vertical slices using real jobs and authoritative snapshots; expose truthful loading, running, stopped and failed states.
+The backtest run API still returns a fixed mock result.
 
+Required work: replace placeholders through bounded backend-to-UI vertical slices using real research jobs/results and `PaperTradingSession.snapshot()`-backed paper state. Do not reconstruct account authority in frontend code.
 ## DW-014 — SQLite Chronology Indexing and Legacy Timestamp-State Migration
 
 **Status:** DEFERRED
@@ -165,7 +160,7 @@ M3.8 baselining does not automatically pull this work into implementation. Corre
 ## DW-015 — Broker Session and Authentication Lifecycle
 
 **Status:** OPEN
-**Target:** M6/M7 broker/live-data and paper-session work; required before V1 real-market-data paper acceptance. Reassess and extend for V2 live execution.
+**Target:** M8/M9 V1 operational-hardening disposition; reassess and extend for V2 live execution.
 
 Current broker authentication is not yet a reusable session lifecycle. When `create_angelone_broker()` is invoked it constructs a new broker and calls `login()` eagerly. `AngelOneBroker` tracks `_logged_in` only within the current broker object/process, but `login()` does not first determine whether an existing authenticated session is still usable. Separate program runs also do not currently reuse or validate a previously created broker session.
 
