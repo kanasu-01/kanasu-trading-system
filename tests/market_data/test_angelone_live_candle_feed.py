@@ -425,12 +425,49 @@ def test_exact_retransmission_does_not_reach_market_update_consumer() -> None:
         ),
     )
 
-    # The pipeline already defines an exact retransmission of the latest
-    # accepted source update as idempotent. Execution/MTM must therefore
-    # see each accepted source observation only once.
+    # The first accepted source observation opens the first observed
+    # interval. Its exact retransmission is idempotent and must not reach
+    # execution/MTM a second time.
     assert observed == [
-        (1, False),
+        (1, True),
         (2, False),
+    ]
+
+    feed.close()
+
+
+
+def test_first_accepted_update_flags_new_interval_without_completed_delivery() -> None:
+    factory = ScriptedSocketFactory(
+        [
+            (
+                [
+                    _message(10, 15, 10000, 500, 1),
+                    _message(10, 20, 10100, 520, 2),
+                ],
+                None,
+            )
+        ]
+    )
+
+    feed = _feed(factory)
+    completed = []
+    observed = []
+
+    feed.subscribe(
+        completed.append,
+        lambda update, opens_new_bar: observed.append(
+            (
+                update.timestamp,
+                opens_new_bar,
+            )
+        ),
+    )
+
+    assert completed == []
+    assert observed == [
+        (_ts(10, 15), True),
+        (_ts(10, 20), False),
     ]
 
     feed.close()

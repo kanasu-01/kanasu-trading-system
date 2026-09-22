@@ -86,11 +86,30 @@ class LiveCandlePipeline:
         update: LiveMarketUpdate,
     ) -> tuple[Candle | None, bool]:
         """
-        Accept one source observation.
+        Accept one source observation while preserving the legacy result.
 
-        The boolean distinguishes an accepted update that produced no
-        completed candle from an exact retransmission that was ignored
-        idempotently.
+        The boolean distinguishes an accepted update from an exact
+        retransmission. Interval-transition identity is available through
+        on_update_with_transition().
+        """
+        completed, accepted, _opens_new_interval = (
+            self.on_update_with_transition(update)
+        )
+        return completed, accepted
+
+    def on_update_with_transition(
+        self,
+        update: LiveMarketUpdate,
+    ) -> tuple[Candle | None, bool, bool]:
+        """
+        Accept one source observation and expose interval transition state.
+
+        Returns:
+            completed candle, accepted flag, opens-new-interval flag.
+
+        The transition flag derives from accepted provider-event interval
+        state, independently of whether the preceding candle is eligible
+        for completed delivery.
         """
         if not self._connected or self._builder is None:
             raise RuntimeError(
@@ -103,7 +122,7 @@ class LiveCandlePipeline:
             self._latest_update is not None
             and update == self._latest_update
         ):
-            return None, False
+            return None, False, False
 
         self._validate_timestamp(update.timestamp)
 
@@ -116,12 +135,29 @@ class LiveCandlePipeline:
                 "live cumulative volume cannot decrease across connections"
             )
 
+        previous_interval_start = (
+            self._builder.active_start
+        )
+
         completed = self._builder.on_update(update)
+
+        current_interval_start = (
+            self._builder.active_start
+        )
+        opens_new_interval = (
+            current_interval_start is not None
+            and current_interval_start
+            != previous_interval_start
+        )
 
         self._record_timestamp(update.timestamp)
         self._latest_update = update
 
-        return self._accept_completed(completed), True
+        return (
+            self._accept_completed(completed),
+            True,
+            opens_new_interval,
+        )
 
     def advance_time(
         self,

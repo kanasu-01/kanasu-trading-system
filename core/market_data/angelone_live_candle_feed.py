@@ -134,20 +134,21 @@ class AngelOneLiveCandleFeed(LiveCandleFeed):
         update: LiveMarketUpdate,
     ) -> None:
         with self._pipeline_lock:
-            candle, accepted = (
-                self._pipeline.on_update_with_acceptance(
-                    update
-                )
+            (
+                candle,
+                accepted,
+                opens_new_bar,
+            ) = self._pipeline.on_update_with_transition(
+                update
             )
 
             if not accepted:
                 return
 
-            opens_new_bar = candle is not None
-
-            # The boundary source update first proves the prior candle
-            # complete. Strategy decision therefore happens before the
-            # same observation becomes the causal next-bar execution price.
+            # The boundary source observation first proves the prior
+            # candle complete. Strategy may therefore evaluate that
+            # completed candle before the same accepted observation is
+            # exposed as the causal opening observation of the new interval.
             if candle is not None:
                 self._emit(candle)
 

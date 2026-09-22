@@ -5,6 +5,7 @@ import pytz
 
 from core.broker.angelone_config import AngelOneConfig
 from core.config.execution_config import ExecutionConfig
+from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.market_data.angelone_live_candle_feed import (
     AngelOneLiveCandleFeed,
@@ -411,3 +412,714 @@ def test_intraday_wall_clock_does_not_finalize_before_late_source_tick():
         15,
     )
     assert candle.close == 103.0
+
+
+
+def _new_m76_causal_processor() -> PaperCandleProcessor:
+    return PaperCandleProcessor(
+        strategy=BuyFirstCompletedCandleStrategy(),
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_enabled=False,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="m76-design-baseline",
+    )
+
+
+def test_live_execution_path_does_not_delegate_to_backtest_processor(
+    monkeypatch,
+) -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    def reject_historical_path(**_kwargs):
+        raise AssertionError(
+            "live execution delegated to process_backtest_candle"
+        )
+
+    monkeypatch.setattr(
+        processor.execution_engine,
+        "process_backtest_candle",
+        reject_historical_path,
+    )
+
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            price=120.0,
+            cumulative_volume=1_100.0,
+            sequence=2,
+        ),
+        True,
+    )
+
+    position = (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+    )
+
+    assert position is not None
+    assert position.entry_time == _ts(10, 30)
+    assert position.entry_price == 120.0
+
+
+def test_live_completed_candle_marks_close_before_strategy_decision(
+    monkeypatch,
+) -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            price=120.0,
+            cumulative_volume=1_100.0,
+            sequence=2,
+        ),
+        True,
+    )
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is not None
+    )
+
+    order = []
+    original_mark = (
+        processor.execution_engine
+        .mark_open_position_to_market
+    )
+
+    def record_mark(*, symbol, price):
+        order.append(("mark", price))
+        return original_mark(
+            symbol=symbol,
+            price=price,
+        )
+
+    def record_decision(candle):
+        order.append(("decision", candle.close))
+        return None
+
+    monkeypatch.setattr(
+        processor.execution_engine,
+        "mark_open_position_to_market",
+        record_mark,
+    )
+    monkeypatch.setattr(
+        processor.strategy_runner,
+        "on_new_candle",
+        record_decision,
+    )
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 30),
+            open=120.0,
+            high=124.0,
+            low=119.0,
+            close=123.0,
+            volume=1_200.0,
+        )
+    )
+
+    assert order == [
+        ("mark", 123.0),
+        ("decision", 123.0),
+    ]
+
+
+
+def test_live_entry_observation_is_not_reused_for_post_entry_stop() -> None:
+    processor = PaperCandleProcessor(
+        strategy=BuyFirstCompletedCandleStrategy(),
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_pct=0.001,
+                slippage_enabled=True,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="m76-protective-causality",
+    )
+
+    # decision_close * 0.98 = 100.009, while the first observed
+    # N+1 price is 100.0 and the slipped BUY fill is 100.1.
+    # The opening observation existed before the position was created
+    # and therefore must not immediately stop the new position.
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=101.0,
+            high=103.0,
+            low=101.0,
+            close=102.05,
+            volume=1_000.0,
+        )
+    )
+
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            price=100.0,
+            cumulative_volume=1_100.0,
+            sequence=2,
+        ),
+        True,
+    )
+
+    position = (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+    )
+
+    assert position is not None
+    assert position.entry_price == 100.1
+    assert position.stop_price == 100.009
+    assert processor.execution_engine.completed_trades == []
+
+    # A later, genuinely post-entry observation may enforce protection.
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            second=1,
+            price=99.5,
+            cumulative_volume=1_101.0,
+            sequence=3,
+        ),
+        False,
+    )
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+    assert len(
+        processor.execution_engine.completed_trades
+    ) == 1
+    assert (
+        processor.execution_engine
+        .completed_trades[0]
+        .exit_reason
+        == "STOP_LOSS"
+    )
+
+
+
+class FeedbackOrderingStrategy(BaseStrategy):
+    def __init__(self) -> None:
+        super().__init__(name="feedback_ordering")
+        self.events = []
+        self.decisions = 0
+
+    def on_new_candle(
+        self,
+        series: CandleSeries,
+    ) -> SignalType | None:
+        self.decisions += 1
+        self.events.append(
+            f"decision:{self.decisions}"
+        )
+
+        if self.decisions == 1:
+            return SignalType.BUY
+
+        return None
+
+    def on_execution_feedback(
+        self,
+        feedback,
+    ) -> None:
+        self.events.append(
+            f"feedback:{feedback.event_type.value}"
+        )
+
+    def reset(self) -> None:
+        self.events.clear()
+        self.decisions = 0
+
+
+def test_live_entry_remains_bound_to_first_observed_next_bar_update():
+    factory = ManualSocketFactory()
+
+    feed = AngelOneLiveCandleFeed(
+        config=_config(),
+        auth_token="Bearer jwt-token",
+        feed_token="feed-token",
+        symbol="RELIANCE",
+        timeframe="15m",
+        session_start=SESSION_START,
+        websocket_factory=factory,
+    )
+
+    processor = _new_m76_causal_processor()
+
+    provider_thread = threading.Thread(
+        target=feed.subscribe,
+        args=(
+            processor.on_live_completed_candle,
+            processor.on_live_market_update,
+        ),
+    )
+    provider_thread.start()
+
+    assert factory.socket is not None
+    assert factory.socket.opened.wait(
+        timeout=1.0
+    )
+
+    try:
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=15,
+                price_paise=10000,
+                cumulative_volume=500,
+                sequence=1,
+            )
+        )
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=20,
+                price_paise=10100,
+                cumulative_volume=520,
+                sequence=2,
+            )
+        )
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=30,
+                price_paise=12000,
+                cumulative_volume=530,
+                sequence=3,
+            )
+        )
+
+        position = (
+            processor.execution_engine
+            .get_runtime_position("RELIANCE")
+        )
+
+        assert position is not None
+        assert position.entry_time == _ts(10, 30)
+        assert position.entry_price == 120.0
+
+        # Later N+1 observations alter the completed candle but must never
+        # rewrite the already-observed execution timestamp or price.
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=35,
+                price_paise=11000,
+                cumulative_volume=540,
+                sequence=4,
+            )
+        )
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=40,
+                price_paise=13000,
+                cumulative_volume=550,
+                sequence=5,
+            )
+        )
+        factory.socket.emit(
+            _message(
+                hour=10,
+                minute=45,
+                price_paise=12500,
+                cumulative_volume=560,
+                sequence=6,
+            )
+        )
+
+        position = (
+            processor.execution_engine
+            .get_runtime_position("RELIANCE")
+        )
+
+        assert position is not None
+        assert position.entry_time == _ts(10, 30)
+        assert position.entry_price == 120.0
+
+        completed_next = processor.series[-1]
+        assert completed_next.timestamp == _ts(10, 30)
+        assert completed_next.open == 120.0
+        assert completed_next.low == 110.0
+        assert completed_next.high == 130.0
+    finally:
+        feed.close()
+        provider_thread.join(timeout=1.0)
+
+    assert not provider_thread.is_alive()
+
+
+def test_live_feedback_precedes_next_completed_candle_decision() -> None:
+    strategy = FeedbackOrderingStrategy()
+
+    processor = PaperCandleProcessor(
+        strategy=strategy,
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_enabled=False,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="m76-feedback-order",
+    )
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    processor.on_live_market_update(
+        _update(
+            hour=10,
+            minute=30,
+            price=120.0,
+            cumulative_volume=1_100.0,
+            sequence=2,
+        ),
+        True,
+    )
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 30),
+            open=120.0,
+            high=123.0,
+            low=119.0,
+            close=122.0,
+            volume=1_200.0,
+        )
+    )
+
+    assert strategy.events == [
+        "decision:1",
+        "feedback:ENTRY_ACCEPTED",
+        "decision:2",
+    ]
+
+
+def test_duplicate_live_open_observation_cannot_execute_intent_twice() -> None:
+    strategy = FeedbackOrderingStrategy()
+
+    processor = PaperCandleProcessor(
+        strategy=strategy,
+        runtime_context=RuntimeContext(
+            execution_config=ExecutionConfig(
+                slippage_enabled=False,
+                brokerage_enabled=False,
+            ),
+        ),
+        dataset_context=DatasetContext(
+            symbol="RELIANCE",
+            timeframe="15m",
+            timezone="Asia/Kolkata",
+        ),
+        initial_capital=100_000.0,
+        session_id="m76-duplicate-open",
+    )
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    opening_update = _update(
+        hour=10,
+        minute=30,
+        price=120.0,
+        cumulative_volume=1_100.0,
+        sequence=2,
+    )
+
+    processor.on_live_market_update(
+        opening_update,
+        True,
+    )
+
+    # Defensive processor-level idempotence: even if an upstream source
+    # were to repeat the callback, the consumed pending intent cannot enter
+    # a second position.
+    processor.on_live_market_update(
+        opening_update,
+        True,
+    )
+
+    assert strategy.events.count(
+        "feedback:ENTRY_ACCEPTED"
+    ) == 1
+
+    position = (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+    )
+
+    assert position is not None
+    assert position.entry_time == _ts(10, 30)
+    assert len(
+        processor.execution_engine.completed_trades
+    ) == 0
+
+
+def test_boundary_provider_and_clock_orderings_are_market_equivalent() -> None:
+    def ready_pipeline() -> LiveCandlePipeline:
+        pipeline = LiveCandlePipeline(
+            timeframe="15m",
+            session_start=SESSION_START,
+        )
+        pipeline.begin_connection()
+
+        assert pipeline.on_update(
+            _update(
+                hour=10,
+                minute=15,
+                price=100.0,
+                cumulative_volume=500.0,
+                sequence=1,
+            )
+        ) is None
+
+        assert pipeline.on_update(
+            _update(
+                hour=10,
+                minute=29,
+                second=59,
+                millisecond=900,
+                price=101.0,
+                cumulative_volume=520.0,
+                sequence=2,
+            )
+        ) is None
+
+        return pipeline
+
+    boundary = _update(
+        hour=10,
+        minute=30,
+        second=0,
+        millisecond=100,
+        price=104.0,
+        cumulative_volume=530.0,
+        sequence=3,
+    )
+    later_clock = _ts(
+        10,
+        30,
+        0,
+        500,
+    )
+
+    provider_first = ready_pipeline()
+    provider_first_result = (
+        provider_first.on_update_with_transition(
+            boundary
+        )
+    )
+    assert provider_first.advance_time(
+        later_clock
+    ) is None
+
+    clock_first = ready_pipeline()
+    assert clock_first.advance_time(
+        later_clock
+    ) is None
+    clock_first_result = (
+        clock_first.on_update_with_transition(
+            boundary
+        )
+    )
+
+    assert provider_first_result == clock_first_result
+
+    candle, accepted, opens_new_interval = (
+        provider_first_result
+    )
+
+    assert accepted is True
+    assert opens_new_interval is True
+    assert candle is not None
+    assert candle.timestamp == _ts(10, 15)
+    assert candle.close == 101.0
+
+
+def test_clock_advance_alone_cannot_execute_pending_live_intent() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    pipeline = LiveCandlePipeline(
+        timeframe="15m",
+        session_start=SESSION_START,
+    )
+    pipeline.begin_connection()
+
+    assert pipeline.advance_time(
+        _ts(10, 30)
+    ) is None
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+
+def test_completed_live_candle_cannot_execute_unresolved_intent() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+    # Deliberately call only the completed-candle path. It must never use
+    # this candle's open as a retrospective execution trigger.
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 30),
+            open=120.0,
+            high=125.0,
+            low=90.0,
+            close=122.0,
+            volume=1_200.0,
+        )
+    )
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+    assert (
+        processor.execution_engine
+        .completed_trades
+        == []
+    )
+
+
+
+def test_live_pending_intent_does_not_execute_after_skipped_next_interval() -> None:
+    processor = _new_m76_causal_processor()
+
+    processor.on_live_completed_candle(
+        Candle(
+            timestamp=_ts(10, 15),
+            open=99.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1_000.0,
+        )
+    )
+
+    assert processor._pending_intent is not None
+
+    # The required execution interval for the 10:15 decision is 10:30.
+    # If the next observed interval is instead 11:00, M7.6 must preserve
+    # that gap ambiguity rather than silently treating 11:00 as N+1.
+    processor.on_live_market_update(
+        _update(
+            hour=11,
+            minute=0,
+            price=140.0,
+            cumulative_volume=1_300.0,
+            sequence=10,
+        ),
+        True,
+    )
+
+    assert (
+        processor.execution_engine
+        .get_runtime_position("RELIANCE")
+        is None
+    )
+
+    # Gap resolution/cancellation belongs to M7.7. M7.6 must at least
+    # retain the unresolved intent rather than consuming it as a valid
+    # immediate-next-interval execution.
+    assert processor._pending_intent is not None

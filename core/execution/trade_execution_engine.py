@@ -520,11 +520,43 @@ class TradeExecutionEngine:
         """
         Process one authoritative live source observation causally.
 
-        The observation contains no future bar information: open/high/low/
-        close are all the currently observed price. This preserves canonical
-        execution, risk, cost, and feedback rules without retrospectively
-        using a completed future candle.
+        Live execution uses only the currently observed provider timestamp
+        and price. It does not delegate to historical completed-candle
+        orchestration and does not replay the entry observation as
+        post-entry protective history.
         """
+        self._reset_execution_diagnostics()
+
+        carried_equity = (
+            self.portfolio_manager.snapshot().equity
+        )
+        self.drawdown_manager.update_equity_period(
+            update.timestamp,
+            carried_equity,
+        )
+
+        open_position = self._get_open_position(
+            symbol
+        )
+
+        if (
+            pending_signal == SignalType.SELL
+            and open_position is None
+        ):
+            raise RuntimeError(
+                f"SELL signal received while authoritative position state "
+                f"is FLAT for {symbol}"
+            )
+
+        if (
+            pending_signal == SignalType.BUY
+            and open_position is not None
+        ):
+            raise RuntimeError(
+                f"BUY signal received while authoritative position state "
+                f"is LONG for {symbol}"
+            )
+
         observed = Candle(
             timestamp=update.timestamp,
             open=update.price,
@@ -534,13 +566,72 @@ class TradeExecutionEngine:
             volume=0.0,
         )
 
-        return self.process_backtest_candle(
-            pending_signal=pending_signal,
-            decision_close=decision_close,
-            rejection_midpoint=rejection_midpoint,
-            candle=observed,
-            execution_index=execution_index,
+        # A position that existed before this observation may be protected
+        # using this newly observed market information.
+        if open_position is not None:
+            if update.price <= open_position.stop_price:
+                return (
+                    self._exit_long(
+                        symbol=symbol,
+                        candle=observed,
+                        reference_price=update.price,
+                        exit_reason="STOP_LOSS",
+                        event_type=(
+                            ExecutionFeedbackType.PROTECTIVE_EXIT
+                        ),
+                        diagnostic_event="STOP_EXIT",
+                        observe_equity_risk=True,
+                    ),
+                )
+
+            if pending_signal == SignalType.SELL:
+                return (
+                    self._exit_long(
+                        symbol=symbol,
+                        candle=observed,
+                        reference_price=update.price,
+                        exit_reason="STRATEGY_EXIT",
+                        event_type=(
+                            ExecutionFeedbackType.STRATEGY_EXIT
+                        ),
+                        diagnostic_event="SELL",
+                        observe_equity_risk=True,
+                    ),
+                )
+
+            return ()
+
+        if pending_signal != SignalType.BUY:
+            return ()
+
+        if decision_close is None:
+            stop_price = None
+        elif rejection_midpoint is not None:
+            stop_price = (
+                self.stop_manager.compute_long_stop(
+                    rejection_midpoint
+                )
+                if isfinite(rejection_midpoint)
+                else rejection_midpoint
+            )
+        else:
+            stop_price = (
+                decision_close
+                * self._fallback_long_stop_multiplier
+            )
+
+        # This observation creates the position. Protection begins with a
+        # subsequent accepted source observation, not by replaying this
+        # same pre-position observation after entry.
+        return self._open_long(
             symbol=symbol,
+            candle=observed,
+            reference_price=update.price,
+            stop_price=stop_price,
+            entry_index=execution_index,
+            require_stop_below_fill=True,
+            use_current_equity_sizing=True,
+            observe_equity_risk=True,
         )
 
     def mark_open_position_to_market(self, *, symbol: str, price: float) -> None:

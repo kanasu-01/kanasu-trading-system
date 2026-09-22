@@ -59,6 +59,11 @@ class LiveCandleBuilder:
 
         self._warmed = False
 
+    @property
+    def active_start(self) -> datetime | None:
+        """Currently observed source interval start."""
+        return self._active_start
+
     def on_update(self, update: LiveMarketUpdate) -> Candle | None:
         """
         Accept one ordered live update.

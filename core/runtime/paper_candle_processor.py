@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from core.execution.pending_intent import PendingIntent
 from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
@@ -89,9 +91,16 @@ class PaperCandleProcessor:
         candle: Candle,
     ) -> None:
         """
-        Decide from a completed live candle without retrospectively
-        executing against that same candle.
+        Mark the completed live close before strategy evaluation.
+
+        Pending intent execution remains exclusively source-observation
+        driven and never occurs retrospectively from this candle's open.
         """
+        self.execution_engine.mark_open_position_to_market(
+            symbol=self.dataset_context.symbol,
+            price=candle.close,
+        )
+
         self._record_strategy_decision(candle)
 
     def on_live_market_update(
@@ -106,11 +115,19 @@ class PaperCandleProcessor:
         that proves a new valid bar has opened. Every accepted live update
         may still enforce protection on an already-open position.
         """
-        pending_intent = (
-            self._pending_intent
-            if opens_new_bar
-            else None
-        )
+        pending_intent = None
+        consume_pending_intent = False
+
+        if (
+            opens_new_bar
+            and self._pending_intent is not None
+            and self._is_immediate_next_live_interval(
+                pending_intent=self._pending_intent,
+                update=update,
+            )
+        ):
+            pending_intent = self._pending_intent
+            consume_pending_intent = True
 
         feedback_events = (
             self.execution_engine.process_live_market_update(
@@ -139,12 +156,57 @@ class PaperCandleProcessor:
             feedback_events
         )
 
-        if opens_new_bar:
+        if consume_pending_intent:
             self._pending_intent = None
 
         self.execution_engine.mark_open_position_to_market(
             symbol=self.dataset_context.symbol,
             price=update.price,
+        )
+
+    def _is_immediate_next_live_interval(
+        self,
+        *,
+        pending_intent: PendingIntent,
+        update: LiveMarketUpdate,
+    ) -> bool:
+        """
+        Return whether this observation belongs to the intent's N+1 bar.
+
+        A later observed interval is an unresolved market-data gap. M7.6
+        must not reinterpret it as the immediate next bar; reconciliation
+        policy is intentionally deferred to M7.7.
+        """
+        timeframe_minutes = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "10m": 10,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+        }.get(self.dataset_context.timeframe)
+
+        if timeframe_minutes is None:
+            raise RuntimeError(
+                "live pending-intent execution requires a supported "
+                f"intraday timeframe, got "
+                f"{self.dataset_context.timeframe!r}"
+            )
+
+        interval = timedelta(
+            minutes=timeframe_minutes
+        )
+        expected_start = (
+            pending_intent.decision_timestamp
+            + interval
+        )
+        expected_end = expected_start + interval
+
+        return (
+            expected_start
+            <= update.timestamp
+            < expected_end
         )
 
     def _record_strategy_decision(
