@@ -145,11 +145,21 @@ Accepted during M4 baselining. This acceptance defines the durable reporting dis
 
 ### AD-012 — API and UI use authoritative workflows
 
-**Status:** PROPOSED
+**Status:** ACCEPTED at M8 design scope
 
-API and UI results come from actual research jobs and authoritative runtime snapshots. Placeholder responses are labelled as such and cannot be treated as evidence.
+API and UI results come from actual authoritative research execution and runtime snapshots. Placeholder or development responses must be explicitly identified and cannot be presented as validated research or paper state.
+
+For Backtest, the application composes the validated historical-source, strategy and `BacktestEngine` boundaries, uses the actual `BacktestResult.session_id` as run identity, and derives account/trade metrics from `PerformanceMetrics.summarize_backtest()`. API execution must not depend on CLI printing, replay, export or visualization side effects.
+
+For Paper, application ownership must include the authoritative `PaperTradingSession`, the real `LivePaperRuntime`, the worker executing the blocking lifecycle, and synchronization sufficient for concurrent start/status/stop access. Status is a projection of `PaperTradingSession.snapshot()`. Stop controls the actual runtime and waits for termination. The last terminal `STOPPED` or `FAILED` snapshot remains observable rather than being discarded immediately.
+
+FastAPI remains a transport/application boundary and does not become a dependency of trading/domain execution code. React remains presentation/control only and does not independently calculate or reconstruct positions, cash, equity, P&L, drawdown or trading lifecycle state.
+
+The initial V1 application boundary supports one active paper session per process and a request-scoped synchronous Backtest API whose blocking execution is moved outside the async event loop. Process-restart recovery, multi-session paper ownership, real-money execution and broker-session/authentication redesign are not implied by this decision.
 
 Target milestone: M8.
+
+Accepted during M8 baselining. This acceptance freezes the application-authority contract; it does not claim M8 production implementation or validation is complete.
 
 ### AD-013 — Local historical retrieval evidence and timestamp comparison
 

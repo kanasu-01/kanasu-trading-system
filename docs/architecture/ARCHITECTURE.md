@@ -338,6 +338,52 @@ The API exposes backtest and paper routes. The backtest run route returns a fixe
 
 The backend remains the intended authority for trading and account state. The frontend presents commands, status and snapshots.
 
+### M8 TARGET — authoritative application boundary
+
+M8 connects the validated research and paper engines to the application without moving trading authority into FastAPI or React. FastAPI routes remain thin transport adapters. Trading/domain code remains independent of FastAPI request, response and exception types.
+
+~~~text
+Backtest application flow:
+React
+  → POST /api/backtest/run
+  → typed application request
+  → historical-source composition
+  → validated strategy composition
+  → BacktestEngine
+  → BacktestResult
+  → PerformanceMetrics.summarize_backtest()
+  → typed application response
+  → React presentation
+
+Paper application flow:
+React
+  → POST /api/paper-trading/start
+  → application-owned paper handle
+       ├─ authoritative PaperTradingSession
+       ├─ authoritative LivePaperRuntime
+       ├─ worker thread/task
+       └─ lifecycle synchronization
+  → GET /api/paper-trading/status
+       → PaperTradingSession.snapshot()
+  → POST /api/paper-trading/stop
+       → LivePaperRuntime.stop()
+       → worker termination
+       → retained STOPPED/FAILED snapshot
+  → React presentation
+~~~
+
+Backtest API execution is request-scoped for the initial V1 application slice. Blocking Backtest work executes outside the FastAPI event loop. The API composes the same authoritative `HistoricalSource`, validated strategy and `BacktestEngine` boundaries used by the accepted research path; it does not depend on CLI printing, replay, export or visualization side effects from `run_backtest()`.
+
+The Backtest run identifier is the actual `BacktestResult.session_id`. Authoritative account/trade metrics come from `PerformanceMetrics.summarize_backtest()`. Equity points and completed trades are projections of the actual `BacktestResult`; the application does not reconstruct research results from frontend state.
+
+Paper application ownership is initially one active session per application process. The application must obtain the authoritative session/runtime handle before the blocking live worker starts so `/status` and `/stop` can observe and control the running M7 lifecycle. A successful stop controls the real runtime and waits for worker termination; changing metadata alone is not a stop. The last terminal `STOPPED` or `FAILED` snapshot is retained until a later successful start replaces it. Status reads must be serialized with paper state mutation or consume an equivalently atomic immutable snapshot so the API cannot observe torn portfolio/execution state.
+
+The accepted public paper lifecycle remains `CREATED → RUNNING → STOPPED` or `CREATED → RUNNING → FAILED`. M8 does not introduce public `STARTING` or `STOPPING` states merely for UI convenience. Any later lifecycle expansion requires an explicit contract change and validation.
+
+The frontend is presentation/control only. Cash, position, equity, realized/unrealized/total P&L, drawdown, active position, completed-trade count, execution state and runtime failure information come from backend authority. Frontend code must not independently derive or repair those values. API base configuration is application/environment configuration rather than a machine-specific hard-coded URL.
+
+The M8 baseline freezes workflows, data contracts and visible lifecycle/error states, not pixel-level UI design. Detailed charting, spacing, responsive composition and interaction polish belong to M8.4.
+
 ## 10. Known divergences
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:

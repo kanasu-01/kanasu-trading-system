@@ -71,7 +71,12 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 ### P4 — Research and Paper Application
 
-- **M8 — NEXT** — Research and paper application.
+- **M8 — DESIGN BASELINE IN PROGRESS** — Research and paper application.
+  - **M8.1 — NEXT after baseline approval** — Application contracts and composition. Freeze authoritative ownership, typed Backtest/Paper contracts, supported V1 strategy/config choices, lifecycle/error behavior, API configuration boundary and minimum frontend/backend contract.
+  - **M8.2 — PLANNED** — Authoritative Backtest vertical slice. Connect frontend/API application composition to `HistoricalSource`, validated strategy, `BacktestEngine`, `BacktestResult`, result-aware metrics and typed response without changing M4/M5 economics.
+  - **M8.3 — PLANNED** — Authoritative Paper control plane. Replace metadata-only ownership with one application-owned live paper handle that can observe `PaperTradingSession`, control `LivePaperRuntime`, own the worker and retain terminal state without changing M7 causal/reconciliation semantics.
+  - **M8.4 — PLANNED** — Frontend authoritative workflows. Present real Backtest and paper state, visible loading/empty/stopped/failed conditions, bounded status refresh and responsive core workflows without reconstructing backend authority.
+  - **M8.5 — PLANNED** — Application integration validation and closure. Validate request/error contracts, real Backtest execution, paper start/status/stop/failure behavior, authoritative portfolio state, frontend checks, placeholder removal, documentation synchronization and DW-013 disposition.
 
 ### P5 — V1 Acceptance and Release
 

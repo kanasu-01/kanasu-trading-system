@@ -118,6 +118,35 @@ The implementation currently exposes `CREATED`, `RUNNING`, `STOPPED` and `FAILED
 - Setup/build/lint instructions match package scripts.
 - Placeholder UI cannot be mistaken for validated product behavior.
 
+### M8 — Research and Paper Application
+
+**Status:** DESIGN BASELINE / implementation not yet validated
+
+M8 validates the application boundary without reopening accepted M4/M5/M7 trading semantics. Required evidence is:
+
+1. Backtest request models reject malformed dates, invalid ranges, non-finite/non-positive capital and unsupported strategy/config values before authoritative execution.
+2. The initial V1 application advertises only strategies that are intentionally supported by the application contract; `camarilla` drift is removed and PivotBoss is not presented as validated.
+3. `POST /api/backtest/run` executes the real historical-source → validated strategy → `BacktestEngine` path rather than returning a fixture or fixed identifier.
+4. Blocking Backtest execution runs outside the FastAPI event loop and the initial request-scoped synchronous lifecycle is deterministic and tested.
+5. The returned run identifier equals the actual `BacktestResult.session_id`.
+6. Backtest summary metrics come from `PerformanceMetrics.summarize_backtest()` and preserve M4.4 account/trade terminology.
+7. Returned equity points and completed trades are projections of the actual `BacktestResult`; empty-result and failure cases are represented truthfully.
+8. Paper start constructs and starts the actual M7 paper runtime and exposes the same authoritative `PaperTradingSession` used by execution.
+9. Application ownership permits at most one active paper session initially; duplicate start has a stable conflict response and cannot create a second live worker.
+10. Paper status is derived from `PaperTradingSession.snapshot()`, includes authoritative lifecycle, portfolio, active-position, latest-execution and failure fields, and cannot expose a torn snapshot across concurrent paper-state mutation; reads are serialized or use equivalent atomic immutable publication.
+11. Paper stop invokes the real `LivePaperRuntime.stop()` path, waits for worker termination and cannot succeed merely by mutating metadata.
+12. Runtime/provider failure propagates to terminal `FAILED` state with truthful failure information and no false healthy status.
+13. The latest terminal `STOPPED` or `FAILED` snapshot remains observable after worker termination and is replaced only by a later successful start.
+14. The accepted public lifecycle remains `CREATED`, `RUNNING`, `STOPPED` and `FAILED` unless a separately reviewed contract change adds transitional states.
+15. Frontend code consumes backend-authoritative cash, position, equity, P&L, drawdown, trade/execution and lifecycle state and does not independently reconstruct them.
+16. Frontend API base configuration is environment/application configuration rather than a machine-specific hard-coded URL.
+17. Frontend type checking/build/lint and focused interaction tests cover Backtest and Paper loading, empty, running, stopped, failed and request-failure states at supported responsive sizes.
+18. No placeholder Backtest result, paper metadata session or commented/inert UI path is presented as validated application behavior.
+19. M8 changes do not silently alter M4/M5 Backtest/WFA economics, M7 causal paper execution/reconciliation, real-money execution boundaries, multi-symbol semantics or PivotBoss validation.
+20. M8 closure updates authoritative documentation and dispositions DW-013 with implementation evidence. DW-015 remains independently scoped unless separately approved.
+
+M9 remains responsible for final V1 end-to-end acceptance and release validation.
+
 ### Documentation
 
 - One authoritative owner exists for each fact.

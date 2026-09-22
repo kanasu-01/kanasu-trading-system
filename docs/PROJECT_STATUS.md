@@ -6,17 +6,18 @@
 |---|---|
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
-| Branch | `m7-live-paper-trading` |
+| Branch | `m8-research-paper-application` |
 | Documentation governance baseline | `2a305a5 Optimize agent context loading` |
 | Implementation verification baseline | `7dd8e34 M7.9: add paper config loader support` |
 | Latest reported test baseline | `725 passed in 6.27s`; GitHub Actions Run 92 succeeded at `7dd8e34` |
 | Current source baseline | `7dd8e34` — accepted M7.9 implementation |
+| M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P4 — Research and Paper Application |
 | Milestone | M8 — Research and paper application |
-| Step | M8 design/baseline and application integration — NEXT |
-| Lifecycle | M0–M7 DONE at accepted scopes; M8 NEXT; M9 RESERVED |
-| Next planned review | M8 design/baseline and backend-to-UI vertical-slice planning |
+| Step | M8 design baseline — IN PROGRESS; implementation NOT STARTED |
+| Lifecycle | M0–M7 DONE at accepted scopes; M8 design baseline IN PROGRESS; M9 RESERVED |
+| Next planned review | M8 design-baseline diff and approval before implementation |
 
 The final M7.9 local full suite passed 725 tests in 6.27s with exit code 0 and `git diff --check` clean before commit. GitHub Actions Run 92 completed successfully on `7dd8e34dd6d9ce32eba7e67b3321738471253fd5`.
 
@@ -309,6 +310,18 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 M0 through M7 are complete at their accepted scopes. The current implementation baseline is `7dd8e34 M7.9: add paper config loader support`.
 
 M4 closed Backtest validity, M5 closed WFA validity, M6 established the AngelOne live market-data foundation, and M7 closed paper-session integration through M7.9.
+
+M8 starts from clean commit `390c7cc313fb782de9a82dc9e6b9c04be545f7b1`. The design baseline is documentation-only: no M8 production implementation, new test evidence, staging, commit or push is implied by this status.
+
+The accepted M8 decomposition is:
+
+- M8.1 — application contracts and composition;
+- M8.2 — authoritative Backtest vertical slice;
+- M8.3 — authoritative Paper control plane;
+- M8.4 — frontend authoritative workflows; and
+- M8.5 — application integration validation and closure.
+
+M8 preserves the validated M4/M5/M7 execution and accounting semantics. Real-money execution, multi-symbol portfolio semantics, PivotBoss validation, process-restart recovery, unrelated legacy replay/export repair and broad broker-authentication redesign remain outside the M8 design baseline unless separately approved.
 
 M7 now provides:
 
