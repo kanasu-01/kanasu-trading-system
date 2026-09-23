@@ -1,52 +1,25 @@
 from fastapi import APIRouter
 
+from api.application_catalog import (
+    backtest_config_payload,
+)
+
+from api.models.backtest_models import (
+    BacktestConfigResponse,
+)
+
 router = APIRouter()
 
 
-@router.get("/config")
-async def get_backtest_config():
-    return {
-        "markets": [
-            {
-                "id": "NSE",
-                "name": "NSE",
-            },
-            {
-                "id": "BSE",
-                "name": "BSE",
-            },
-        ],
-        "symbols": [
-            {
-                "symbol": "RELIANCE",
-                "exchange": "NSE",
-            },
-            {
-                "symbol": "TCS",
-                "exchange": "NSE",
-            },
-        ],
-        "timeframes": [
-            {
-                "id": "5m",
-                "label": "5 Minutes",
-            },
-            {
-                "id": "15m",
-                "label": "15 Minutes",
-            },
-        ],
-        "strategies": [
-            {
-                "id": "sma_crossover",
-                "name": "SMA Crossover",
-            },
-            {
-                "id": "camarilla",
-                "name": "Camarilla",
-            },
-        ],
-    }
+@router.get(
+    "/config",
+    response_model=BacktestConfigResponse,
+)
+async def get_backtest_config(
+) -> BacktestConfigResponse:
+    return BacktestConfigResponse.model_validate(
+        backtest_config_payload()
+    )
 
 
 @router.post("/run")

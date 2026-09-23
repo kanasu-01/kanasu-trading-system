@@ -4,37 +4,27 @@ from core.paper_trading.paper_trading_service import (
     paper_trading_service,
 )
 
+from api.application_catalog import (
+    paper_trading_config_payload,
+)
+
 from api.models.paper_trading_models import (
+    PaperTradingConfigResponse,
     PaperTradingStartRequest,
 )
 
 router = APIRouter()
 
 
-@router.get("/config")
-async def get_paper_trading_config():
-    return {
-        "symbols": [
-            {
-                "symbol": "RELIANCE",
-                "exchange": "NSE",
-            },
-            {
-                "symbol": "TCS",
-                "exchange": "NSE",
-            },
-        ],
-        "strategies": [
-            {
-                "id": "sma_crossover",
-                "name": "SMA Crossover",
-            },
-            {
-                "id": "camarilla",
-                "name": "Camarilla",
-            },
-        ],
-    }
+@router.get(
+    "/config",
+    response_model=PaperTradingConfigResponse,
+)
+async def get_paper_trading_config(
+) -> PaperTradingConfigResponse:
+    return PaperTradingConfigResponse.model_validate(
+        paper_trading_config_payload()
+    )
 
 
 @router.post("/start")
@@ -47,6 +37,7 @@ async def start_paper_trading(
         return {
             "status": "already_running",
         }
+
     session = paper_trading_service.create_session(
         strategy_name=request.strategy_id,
         symbol=request.symbol,
