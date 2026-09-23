@@ -1,19 +1,47 @@
-from fastapi import APIRouter
+import logging
 
-from core.paper_trading.paper_trading_service import (
-    paper_trading_service,
-)
+from fastapi import APIRouter
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 
 from api.application_catalog import (
     paper_trading_config_payload,
 )
-
+from api.models.common_models import (
+    ApiErrorResponse,
+)
 from api.models.paper_trading_models import (
     PaperTradingConfigResponse,
     PaperTradingStartRequest,
+    PaperTradingStartResponse,
+    PaperTradingStatusResponse,
+    PaperTradingStopResponse,
+)
+from api.paper_trading_application import (
+    PaperLifecycleConflict,
+    paper_trading_application,
 )
 
+
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _error_response(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+) -> JSONResponse:
+    error = ApiErrorResponse(
+        code=code,
+        message=message,
+    )
+
+    return JSONResponse(
+        status_code=status_code,
+        content=error.model_dump(),
+    )
 
 
 @router.get(
@@ -27,66 +55,91 @@ async def get_paper_trading_config(
     )
 
 
-@router.post("/start")
+@router.post(
+    "/start",
+    response_model=PaperTradingStartResponse,
+    responses={
+        409: {"model": ApiErrorResponse},
+        422: {"model": ApiErrorResponse},
+        500: {"model": ApiErrorResponse},
+    },
+)
 async def start_paper_trading(
     request: PaperTradingStartRequest,
 ):
+    try:
+        return await run_in_threadpool(
+            paper_trading_application.start,
+            request,
+        )
+    except PaperLifecycleConflict:
+        return _error_response(
+            status_code=409,
+            code="paper_lifecycle_conflict",
+            message="Paper trading lifecycle conflict",
+        )
+    except Exception:
+        logger.exception(
+            "Paper trading API start failed"
+        )
 
-    if paper_trading_service.has_active_session():
-
-        return {
-            "status": "already_running",
-        }
-
-    session = paper_trading_service.create_session(
-        strategy_name=request.strategy_id,
-        symbol=request.symbol,
-        initial_capital=100000,
-    )
-
-    return {
-        "session_id": session.session_id,
-        "status": session.status,
-        "symbol": session.symbol,
-        "strategy": session.strategy_name,
-    }
-
-
-@router.post("/stop")
-async def stop_paper_trading():
-
-    session = paper_trading_service.get_session()
-
-    if session:
-
-        session.stop()
-
-        paper_trading_service.clear_session()
-
-    return {
-        "status": "stopped",
-    }
+        return _error_response(
+            status_code=500,
+            code="paper_start_failed",
+            message="Paper trading start failed",
+        )
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    response_model=PaperTradingStatusResponse,
+    responses={
+        500: {"model": ApiErrorResponse},
+    },
+)
 async def get_paper_trading_status():
+    try:
+        return await run_in_threadpool(
+            paper_trading_application.status
+        )
+    except Exception:
+        logger.exception(
+            "Paper trading API status failed"
+        )
 
-    session = paper_trading_service.get_session()
+        return _error_response(
+            status_code=500,
+            code="paper_status_failed",
+            message="Paper trading status failed",
+        )
 
-    if session is None:
 
-        return {
-            "status": "STOPPED",
-            "strategy": None,
-            "symbol": None,
-            "started_at": None,
-        }
+@router.post(
+    "/stop",
+    response_model=PaperTradingStopResponse,
+    responses={
+        409: {"model": ApiErrorResponse},
+        500: {"model": ApiErrorResponse},
+    },
+)
+async def stop_paper_trading():
+    try:
+        return await run_in_threadpool(
+            paper_trading_application.stop
+        )
+    except PaperLifecycleConflict:
+        return _error_response(
+            status_code=409,
+            code="paper_lifecycle_conflict",
+            message="Paper trading lifecycle conflict",
+        )
+    except Exception:
+        logger.exception(
+            "Paper trading API stop failed"
+        )
 
-    snapshot = session.snapshot()
-
-    return {
-        "status": snapshot.status,
-        "strategy": snapshot.strategy_name,
-        "symbol": snapshot.symbol,
-        "started_at": snapshot.started_at,
-    }
+        return _error_response(
+            status_code=500,
+            code="paper_stop_failed",
+            message="Paper trading stop failed",
+        )

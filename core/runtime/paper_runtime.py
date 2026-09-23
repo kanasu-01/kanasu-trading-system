@@ -1,6 +1,8 @@
 import re
 import threading
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 
 from core.logging.logger import get_logger
@@ -122,27 +124,34 @@ def run_paper_trading(
 
 
 
-def run_live_paper_trading(
+@dataclass(frozen=True)
+class PreparedLivePaperRun:
+    """Prepared authoritative live-paper graph ready for execution."""
+
+    session: PaperTradingSession
+    runtime: LivePaperRuntime
+    state_lock: object
+    session_end: datetime
+    now: Callable[[], datetime]
+    clock_interval_seconds: float
+
+
+def prepare_live_paper_trading(
     *,
     feed: ManagedLiveCandleFeed,
     strategy: BaseStrategy,
     runtime_context: RuntimeContext,
     dataset_context: DatasetContext,
-    session_end,
-    now,
+    session_end: datetime,
+    now: Callable[[], datetime],
     reconnect_attempts: int,
     reconnect_delay_seconds: float,
     clock_interval_seconds: float,
     initial_capital: float = 100000,
     history_bars=None,
     historical_source=None,
-) -> PaperTradingSession:
-    """Run one supervised live-market-data paper session."""
-
-    logger.info(
-        f"LIVE PAPER TRADING STARTED | "
-        f"Symbol={dataset_context.symbol}"
-    )
+) -> PreparedLivePaperRun:
+    """Prepare one authoritative M7 live-paper graph without starting it."""
 
     session = PaperTradingSession(
         session_id=_create_paper_session_id(
@@ -171,10 +180,9 @@ def run_live_paper_trading(
     session.strategy_runner = processor.strategy_runner
     session.execution_engine = processor.execution_engine
 
-    session.start()
+    state_lock = threading.RLock()
 
     reconciliation_active = False
-    reconciliation_lock = threading.Lock()
     pending_recovery_range = None
     reconciliation_generation = 0
 
@@ -183,14 +191,14 @@ def run_live_paper_trading(
         nonlocal pending_recovery_range
         nonlocal reconciliation_generation
 
-        with reconciliation_lock:
+        with state_lock:
             processor.begin_live_reconciliation()
             reconciliation_generation += 1
             reconciliation_active = True
             pending_recovery_range = None
 
     def handle_completed_candle(candle) -> None:
-        with reconciliation_lock:
+        with state_lock:
             if reconciliation_active:
                 return
 
@@ -202,7 +210,7 @@ def run_live_paper_trading(
     ) -> None:
         nonlocal pending_recovery_range
 
-        with reconciliation_lock:
+        with state_lock:
             if not reconciliation_active:
                 processor.on_live_market_update(
                     update,
@@ -210,8 +218,6 @@ def run_live_paper_trading(
                 )
                 return
 
-            # Reconciliation freezes new strategy execution, but newly
-            # observed live prices must immediately protect existing exposure.
             processor.on_live_market_update(
                 update,
                 False,
@@ -231,7 +237,7 @@ def run_live_paper_trading(
         nonlocal reconciliation_active
         nonlocal pending_recovery_range
 
-        with reconciliation_lock:
+        with state_lock:
             if (
                 not reconciliation_active
                 or pending_recovery_range is None
@@ -250,9 +256,6 @@ def run_live_paper_trading(
                     "for reconnect reconciliation"
                 )
 
-            # Deliberately outside reconciliation_lock: provider callbacks
-            # must continue processing current live prices while historical
-            # retrieval is in progress.
             recovered_candles = historical_source.retrieve(
                 dataset_context,
                 TimeRange(
@@ -261,9 +264,7 @@ def run_live_paper_trading(
                 ),
             )
 
-            with reconciliation_lock:
-                # A newer provider gap/boundary may have superseded this
-                # request while retrieval was running.
+            with state_lock:
                 if (
                     not reconciliation_active
                     or reconciliation_generation
@@ -282,9 +283,7 @@ def run_live_paper_trading(
                 reconciliation_active = False
 
         except Exception:
-            with reconciliation_lock:
-                # Successes and failures from superseded reconciliation
-                # epochs are both causally obsolete.
+            with state_lock:
                 if (
                     not reconciliation_active
                     or reconciliation_generation
@@ -320,24 +319,100 @@ def run_live_paper_trading(
         reconnect_delay_seconds=reconnect_delay_seconds,
     )
 
+    return PreparedLivePaperRun(
+        session=session,
+        runtime=supervisor,
+        state_lock=state_lock,
+        session_end=session_end,
+        now=now,
+        clock_interval_seconds=clock_interval_seconds,
+    )
+
+
+def execute_prepared_live_paper_trading(
+    prepared: PreparedLivePaperRun,
+) -> PaperTradingSession:
+    """Execute one previously prepared authoritative live-paper graph."""
+
+    session = prepared.session
+
+    logger.info(
+        f"LIVE PAPER TRADING STARTED | "
+        f"Symbol={session.symbol}"
+    )
+
+    with prepared.state_lock:
+        session.start()
+
     try:
-        supervisor.run_until(
-            session_end=session_end,
-            now=now,
-            clock_interval_seconds=clock_interval_seconds,
+        prepared.runtime.run_until(
+            session_end=prepared.session_end,
+            now=prepared.now,
+            clock_interval_seconds=(
+                prepared.clock_interval_seconds
+            ),
         )
     except Exception as exc:
-        session.fail(exc)
+        with prepared.state_lock:
+            session.fail(exc)
+
         logger.exception(
-            f"LIVE PAPER TRADING FAILED | Symbol={dataset_context.symbol}"
+            f"LIVE PAPER TRADING FAILED | "
+            f"Symbol={session.symbol}"
         )
         raise
     else:
-        session.stop()
+        with prepared.state_lock:
+            session.stop()
+
+    with prepared.state_lock:
+        engine = session.execution_engine
+        completed_trade_count = (
+            len(engine.completed_trades)
+            if engine is not None
+            else 0
+        )
 
     logger.info(
         f"LIVE PAPER TRADING COMPLETED | "
-        f"Trades={len(processor.execution_engine.completed_trades)}"
+        f"Trades={completed_trade_count}"
     )
 
     return session
+
+
+def run_live_paper_trading(
+    *,
+    feed: ManagedLiveCandleFeed,
+    strategy: BaseStrategy,
+    runtime_context: RuntimeContext,
+    dataset_context: DatasetContext,
+    session_end,
+    now,
+    reconnect_attempts: int,
+    reconnect_delay_seconds: float,
+    clock_interval_seconds: float,
+    initial_capital: float = 100000,
+    history_bars=None,
+    historical_source=None,
+) -> PaperTradingSession:
+    """Run one supervised live-market-data paper session."""
+
+    prepared = prepare_live_paper_trading(
+        feed=feed,
+        strategy=strategy,
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+        session_end=session_end,
+        now=now,
+        reconnect_attempts=reconnect_attempts,
+        reconnect_delay_seconds=reconnect_delay_seconds,
+        clock_interval_seconds=clock_interval_seconds,
+        initial_capital=initial_capital,
+        history_bars=history_bars,
+        historical_source=historical_source,
+    )
+
+    return execute_prepared_live_paper_trading(
+        prepared
+    )

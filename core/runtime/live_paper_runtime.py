@@ -1,4 +1,5 @@
 import threading
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
@@ -85,11 +86,13 @@ class LivePaperRuntime:
         self._join_timeout_seconds = join_timeout_seconds
 
         self._stop_event = threading.Event()
+        self._started_event = threading.Event()
         self._completed_state_started = threading.Event()
         self._callback_lock = threading.Lock()
         self._callbacks_open = False
         self._session_end: datetime | None = None
         self._failure_lock = threading.Lock()
+        self._stop_lock = threading.Lock()
 
         self._provider_thread: threading.Thread | None = None
         self._provider_failure: Exception | None = None
@@ -103,6 +106,16 @@ class LivePaperRuntime:
 
         return self._provider_thread
 
+    def wait_until_started(
+        self,
+        timeout_seconds: float | None = None,
+    ) -> bool:
+        """Wait until the provider thread has actually been started."""
+
+        return self._started_event.wait(
+            timeout_seconds
+        )
+
     def start(self) -> None:
         if self._provider_thread is not None:
             raise RuntimeError(
@@ -110,6 +123,7 @@ class LivePaperRuntime:
             )
 
         self._stop_event.clear()
+        self._started_event.clear()
         self._completed_state_started.clear()
 
         with self._callback_lock:
@@ -126,25 +140,53 @@ class LivePaperRuntime:
 
         self._provider_thread = thread
         thread.start()
+        self._started_event.set()
 
     def stop(self) -> None:
-        thread = self._provider_thread
+        # API stop and run_until() cleanup may race. Serialize the
+        # shutdown authority so provider close/join operations never
+        # execute concurrently.
+        with self._stop_lock:
+            thread = self._provider_thread
 
-        if thread is None:
-            return
+            if thread is None:
+                return
 
-        self._stop_event.set()
-        self._close_callback_admission()
-        self._feed.close()
+            self._stop_event.set()
+            self._close_callback_admission()
 
-        thread.join(
-            timeout=self._join_timeout_seconds,
-        )
-
-        if thread.is_alive():
-            raise RuntimeError(
-                "Live paper provider thread did not stop"
+            deadline = (
+                time.monotonic()
+                + self._join_timeout_seconds
             )
+
+            while thread.is_alive():
+                # A stop may race provider startup before subscribe/connect
+                # has become closeable, so repeat the idempotent close while
+                # waiting for provider termination.
+                self._feed.close()
+
+                remaining = (
+                    deadline - time.monotonic()
+                )
+
+                if remaining <= 0:
+                    break
+
+                thread.join(
+                    timeout=min(
+                        0.05,
+                        remaining,
+                    )
+                )
+
+            if not thread.is_alive():
+                self._feed.close()
+
+            if thread.is_alive():
+                raise RuntimeError(
+                    "Live paper provider thread did not stop"
+                )
 
     def advance_time(
         self,

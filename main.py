@@ -1,6 +1,6 @@
 # main.py (root)
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytz
 from core.runtime.walk_forward_runtime import (
@@ -27,6 +27,9 @@ from core.runtime.dataset_context import DatasetContext
 from core.runtime.live_paper_session import (
     resolve_live_paper_session_window,
 )
+from core.runtime.live_paper_warmup import (
+    load_live_paper_warmup,
+)
 from dotenv import load_dotenv
 from core.runtime.paper_runtime import (
     run_live_paper_trading,
@@ -45,7 +48,6 @@ from core.broker.angelone_config import AngelOneConfig
 from core.market_data.csv_candle_loader import (
     load_candles_from_csv,
 )
-from core.market_data.historical_coverage import TimeRange
 from core.market_data.historical_source_factory import (
     create_historical_source,
 )
@@ -56,129 +58,6 @@ logging.basicConfig(
     level=logging.INFO,
     format=("%(asctime)s | " "%(levelname)s | " "%(name)s | " "%(message)s"),
 )
-
-
-_LIVE_TIMEFRAME_MINUTES = {
-    "1m": 1,
-    "3m": 3,
-    "5m": 5,
-    "10m": 10,
-    "15m": 15,
-    "30m": 30,
-    "1h": 60,
-}
-
-
-def _load_live_paper_warmup(
-    *,
-    app_config: AppConfig,
-    historical_source,
-    strategy,
-    dataset_context: DatasetContext,
-    current_time: datetime,
-    session_start: datetime,
-) -> list:
-    warmup_method = getattr(
-        strategy,
-        "warmup_bars",
-        None,
-    )
-    warmup_bars = (
-        warmup_method()
-        if callable(warmup_method)
-        else 0
-    )
-
-    if (
-        isinstance(warmup_bars, bool)
-        or not isinstance(warmup_bars, int)
-        or warmup_bars < 0
-    ):
-        raise ValueError(
-            "strategy warmup_bars must be a non-negative integer"
-        )
-
-    if warmup_bars == 0:
-        return []
-
-    timeframe = dataset_context.timeframe
-    if timeframe not in _LIVE_TIMEFRAME_MINUTES:
-        raise ValueError(
-            f"unsupported live warm-up timeframe: {timeframe}"
-        )
-
-    session_start_wall = app_config.paper_session_start
-    session_end_wall = app_config.paper_session_end
-
-    start_seconds = (
-        session_start_wall.hour * 3600
-        + session_start_wall.minute * 60
-        + session_start_wall.second
-    )
-    end_seconds = (
-        session_end_wall.hour * 3600
-        + session_end_wall.minute * 60
-        + session_end_wall.second
-    )
-    session_minutes = (end_seconds - start_seconds) // 60
-
-    timeframe_minutes = _LIVE_TIMEFRAME_MINUTES[timeframe]
-
-    interval = timedelta(
-        minutes=timeframe_minutes,
-    )
-    elapsed = current_time - session_start
-
-    if elapsed.total_seconds() < 0:
-        raise RuntimeError(
-            "live paper warm-up cannot precede session start"
-        )
-
-    bucket_index = int(
-        elapsed.total_seconds()
-        // interval.total_seconds()
-    )
-    history_end = (
-        session_start
-        + interval * bucket_index
-    )
-
-    bars_per_session = max(
-        1,
-        session_minutes // timeframe_minutes,
-    )
-    required_sessions = (
-        warmup_bars + bars_per_session - 1
-    ) // bars_per_session
-
-    # Calendar lookback deliberately exceeds the minimum trading-session
-    # count so weekends and ordinary exchange holidays do not silently
-    # starve strategy warm-up. Exact sufficiency is validated below.
-    lookback_days = max(
-        7,
-        required_sessions * 2 + 2,
-    )
-
-    request = TimeRange(
-        start=(
-            history_end
-            - timedelta(days=lookback_days)
-        ),
-        end=history_end,
-    )
-
-    history = historical_source.retrieve(
-        dataset_context,
-        request,
-    )
-
-    if len(history) < warmup_bars:
-        raise RuntimeError(
-            "insufficient historical warm-up for live paper strategy: "
-            f"required={warmup_bars}, available={len(history)}"
-        )
-
-    return history[-warmup_bars:]
 
 
 def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
@@ -262,7 +141,7 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
                 app_config
             )
 
-            history_bars = _load_live_paper_warmup(
+            history_bars = load_live_paper_warmup(
                 app_config=app_config,
                 historical_source=historical_source,
                 strategy=strategy,
