@@ -1,6 +1,9 @@
 from core.backtest.backtest_engine import (
     BacktestEngine,
 )
+from core.backtest.backtest_result import (
+    BacktestResult,
+)
 
 from core.backtest.backtest_runner import (
     print_performance_summary,
@@ -22,13 +25,15 @@ from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 
 
-def run_backtest(
+def execute_backtest(
     historical_source: HistoricalSource,
     strategy: BaseStrategy,
     config: BacktestConfig,
     runtime_context: RuntimeContext,
     dataset_context: DatasetContext,
-) -> None:
+) -> BacktestResult:
+    """Execute the authoritative Backtest path without presentation side effects."""
+
     candles = historical_source.retrieve(
         dataset_context,
         TimeRange(config.start, config.end),
@@ -40,9 +45,26 @@ def run_backtest(
         runtime_context=runtime_context,
         dataset_context=dataset_context,
     )
-    backtest_result = engine.run_stream(candles)
 
-    ## Performance metrics OR Backtest summary report
+    return engine.run_stream(candles)
+
+
+def run_backtest(
+    historical_source: HistoricalSource,
+    strategy: BaseStrategy,
+    config: BacktestConfig,
+    runtime_context: RuntimeContext,
+    dataset_context: DatasetContext,
+) -> None:
+    backtest_result = execute_backtest(
+        historical_source=historical_source,
+        strategy=strategy,
+        config=config,
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+    )
+
+    # Performance metrics OR Backtest summary report
     print_performance_summary(backtest_result)
 
     if config.enable_replay:
@@ -51,14 +73,12 @@ def run_backtest(
             records=backtest_result.bar_records,
         )
 
-    # EXPORTS (CSV/JSON for replay)
     if config.enable_exports:
         export_backtest_records(
             result=backtest_result,
             config=config,
         )
 
-    # Visualization
     if config.enable_visualization:
         visualize_backtest(
             strategy=strategy,
