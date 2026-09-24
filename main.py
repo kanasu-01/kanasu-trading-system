@@ -156,6 +156,12 @@ def main(app_config: AppConfig, backtest_config: BacktestConfig) -> None:
                 config=angelone_config,
                 paper_mode=True,
                 enable_historical_api=False,
+                login_retry_attempts=(
+                    app_config.broker_retry_attempts
+                ),
+                login_retry_delay_seconds=(
+                    app_config.broker_retry_delay_sec
+                ),
             )
             broker.login()
 

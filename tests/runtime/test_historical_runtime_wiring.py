@@ -353,11 +353,19 @@ def test_main_paper_angelone_composes_live_feed_and_supervisor(
             config,
             paper_mode,
             enable_historical_api,
+            login_retry_attempts,
+            login_retry_delay_seconds,
         ):
             captured["broker_config"] = config
             captured["paper_mode"] = paper_mode
             captured["enable_historical_api"] = (
                 enable_historical_api
+            )
+            captured["login_retry_attempts"] = (
+                login_retry_attempts
+            )
+            captured["login_retry_delay_seconds"] = (
+                login_retry_delay_seconds
             )
 
         def login(self):
@@ -439,6 +447,8 @@ def test_main_paper_angelone_composes_live_feed_and_supervisor(
     assert captured["broker_config"] is angelone_config
     assert captured["paper_mode"] is True
     assert captured["enable_historical_api"] is False
+    assert captured["login_retry_attempts"] == 3
+    assert captured["login_retry_delay_seconds"] == 1.5
     assert captured["login"] is True
 
     assert captured["feed_kwargs"] == {
@@ -665,6 +675,8 @@ def test_main_paper_angelone_retrieves_strategy_warmup_before_live_session(
             config,
             paper_mode,
             enable_historical_api,
+            login_retry_attempts,
+            login_retry_delay_seconds,
         ):
             pass
 
@@ -790,6 +802,8 @@ def test_main_paper_angelone_revalidates_session_after_provider_setup(
             config,
             paper_mode,
             enable_historical_api,
+            login_retry_attempts,
+            login_retry_delay_seconds,
         ):
             pass
 
@@ -890,6 +904,8 @@ def test_main_paper_angelone_passes_historical_source_to_live_runtime(
             config,
             paper_mode,
             enable_historical_api,
+            login_retry_attempts,
+            login_retry_delay_seconds,
         ):
             pass
 

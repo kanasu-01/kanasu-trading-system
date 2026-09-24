@@ -4,6 +4,7 @@ import pytz
 import pytest
 
 import core.broker.angelone as angelone_module
+import core.utils.retry as retry_module
 from core.broker.angelone import AngelOneBroker
 from core.broker.angelone_config import AngelOneConfig
 from core.market_data.angelone_live_market_data import (
@@ -471,3 +472,124 @@ def test_downstream_connection_error_is_still_fatal_not_reconnectable():
         exc_info.value.__cause__
     ) == "strategy callback connection-shaped failure"
     assert created[0].closed is True
+
+
+def test_broker_login_uses_configured_retry_policy(
+    monkeypatch,
+):
+    attempts = []
+    sleeps = []
+
+    class FlakySmartConnect:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def generateSession(
+            self,
+            client_id,
+            client_pin,
+            totp,
+        ):
+            attempts.append(1)
+
+            if len(attempts) < 3:
+                raise ConnectionError(
+                    "temporary login failure"
+                )
+
+            return {
+                "data": {
+                    "jwtToken": "Bearer jwt-token",
+                }
+            }
+
+        def getfeedToken(self):
+            return "feed-token"
+
+    monkeypatch.setattr(
+        angelone_module,
+        "SmartConnect",
+        FlakySmartConnect,
+    )
+    monkeypatch.setattr(
+        angelone_module.pyotp,
+        "TOTP",
+        FakeTOTP,
+    )
+    monkeypatch.setattr(
+        retry_module.time,
+        "sleep",
+        sleeps.append,
+    )
+
+    broker = AngelOneBroker(
+        _config(),
+        login_retry_attempts=3,
+        login_retry_delay_seconds=0.25,
+    )
+
+    assert broker.login() is True
+    assert len(attempts) == 3
+    assert sleeps == [0.25, 0.25]
+
+
+def test_broker_login_exhausts_configured_retry_policy(
+    monkeypatch,
+):
+    attempts = []
+    sleeps = []
+
+    class FailingSmartConnect:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def generateSession(
+            self,
+            client_id,
+            client_pin,
+            totp,
+        ):
+            attempts.append(1)
+            raise ConnectionError(
+                "persistent login failure"
+            )
+
+        def getfeedToken(self):
+            pytest.fail(
+                "feed token requested after failed login"
+            )
+
+    monkeypatch.setattr(
+        angelone_module,
+        "SmartConnect",
+        FailingSmartConnect,
+    )
+    monkeypatch.setattr(
+        angelone_module.pyotp,
+        "TOTP",
+        FakeTOTP,
+    )
+    monkeypatch.setattr(
+        retry_module.time,
+        "sleep",
+        sleeps.append,
+    )
+
+    broker = AngelOneBroker(
+        _config(),
+        login_retry_attempts=3,
+        login_retry_delay_seconds=0.25,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="AngelOne login request failed",
+    ) as exc_info:
+        broker.login()
+
+    assert isinstance(
+        exc_info.value.__cause__,
+        ConnectionError,
+    )
+    assert len(attempts) == 3
+    assert sleeps == [0.25, 0.25]

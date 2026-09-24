@@ -1,6 +1,5 @@
 from typing import Optional, List
 from datetime import datetime
-import time
 import pytz
 import pyotp
 
@@ -12,6 +11,7 @@ from core.execution.order_response import OrderResponse, OrderStatus
 from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
 from core.logging.logger import get_logger
+from core.utils.retry import RetryPolicy
 
 
 class AngelOneBroker(BaseBroker):
@@ -27,10 +27,16 @@ class AngelOneBroker(BaseBroker):
         config: AngelOneConfig,
         paper_mode: bool = True,
         enable_historical_api: bool = False,
+        login_retry_attempts: int = 2,
+        login_retry_delay_seconds: float = 2.0,
     ):
         self.config = config
         self.paper_mode = paper_mode
         self.enable_historical_api = enable_historical_api
+        self.login_retry_attempts = login_retry_attempts
+        self.login_retry_delay_seconds = (
+            login_retry_delay_seconds
+        )
 
         self._logged_in = False
         self._api: Optional[SmartConnect] = None
@@ -59,31 +65,25 @@ class AngelOneBroker(BaseBroker):
 
         totp = pyotp.TOTP(self.config.totp_secret).now()
 
-        session = None
+        retry_policy = RetryPolicy(
+            max_retries=self.login_retry_attempts,
+            delay_seconds=self.login_retry_delay_seconds,
+        )
 
-        for attempt in range(2):
-
-            try:
-
-                session = self._api.generateSession(
-                    self.config.client_id,
-                    self.config.client_pin,
-                    totp,
-                )
-
-                break
-
-            except Exception as e:
-
-                self.logger.exception(
-                    f"AngelOne login attempt failed | " f"Attempt={attempt + 1}"
-                )
-
-                if attempt == 1:
-
-                    raise RuntimeError("AngelOne login request failed") from e
-
-                time.sleep(2)
+        try:
+            session = retry_policy.execute(
+                self._api.generateSession,
+                self.config.client_id,
+                self.config.client_pin,
+                totp,
+            )
+        except Exception as e:
+            self.logger.exception(
+                "AngelOne login request failed"
+            )
+            raise RuntimeError(
+                "AngelOne login request failed"
+            ) from e
 
         if not isinstance(session, dict):
             raise RuntimeError("AngelOne login failed: invalid session response")
