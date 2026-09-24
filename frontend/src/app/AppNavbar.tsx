@@ -12,12 +12,7 @@ const linkStyle = {
 
 export function AppNavbar() {
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 8,
-      }}
-    >
+    <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
       <NavLink
         to="/"
         style={({ isActive }) => ({

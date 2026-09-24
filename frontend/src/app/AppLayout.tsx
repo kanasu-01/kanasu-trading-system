@@ -10,59 +10,18 @@ type Props = {
 
 export function AppLayout({ children }: Props) {
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "#020617",
-        color: "#e2e8f0",
-      }}
-    >
+    <div className="flex h-screen flex-col bg-slate-950 text-slate-200">
       {/* TOP BAR */}
-      <div
-        style={{
-          height: 52,
-
-          borderBottom: "1px solid #1e293b",
-
-          display: "flex",
-
-          alignItems: "center",
-
-          justifyContent: "space-between",
-
-          paddingLeft: 16,
-          paddingRight: 16,
-
-          flexShrink: 0,
-        }}
-      >
+      <div className="flex min-h-[52px] flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-2">
         <strong>Kanasu Trading System</strong>
 
         <AppNavbar />
       </div>
 
       {/* BODY */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          minHeight: 0,
-        }}
-      >
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* SIDEBAR */}
-        <div
-          style={{
-            width: 220,
-
-            borderRight: "1px solid #1e293b",
-
-            padding: 12,
-
-            flexShrink: 0,
-          }}
-        >
+        <div className="w-full flex-shrink-0 border-b border-slate-800 p-3 md:w-[220px] md:border-b-0 md:border-r">
           <div
             style={{
               fontSize: 13,
@@ -83,13 +42,7 @@ export function AppLayout({ children }: Props) {
         </div>
 
         {/* PAGE CONTENT */}
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            minHeight: 0,
-          }}
-        >
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto">
           {children}
         </div>
       </div>

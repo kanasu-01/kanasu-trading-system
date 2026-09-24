@@ -26,7 +26,7 @@ const pages = [
   {
     title: "Portfolio",
     path: "/portfolio",
-    description: "Analyze portfolio and PnL",
+    description: "Coming soon - portfolio analytics",
   },
 ];
 

@@ -128,14 +128,18 @@ Required work: decide which public paths remain supported, write compatibility t
 
 ## DW-013 — API Placeholders and Paper Runtime Disconnection
 
-**Status:** OPEN
-**Target:** M8.
+**Status:** RESOLVED AT M8 APPLICATION SCOPE
+**Resolution scope:** M8 authoritative Backtest/Paper application boundary.
 
-The authoritative M7 paper runtime now exists, but current paper API endpoints still create and stop singleton metadata state rather than starting, stopping and observing that runtime.
+M8.2 replaced the fixed Backtest API result with the real historical-source → validated strategy → `BacktestEngine` path and returns the actual `BacktestResult.session_id`, result-aware metrics, equity and completed trades.
 
-The backtest run API still returns a fixed mock result.
+M8.3 replaced metadata-only paper ownership with one process-local application-owned authoritative `PaperTradingSession` / `LivePaperRuntime` handle, synchronized status, real runtime stop/worker termination, runtime-failure propagation and retained terminal snapshots.
 
-Required work: replace placeholders through bounded backend-to-UI vertical slices using real research jobs/results and `PaperTradingSession.snapshot()`-backed paper state. Do not reconstruct account authority in frontend code.
+M8.4 connected the frontend to these authoritative contracts, removed machine-specific API configuration and presents backend-owned Backtest/Paper state rather than reconstructing account authority in React.
+
+M8.5 integration and closure validation passes 58 API/application tests, 792 full Python tests and 17 frontend tests. Production build, lint and responsive desktop/mobile browser smoke pass. M8.5c required only a bounded frontend-shell correction for responsive composition plus truthful Portfolio coming-soon wording; it did not change trading/runtime/broker authority.
+
+This resolution does not claim process-restart recovery, reusable broker-session/authentication lifecycle, real-money execution, legacy Replay/export repair or multi-symbol portfolio semantics. Those remain separately scoped.
 ## DW-014 — SQLite Chronology Indexing and Legacy Timestamp-State Migration
 
 **Status:** DEFERRED
@@ -178,6 +182,25 @@ Required future behavior:
 - add deterministic tests for already-authenticated reuse, initial login, expired/invalid-session recovery, authentication failure and concurrent or repeated capability requests.
 
 Do not implement this behavior now.
+
+## DW-016 — AngelOne Historical Negative-Volume Anomaly
+
+**Status:** DEFERRED
+**Target:** Future broker/historical-provider hardening under separately approved scope.
+
+During M8.4 broker-backed historical verification, one raw AngelOne 5-minute historical row was observed with negative volume:
+
+- timestamp: `2024-03-02T11:15:00+05:30`
+- OHLC: `1497.0 / 1497.0 / 1497.0 / 1497.0`
+- volume: `-444538`
+
+The canonical `Candle` contract correctly rejects negative volume. The current AngelOne adapter passes the provider volume through unchanged, so a request containing this row fails rather than silently repairing invalid canonical data.
+
+A read-only scan performed during diagnosis examined 92,465 5-minute rows and 30,842 15-minute rows. The 5-minute scan contained one negative-volume row; the 15-minute scan contained none. Across 123,307 scanned rows, the observed negative-volume count was one.
+
+The issue was explicitly deferred during M8.4. No normalization, clamping, skipping, quarantine or provider-specific repair is authorized by this entry.
+
+Future work, if approved, must define the provider-boundary policy, preserve the canonical non-negative-volume invariant, define retrieval/coverage behavior when a raw provider row is rejected or quarantined, and add deterministic regression evidence without weakening `Candle` validation.
 
 ## Maintenance
 

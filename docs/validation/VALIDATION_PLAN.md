@@ -120,7 +120,7 @@ The implementation currently exposes `CREATED`, `RUNNING`, `STOPPED` and `FAILED
 
 ### M8 — Research and Paper Application
 
-**Status:** DESIGN BASELINE / implementation not yet validated
+**Status:** DONE/CLOSED at accepted M8 application scope
 
 M8 validates the application boundary without reopening accepted M4/M5/M7 trading semantics. Required evidence is:
 
@@ -140,13 +140,39 @@ M8 validates the application boundary without reopening accepted M4/M5/M7 tradin
 14. The accepted public lifecycle remains `CREATED`, `RUNNING`, `STOPPED` and `FAILED` unless a separately reviewed contract change adds transitional states.
 15. Frontend code consumes backend-authoritative cash, position, equity, P&L, drawdown, trade/execution and lifecycle state and does not independently reconstruct them.
 16. Frontend API base configuration is environment/application configuration rather than a machine-specific hard-coded URL.
-17. Frontend type checking/build/lint and focused interaction tests cover Backtest and Paper loading, empty, running, stopped, failed and request-failure states at supported responsive sizes.
+17. Frontend type checking/build/lint and focused interaction tests cover Backtest and Paper loading, empty, running, stopped, failed and request-failure states, with responsive behavior additionally checked through browser smoke at supported desktop/mobile widths.
 18. No placeholder Backtest result, paper metadata session or commented/inert UI path is presented as validated application behavior.
 19. M8 changes do not silently alter M4/M5 Backtest/WFA economics, M7 causal paper execution/reconciliation, real-money execution boundaries, multi-symbol semantics or PivotBoss validation.
 20. M8 closure updates authoritative documentation and dispositions DW-013 with implementation evidence. DW-015 remains independently scoped unless separately approved.
 
-M9 remains responsible for final V1 end-to-end acceptance and release validation.
+Implementation evidence through M8.4:
 
+- M8 design baseline: `f86a6dd Baseline M8 research and paper application design`
+- M8.1: `a31ad067 Implement M8.1 application contracts`
+- M8.2: `9ec54f1 Implement M8.2 authoritative backtest API`
+- M8.3: `e57e085 Implement M8.3 authoritative paper control plane`
+- M8.4: `3694a2e Implement M8.4 authoritative frontend workflows`
+- M8.4 final Python regression: 788 passed
+- M8.4 frontend tests: 4 passed; production build and lint passed
+- real broker-backed historical Backtest path was exercised successfully for a bounded RELIANCE interval without placing orders
+
+Final M8.5 closure evidence:
+
+- closure parent baseline: `83ae719 Harden AngelOne login retry configuration`
+- API/application validation: 58 passed
+- complete Python regression: 792 passed in 7.56s
+- frontend focused validation: 17 passed across five test files
+- frontend production build and lint: passed; the Vite chunk-size warning remains advisory
+- placeholder/drift search across API/frontend: no matches
+- `git diff --check`: passed
+- deterministic Paper integration validation uses controlled runtime/account authority and does not contact AngelOne or place orders
+- M8.5c corrected only responsive application-shell composition and truthful Portfolio coming-soon presentation; Backtest/Paper execution semantics, broker/runtime authority and the real-money boundary were unchanged
+- desktop and Tailscale-connected mobile browser smoke passed for Home, Backtest and Paper presentation/navigation
+- live Paper start was intentionally not exercised during browser smoke; M9 retains final V1 end-to-end acceptance responsibility
+
+M8 is DONE/CLOSED at the accepted application scope.
+
+M9 remains responsible for final V1 end-to-end acceptance and release validation.
 ### Documentation
 
 - One authoritative owner exists for each fact.

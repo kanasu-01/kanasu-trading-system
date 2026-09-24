@@ -8,19 +8,20 @@
 | Migration baseline | 2026-09-13 |
 | Branch | `m8-research-paper-application` |
 | Documentation governance baseline | `2a305a5 Optimize agent context loading` |
-| Implementation verification baseline | `7dd8e34 M7.9: add paper config loader support` |
-| Latest reported test baseline | `725 passed in 6.27s`; GitHub Actions Run 92 succeeded at `7dd8e34` |
-| Current source baseline | `7dd8e34` — accepted M7.9 implementation |
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
+| M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
+| M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
+| Latest full Python regression | M8.5: `792 passed in 7.56s` |
+| Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
+| Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P4 — Research and Paper Application |
 | Milestone | M8 — Research and paper application |
-| Step | M8 design baseline — IN PROGRESS; implementation NOT STARTED |
-| Lifecycle | M0–M7 DONE at accepted scopes; M8 design baseline IN PROGRESS; M9 RESERVED |
-| Next planned review | M8 design-baseline diff and approval before implementation |
+| Step | M8.5 - application integration validation and closure - DONE |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9 RESERVED |
+| Next planned review | M9 V1 acceptance and release validation |
 
-The final M7.9 local full suite passed 725 tests in 6.27s with exit code 0 and `git diff --check` clean before commit. GitHub Actions Run 92 completed successfully on `7dd8e34dd6d9ce32eba7e67b3321738471253fd5`.
-
+M8.1-M8.4 implementation is committed through `3694a2e07cd43289b68cd8bb04755d2c508ff67a`. M8.5 closure validation ran on parent baseline `83ae719f15ba0d5f681b35b955dbf46cad6b8ce9`. The closure candidate adds integration tests, synchronized closure documentation and a bounded responsive-shell correction; it does not change Backtest/Paper trading authority, broker/runtime semantics or the real-money boundary.
 ## Completed foundation
 
 - M0 — Repository / foundation hygiene
@@ -307,48 +308,35 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M0 through M7 are complete at their accepted scopes. The current implementation baseline is `7dd8e34 M7.9: add paper config loader support`.
+M0 through M8 are complete at their accepted scopes. M8.5 closes application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
 
-M4 closed Backtest validity, M5 closed WFA validity, M6 established the AngelOne live market-data foundation, and M7 closed paper-session integration through M7.9.
+The accepted M8 implementation chain is:
 
-M8 starts from clean commit `390c7cc313fb782de9a82dc9e6b9c04be545f7b1`. The design baseline is documentation-only: no M8 production implementation, new test evidence, staging, commit or push is implied by this status.
+- design baseline `f86a6dd` — research and paper application design;
+- M8.1 `a31ad067` — application contracts and composition;
+- M8.2 `9ec54f1` — authoritative Backtest API;
+- M8.3 `e57e085` — authoritative Paper control plane; and
+- M8.4 `3694a2e` — authoritative frontend workflows.
 
-The accepted M8 decomposition is:
+The Backtest application now executes the real historical-source → validated strategy → `BacktestEngine` path, exposes the actual `BacktestResult.session_id`, uses result-aware account/trade metrics and projects authoritative equity/trade results.
 
-- M8.1 — application contracts and composition;
-- M8.2 — authoritative Backtest vertical slice;
-- M8.3 — authoritative Paper control plane;
-- M8.4 — frontend authoritative workflows; and
-- M8.5 — application integration validation and closure.
+The Paper application now owns one process-local authoritative M7 runtime handle, exposes `PaperTradingSession.snapshot()` state, controls the real runtime stop path, waits for worker termination and retains terminal `STOPPED` or `FAILED` state.
 
-M8 preserves the validated M4/M5/M7 execution and accounting semantics. Real-money execution, multi-symbol portfolio semantics, PivotBoss validation, process-restart recovery, unrelated legacy replay/export repair and broad broker-authentication redesign remain outside the M8 design baseline unless separately approved.
+The frontend consumes these authoritative Backtest and Paper contracts through environment/same-origin API configuration. It does not independently reconstruct portfolio, P&L, drawdown or lifecycle authority.
 
-M7 now provides:
+M8.5 validation is green. API/application validation passes 58 tests; the complete Python regression passes 792 tests. Frontend validation passes 17 tests across five files, production build and lint pass, the placeholder/drift search finds no matches and `git diff --check` passes. M8.5c applies only a bounded responsive application-shell correction and truthful Portfolio coming-soon wording. Desktop and Tailscale-connected mobile browser smoke passed for the Home, Backtest and Paper UI; live Paper start was intentionally not exercised during browser smoke.
 
-- AngelOne real-market-data paper operation with simulated execution;
-- causal next-bar execution from newly observed source events;
-- supervised provider lifecycle and failure propagation;
-- configurable reconnect attempts and retry delay;
-- provider-gap reconciliation without retrospective trade execution;
-- authoritative `PortfolioManager`-backed snapshots;
-- truthful terminal `STOPPED` / `FAILED` state;
-- unique runtime session identity propagated into execution and journals; and
-- environment-loaded retry configuration.
+M8.5 implementation and validation evidence is complete at the accepted application scope. Normal repository review, staging, commit and publication gates remain procedural controls and do not expand the validated scope.
 
-The deterministic `MockLiveFeed` path remains available for development and regression.
+M8 preserves the validated M4/M5/M7 execution and accounting semantics. Real-money execution, multi-symbol portfolio semantics, PivotBoss validation, process-restart recovery, unrelated legacy replay/export repair and broad broker-authentication redesign remain outside M8.
 
-The M7 application boundary remains deliberate. The current paper API still creates metadata-only singleton session state rather than starting and owning the authoritative M7 runtime. The frontend therefore does not yet consume the authoritative M7 snapshot. The backtest API also still returns a fixed mock result. These are M8 responsibilities.
-
+DW-013 is resolved at the implemented M8 application scope. DW-015 remains open for broker-session/authentication lifecycle hardening. DW-016 records the separately deferred AngelOne negative-volume historical-data anomaly; no fix is included in M8.
 ## Important V1 blockers
 
-- replace the fixed backtest API response with a real research workflow;
-- connect paper API lifecycle to the authoritative M7 runtime;
-- expose authoritative portfolio, trade, equity and failure state through stable APIs;
-- connect the responsive frontend to those real workflows;
-- disposition remaining V1 operational-hardening items, including broker authentication/session lifecycle and unsupported restart boundaries; and
+- disposition remaining V1 operational-hardening boundaries, including DW-015 broker-session/authentication lifecycle and unsupported process-restart recovery;
+- preserve the explicit deferral of DW-016 unless separately authorized; and
 - complete M9 end-to-end V1 acceptance and release validation.
 
-Technical findings that remain outside the accepted M7 scope are recorded in [Deferred Work](roadmap/DEFERRED_WORK.md). The delivery plan is in the [Roadmap](roadmap/ROADMAP.md).
-
+Technical findings outside the active implementation scope are recorded in [Deferred Work](roadmap/DEFERRED_WORK.md). The delivery plan is in the [Roadmap](roadmap/ROADMAP.md).
 ## Release boundary
 V1 does not place real-money broker orders. Live execution is deferred to V2 and requires additional execution, reconciliation, recovery, operational-safety, and external acceptance evidence.

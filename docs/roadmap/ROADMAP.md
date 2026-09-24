@@ -71,13 +71,12 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 
 ### P4 — Research and Paper Application
 
-- **M8 — DESIGN BASELINE IN PROGRESS** — Research and paper application.
-  - **M8.1 — NEXT after baseline approval** — Application contracts and composition. Freeze authoritative ownership, typed Backtest/Paper contracts, supported V1 strategy/config choices, lifecycle/error behavior, API configuration boundary and minimum frontend/backend contract.
-  - **M8.2 — PLANNED** — Authoritative Backtest vertical slice. Connect frontend/API application composition to `HistoricalSource`, validated strategy, `BacktestEngine`, `BacktestResult`, result-aware metrics and typed response without changing M4/M5 economics.
-  - **M8.3 — PLANNED** — Authoritative Paper control plane. Replace metadata-only ownership with one application-owned live paper handle that can observe `PaperTradingSession`, control `LivePaperRuntime`, own the worker and retain terminal state without changing M7 causal/reconciliation semantics.
-  - **M8.4 — PLANNED** — Frontend authoritative workflows. Present real Backtest and paper state, visible loading/empty/stopped/failed conditions, bounded status refresh and responsive core workflows without reconstructing backend authority.
-  - **M8.5 — PLANNED** — Application integration validation and closure. Validate request/error contracts, real Backtest execution, paper start/status/stop/failure behavior, authoritative portfolio state, frontend checks, placeholder removal, documentation synchronization and DW-013 disposition.
-
+- **M8 - DONE** - Research and paper application.
+  - **M8.1 — DONE** — Application contracts and composition. Authoritative ownership, typed Backtest/Paper contracts, supported V1 strategy/config choices, lifecycle/error behavior, API configuration boundary and minimum frontend/backend contract are implemented.
+  - **M8.2 — DONE** — Authoritative Backtest vertical slice. The API composes `HistoricalSource`, the validated strategy, `BacktestEngine`, `BacktestResult`, result-aware metrics and typed responses without changing M4/M5 economics.
+  - **M8.3 — DONE** — Authoritative Paper control plane. Application ownership now includes the authoritative `PaperTradingSession`, `LivePaperRuntime`, worker lifecycle and retained terminal state without changing M7 causal/reconciliation semantics.
+  - **M8.4 — DONE** — Frontend authoritative workflows. Backtest and Paper consume backend-authoritative state, expose loading/empty/stopped/failed conditions, use bounded status refresh and use environment/same-origin API configuration.
+  - **M8.5 - DONE** - Application integration validation and closure. API/application integration, full Python regression, frontend interaction validation, production build/lint, placeholder checks and responsive desktop/mobile browser smoke are complete; DW-013 is resolved at the accepted M8 application scope.
 ### P5 — V1 Acceptance and Release
 
 - **M9 — RESERVED** — V1 validation and release.

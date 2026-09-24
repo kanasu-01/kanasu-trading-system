@@ -332,13 +332,7 @@ The existing API is not yet wired to this runtime; that ownership boundary remai
 See [Paper Runtime](../design/PAPER_RUNTIME.md) for the accepted M7 lifecycle.
 ## 9. API and frontend architecture
 
-### CURRENT
-
-The API exposes backtest and paper routes. The backtest run route returns a fixed mock result. Paper routes expose a singleton-backed session metadata lifecycle. The React/TypeScript/Vite frontend provides Home, Backtest, Replay, Paper and Portfolio pages and calls these APIs. The frontend is not yet a complete validated research or paper control plane.
-
-The backend remains the intended authority for trading and account state. The frontend presents commands, status and snapshots.
-
-### M8 TARGET — authoritative application boundary
+### CURRENT — authoritative M8 application boundary
 
 M8 connects the validated research and paper engines to the application without moving trading authority into FastAPI or React. FastAPI routes remain thin transport adapters. Trading/domain code remains independent of FastAPI request, response and exception types.
 
@@ -361,7 +355,7 @@ React
   → application-owned paper handle
        ├─ authoritative PaperTradingSession
        ├─ authoritative LivePaperRuntime
-       ├─ worker thread/task
+       ├─ worker thread
        └─ lifecycle synchronization
   → GET /api/paper-trading/status
        → PaperTradingSession.snapshot()
@@ -372,18 +366,19 @@ React
   → React presentation
 ~~~
 
-Backtest API execution is request-scoped for the initial V1 application slice. Blocking Backtest work executes outside the FastAPI event loop. The API composes the same authoritative `HistoricalSource`, validated strategy and `BacktestEngine` boundaries used by the accepted research path; it does not depend on CLI printing, replay, export or visualization side effects from `run_backtest()`.
+Backtest API execution is request-scoped for the initial V1 application slice. Blocking execution runs outside the FastAPI event loop. The API composes the authoritative `HistoricalSource`, validated strategy and `BacktestEngine` boundaries without depending on CLI printing, replay, export or visualization side effects.
 
-The Backtest run identifier is the actual `BacktestResult.session_id`. Authoritative account/trade metrics come from `PerformanceMetrics.summarize_backtest()`. Equity points and completed trades are projections of the actual `BacktestResult`; the application does not reconstruct research results from frontend state.
+The Backtest run identifier is the actual `BacktestResult.session_id`. Account/trade metrics come from `PerformanceMetrics.summarize_backtest()`. Equity points and completed trades are projections of the authoritative result rather than frontend reconstructions.
 
-Paper application ownership is initially one active session per application process. The application must obtain the authoritative session/runtime handle before the blocking live worker starts so `/status` and `/stop` can observe and control the running M7 lifecycle. A successful stop controls the real runtime and waits for worker termination; changing metadata alone is not a stop. The last terminal `STOPPED` or `FAILED` snapshot is retained until a later successful start replaces it. Status reads must be serialized with paper state mutation or consume an equivalently atomic immutable snapshot so the API cannot observe torn portfolio/execution state.
+Paper application ownership permits one active session per application process. The application owns the authoritative session/runtime handle before the blocking worker begins, allowing status and stop calls to observe and control the running M7 lifecycle. Successful stop controls the real runtime and waits for worker termination. The latest terminal `STOPPED` or `FAILED` snapshot remains observable until a later successful start replaces it.
 
-The accepted public paper lifecycle remains `CREATED → RUNNING → STOPPED` or `CREATED → RUNNING → FAILED`. M8 does not introduce public `STARTING` or `STOPPING` states merely for UI convenience. Any later lifecycle expansion requires an explicit contract change and validation.
+Status reads are synchronized with paper-state mutation and project `PaperTradingSession.snapshot()` state. The accepted public lifecycle remains `CREATED`, `RUNNING`, `STOPPED` and `FAILED`; M8 does not invent presentation-only transitional lifecycle states.
 
-The frontend is presentation/control only. Cash, position, equity, realized/unrealized/total P&L, drawdown, active position, completed-trade count, execution state and runtime failure information come from backend authority. Frontend code must not independently derive or repair those values. API base configuration is application/environment configuration rather than a machine-specific hard-coded URL.
+The React frontend is presentation/control only. Cash, position, equity, realized/unrealized/total P&L, drawdown, active position, completed-trade count, latest execution and runtime failure information originate from backend authority. API base configuration uses `VITE_API_BASE_URL` when configured and otherwise same-origin `/api`; the Vite development proxy target is environment-configurable.
 
-The M8 baseline freezes workflows, data contracts and visible lifecycle/error states, not pixel-level UI design. Detailed charting, spacing, responsive composition and interaction polish belong to M8.4.
+The accepted application shell is responsive: top navigation can wrap on narrow displays, the runtime-status panel stacks above page content below the medium breakpoint, and the same panel remains a fixed-width left column at medium and wider widths. Page content owns its internal scrolling without requiring a fixed desktop-only shell width.
 
+M8 authoritative frontend scope is Backtest and Paper. Legacy Replay/export behavior is not promoted to a validated M8 workflow, and Portfolio remains explicitly presented as coming-soon rather than completed functionality.
 ## 10. Known divergences
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
