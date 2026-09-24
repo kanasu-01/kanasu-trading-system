@@ -1,3 +1,9 @@
+export interface DecisionSnapshot {
+  fast_sma?: number | null;
+  slow_sma?: number | null;
+  [key: string]: unknown;
+}
+
 export interface BarRecord {
   timestamp: string;
   open: number;
@@ -10,5 +16,5 @@ export interface BarRecord {
   state: string | null;
   signal: "BUY" | "SELL" | null;
 
-  decision_snapshot: Record<string, any>;
+  decision_snapshot: DecisionSnapshot;
 }

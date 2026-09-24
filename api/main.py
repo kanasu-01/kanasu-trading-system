@@ -2,12 +2,16 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
 from api.models.common_models import ApiErrorResponse
 from api.routes.backtest_routes import router as backtest_router
 from api.routes.paper_trading_routes import (
     router as paper_trading_router,
 )
+
+
+load_dotenv()
 
 
 app = FastAPI(

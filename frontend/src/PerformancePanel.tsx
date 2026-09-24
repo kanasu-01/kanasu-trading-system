@@ -1,4 +1,4 @@
-import type { BarRecord } from "../types/BarRecord";
+import type { BarRecord } from "./types/BarRecord";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { DashboardSection } from "@/components/dashboard/DashboardSection";
 

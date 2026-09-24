@@ -3,7 +3,7 @@ import { toUnixSeconds } from "../chart/utils/time";
 import { createKanasuChart } from "../chart/core/createChart";
 import { buildFastSMAData, buildSlowSMAData } from "../chart/indicators/sma";
 import { buildTradeMarkers } from "../chart/markers/tradeMarkers";
-import { createSeriesMarkers, AreaSeries } from "lightweight-charts";
+import { createSeriesMarkers } from "lightweight-charts";
 import { renderTradeZones } from "../chart/overlays/tradeZones";
 
 import type {

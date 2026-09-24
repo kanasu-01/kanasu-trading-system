@@ -1,100 +1,54 @@
+import { apiRequest } from "@/api/apiClient";
+
 import type {
   PaperTradingConfigResponse,
   PaperTradingStartRequest,
   PaperTradingStartResponse,
-  PaperTradingStopResponse,
   PaperTradingStatusResponse,
+  PaperTradingStopResponse,
 } from "@/types/paperTrading";
-
-const API_BASE_URL =
-  "http://100.118.17.51:8000/api";
-
-//
-// GET CONFIG
-//
 
 export async function getPaperTradingConfig():
 Promise<PaperTradingConfigResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/paper-trading/config`
+  return apiRequest<PaperTradingConfigResponse>(
+    "/paper-trading/config",
+    undefined,
+    "Failed to fetch paper trading config",
   );
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to fetch paper trading config"
-    );
-  }
-
-  return response.json();
 }
-
-//
-// START
-//
 
 export async function startPaperTrading(
-  payload: PaperTradingStartRequest
+  payload: PaperTradingStartRequest,
 ): Promise<PaperTradingStartResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/paper-trading/start`,
+  return apiRequest<PaperTradingStartResponse>(
+    "/paper-trading/start",
     {
       method: "POST",
-
       headers: {
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
       },
-
       body: JSON.stringify(payload),
-    }
+    },
+    "Paper trading start failed",
   );
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to start paper trading"
-    );
-  }
-
-  return response.json();
 }
-
-//
-// STOP
-//
 
 export async function stopPaperTrading():
 Promise<PaperTradingStopResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/paper-trading/stop`,
+  return apiRequest<PaperTradingStopResponse>(
+    "/paper-trading/stop",
     {
       method: "POST",
-    }
+    },
+    "Paper trading stop failed",
   );
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to stop paper trading"
-    );
-  }
-
-  return response.json();
 }
-
-//
-// STATUS
-//
 
 export async function getPaperTradingStatus():
 Promise<PaperTradingStatusResponse> {
-  const response = await fetch(
-    `${API_BASE_URL}/paper-trading/status`
+  return apiRequest<PaperTradingStatusResponse>(
+    "/paper-trading/status",
+    undefined,
+    "Failed to fetch paper trading status",
   );
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to fetch paper trading status"
-    );
-  }
-
-  return response.json();
 }

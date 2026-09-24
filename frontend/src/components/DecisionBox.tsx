@@ -1,9 +1,9 @@
 type Props = {
   label: string;
-  value: any;
+  value: unknown;
 };
 
-function formatValue(value: any): string {
+function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
 
   if (typeof value === "boolean") {
@@ -21,7 +21,7 @@ function formatValue(value: any): string {
   return "";
 }
 
-function backgroundForValue(value: any): string {
+function backgroundForValue(value: unknown): string {
   if (typeof value === "boolean") {
     return value ? "#14532d" : "#7f1d1d"; // green / red
   }

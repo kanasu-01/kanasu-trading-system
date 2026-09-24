@@ -1,103 +1,71 @@
-//
-// PAPER TRADING CONFIG
-//
-
 export interface SymbolConfig {
   symbol: string;
-
   exchange: string;
 }
 
 export interface StrategyConfig {
   id: string;
-
   name: string;
 }
 
 export interface PaperTradingConfigResponse {
   symbols: SymbolConfig[];
-
   strategies: StrategyConfig[];
 }
 
-//
-// START PAPER TRADING
-//
-
 export interface PaperTradingStartRequest {
   symbol: string;
-
   strategy_id: string;
 }
 
-export interface PaperTradingStartResponse {
-  session_id: string;
+export type PaperTradingLifecycleStatus =
+  | "CREATED"
+  | "RUNNING"
+  | "STOPPED"
+  | "FAILED";
 
-  status: string;
-
+export interface PaperPositionSnapshot {
   symbol: string;
-
-  strategy: string;
-}
-
-//
-// STOP PAPER TRADING
-//
-
-export interface PaperTradingStopResponse {
-  status: string;
-}
-
-//
-// STATUS
-//
-
-export interface ActivePosition {
-  side: string;
-
+  direction: string;
+  quantity: number;
+  entry_time: string;
   entry_price: number;
-
-  current_price: number;
-
-  quantity: number;
-
-  unrealized_pnl: number;
+  stop_price: number;
 }
 
-export interface SessionMetrics {
-  total_trades: number;
-
-  win_rate: number;
-
-  net_pnl: number;
-
-  drawdown: number;
-}
-
-export interface PaperTrade {
-  time: string;
-
+export interface PaperTradingSnapshot {
+  session_id: string;
+  status: PaperTradingLifecycleStatus;
+  strategy_name: string;
   symbol: string;
-
-  side: string;
-
-  price: number;
-
-  quantity: number;
+  started_at: string | null;
+  stopped_at: string | null;
+  initial_capital: number;
+  cash: number | null;
+  position_size: number | null;
+  position_value: number | null;
+  equity: number | null;
+  realized_pnl: number | null;
+  unrealized_pnl: number | null;
+  total_pnl: number | null;
+  peak_equity: number | null;
+  drawdown: number | null;
+  active_position: PaperPositionSnapshot | null;
+  completed_trade_count: number;
+  last_execution_event: string | null;
+  last_execution_price: number | null;
+  last_execution_quantity: number | null;
+  failure_type: string | null;
+  failure_message: string | null;
 }
 
 export interface PaperTradingStatusResponse {
-  status: string;
-
-  strategy: string;
-
-  symbol: string;
-
-  started_at: string;
-
-  active_position: ActivePosition | null;
-
-  metrics: SessionMetrics;
-
-  trades: PaperTrade[];
+  active: boolean;
+  snapshot: PaperTradingSnapshot | null;
 }
+
+export type PaperTradingStartResponse =
+  PaperTradingSnapshot;
+
+export type PaperTradingStopResponse =
+  PaperTradingSnapshot;
