@@ -77,11 +77,20 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M8.3 — DONE** — Authoritative Paper control plane. Application ownership now includes the authoritative `PaperTradingSession`, `LivePaperRuntime`, worker lifecycle and retained terminal state without changing M7 causal/reconciliation semantics.
   - **M8.4 — DONE** — Frontend authoritative workflows. Backtest and Paper consume backend-authoritative state, expose loading/empty/stopped/failed conditions, use bounded status refresh and use environment/same-origin API configuration.
   - **M8.5 - DONE** - Application integration validation and closure. API/application integration, full Python regression, frontend interaction validation, production build/lint, placeholder checks and responsive desktop/mobile browser smoke are complete; DW-013 is resolved at the accepted M8 application scope.
-### P5 — V1 Acceptance and Release
+### P5 ? V1 Research Platform Completion and Release
 
-- **M9 — RESERVED** — V1 validation and release.
+- **M9 ? ACTIVE** ? V1 research platform completion and research-ready release.
+  - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
+  - **M9.2 ? PLANNED** ? Durable research catalog and automatic evidence.
+  - **M9.3 ? PLANNED** ? Instrument, universe and dataset truthfulness.
+  - **M9.4 ? PLANNED** ? Registered Studies and bounded local batch execution.
+  - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
+  - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
+  - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
+  - **M9.8 ? PLANNED** ? Complete research-workspace integration.
+  - **M9.9 ? PLANNED** ? V1 research-ready acceptance and release.
 
-M3 through M7 are DONE at their accepted scopes. The current delivery boundary is M8: replace API/frontend placeholders with actual research workflows and authoritative paper-runtime workflows. M9 remains the final V1 acceptance/release milestone. Real-money broker execution remains outside V1.
+M0 through M8 are DONE/CLOSED at their accepted scopes. M9 does not reopen those validated engines by default; it builds the persistent research workflow, evidence governance and product integration around them. Real-money broker execution and true shared-capital multi-symbol portfolio economics remain outside V1.
 
 ## Near-term detailed work
 ### M3.6b — Coverage and missing-range planning
@@ -672,7 +681,7 @@ M5 validates finite walk-forward windows, effective configuration/economic propa
 
 M6 establishes AngelOne live market-data delivery, canonical update/candle construction, sequence and session-boundary validity, adapter/pipeline behavior and verified WebSocket TLS. Final accepted baseline: `ffb86c2`.
 
-### M7 — Paper-session integration
+### M7 ? Paper-session integration
 
 **Status:** DONE through M7.9.
 
@@ -680,19 +689,22 @@ M7 integrates real AngelOne market data with simulated execution and authoritati
 
 Final accepted baseline: `7dd8e34`. Final local regression: 725 tests passed. GitHub Actions Run 92 succeeded.
 
-The current API/frontend do not yet own this authoritative runtime. That is M8 scope.
+M8 subsequently connected this authoritative runtime to the API/frontend application boundary.
 
-### M8 — Research and paper application
+### M8 ? Research and paper application
 
-**Status:** NEXT / not yet baselined.
+**Status:** DONE/CLOSED at accepted M8 application scope.
 
-Replace placeholders through bounded backend-to-UI vertical slices using actual research jobs/results and the authoritative M7 paper runtime/snapshot.
+M8 replaced the Backtest/Paper application placeholders with authoritative Backtest execution, process-local Paper runtime ownership and frontend workflows without reopening accepted M4/M5/M7 trading semantics.
 
-### M9 — V1 validation and release
+Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
-**Status:** RESERVED.
+### M9 ? V1 research platform completion
 
-M9 owns end-to-end V1 reference evidence, workflow/failure validation, paper observation, operational-hardening disposition, final documentation synchronization and mandatory V1 release gates.
+**Status:** ACTIVE — M9.1 design baseline accepted; M9.2 next.
+
+M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
+
 ## V2 and progressive horizons
 
 **V2 — Controlled Real-Money Execution** follows V1 acceptance. Its detailed milestone identifiers are intentionally not allocated. It requires order identity, acknowledgement/rejection/cancellation/partial-fill semantics, reconciliation, restart recovery, operational risk controls, restricted rollout and applicable external acceptance.

@@ -13,6 +13,63 @@ This document owns Kanasu's current and target system architecture. It describes
 - Prefer small capability boundaries and incremental migration over a universal framework.
 - Make current implementation, target design, validation, and release readiness distinct.
 
+## 2.1 M9 V1 research-product target
+
+M9 does not replace the validated historical, Backtest, WFA, risk/accounting or live-Paper cores. It adds a persistent evidence-driven research application around them.
+
+The V1 research application follows this conceptual lineage:
+
+~~~text
+StudyRevision
+    |
+    +-- registered Trial
+          |
+          +-- ExperimentSpec
+                |
+                +-- RunAttempt(s)
+                      |
+                      +-- authoritative result
+                      +-- ResearchEvidence
+                            |
+                            +-- QualificationDecision
+                                  |
+                                  +-- CandidateRevision
+                                        |
+                                        +-- WFA / OOS evidence
+                                              |
+                                              +-- QualificationDecision
+                                                    |
+                                                    +-- PaperCampaign
+                                                          |
+                                                          +-- PaperSession(s)
+~~~
+
+`StudyRevision` owns the registered research intent: hypothesis/objective, universe/data references, declared search, effective economics/risk assumptions, evaluation boundaries and qualification-policy references.
+
+A `Trial` represents one registered research test or disposition in the search history. An `ExperimentSpec` is an immutable deterministic computation definition. A `RunAttempt` is one physical attempt to execute that specification. Retries therefore do not become independent research trials.
+
+Existing deterministic dataset/configuration/result identities and `ResearchEvidence` remain authoritative at their accepted scopes. `ResearchEvidenceStatus.ACCEPTED` means the evidence record satisfies its reproducibility-record contract; it does not mean a strategy passed research qualification.
+
+Research workflow, execution/job state, data/validity state and evidence decision are separate dimensions. A computation may succeed while its research evidence is rejected or insufficient.
+
+Universe studies run independent per-instrument simulated accounts. Their aggregate reports describe breadth, distributions and explicit denominators. Independent P&L or returns must not be summed and presented as one shared-capital portfolio.
+
+The V1 supported execution timeframes remain 5m and 15m. The research domain remains timeframe-neutral so other horizons can be separately certified later.
+
+A Candidate freezes either a fixed executable configuration or an adaptive procedure. Those are distinct research claims. Candidate lineage carries exact evidence/configuration forward so WFA and Paper do not depend on manual parameter reconstruction. For research progression, PaperCampaign may begin only after the exact CandidateRevision satisfies its applicable registered WFA/OOS qualification. A separately supported standalone Paper run may be labelled operational smoke, but it cannot be represented as qualified research progression.
+
+`PaperCampaign` is the research-level forward-observation concept above one or more runtime `PaperSession` episodes. Detailed campaign persistence, checkpoint and session-boundary economics remain later M9 design/implementation work; M9.1 does not change accepted M7/M8 Paper semantics.
+
+AI may assist future research, but it cannot silently mutate registered protocols/policies/Candidates or act as qualification authority. AI-generated configurations that are actually evaluated participate in the same research search/trial history as human-generated configurations.
+
+### Behavioral specification and traceability
+
+M9 introduces a natural-language Behavioral System Map under `docs/behavior/`. It records externally meaningful flows, decisions, state transitions, financial/research invariants, failures and safety boundaries in language understandable without reading implementation code.
+
+Behavior documentation is not a substitute for source code or tests. A behavior becomes `VERIFIED` only when its implementation and evidence trace are checked. Behavior-changing implementation must update the corresponding behavioral specification in the same reviewed change.
+
+Stable behavior identifiers are never silently renumbered. Important future implementation changes declare `BEHAVIOR IMPACT` as `NONE`, `ADDED`, `CHANGED` or `REMOVED`, identify affected behavior IDs and provide before/after semantics plus code/test evidence.
+
 ## 3. Current architecture
 
 ### CURRENT
@@ -327,7 +384,7 @@ Provider gaps invalidate pending intent and enter restricted reconciliation. Exa
 
 `PaperTradingSession` exposes authoritative immutable snapshots backed by execution/PortfolioManager state. Runtime-created sessions also use unique per-session journal identity.
 
-The existing API is not yet wired to this runtime; that ownership boundary remains M8.
+The M8 API is wired to this authoritative runtime through process-local application ownership. Durable research-campaign ownership, application-restart history and campaign continuity remain M9 work.
 
 See [Paper Runtime](../design/PAPER_RUNTIME.md) for the accepted M7 lifecycle.
 ## 9. API and frontend architecture
@@ -383,14 +440,19 @@ M8 authoritative frontend scope is Backtest and Paper. Legacy Replay/export beha
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
 
-- the backtest API still returns a fixed mock result;
-- the paper API still owns metadata-only singleton state rather than the authoritative M7 runtime;
-- the frontend therefore does not yet provide an authoritative research/paper control plane;
-- automatic application-level research-job/evidence persistence remains unwired;
+- Backtest execution is authoritative but remains request-scoped rather than owned by a durable Study/job catalog;
+- automatic application-level research-result/evidence persistence remains unwired;
+- no first-class universe definition/snapshot and universe-quality contract currently exists;
+- no persistent Study/Trial/ExperimentSpec/RunAttempt research lifecycle currently exists;
+- the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
+- no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;
+- current Paper ownership is one process-local authoritative session rather than a durable multi-session `PaperCampaign`;
 - reusable broker authentication/session lifecycle remains an open hardening item;
 - the paper lifecycle does not expose separate `STARTING`/`STOPPING` states;
+- the legacy Replay performance panel reconstructs financial results from signal-close prices rather than authoritative execution evidence;
+- the application shell currently presents a static `Connected` label rather than backend health authority;
 - PivotBoss remains unvalidated;
-- legacy replay/export/broker paths retain stale contracts; and
+- legacy Replay/export/broker paths retain stale contracts; and
 - real-money execution remains outside V1.
 
 ## 11. Target architecture

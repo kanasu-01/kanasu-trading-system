@@ -456,6 +456,81 @@ This decision does not establish API/frontend ownership, process-restart recover
 
 Accepted implementation evidence: `f5dff2f`, `9f25685`, `5682a19`, `52adf41`, `d836a5e`, `2ccfd89`, `06bbb93`, `4cdde0e`, `74fe936`, `7dd8e34`.
 
+### AD-021 ? V1 research workflow, identity and qualification authority
+
+**Status:** ACCEPTED
+
+**Target:** M9.1
+
+M9 completes V1 as an evidence-driven research product around the already validated historical-data, Backtest, WFA, risk/accounting and live-Paper computation/runtime cores. Those accepted cores are reused unless a separately evidenced defect requires change.
+
+The research application owns a persistent `Study` with immutable registered `StudyRevision` values. A registered revision captures the research intent, universe/data references, declared search, strategy/procedure, effective economics/risk assumptions, evaluation boundaries and qualification-policy references.
+
+Every planned research test is represented by a `Trial` before execution or terminal disposition. The trial/search history retains successful, losing, invalid-data, insufficient-data, failed, cancelled, interrupted and explicitly reused work when it participated in the research process. Hiding a result from normal presentation does not erase its lineage.
+
+An `ExperimentSpec` is the immutable deterministic computation definition. A `RunAttempt` is one physical attempt to execute it. Retries share the computation specification but have distinct execution-attempt identities and must not be misrepresented as independent statistical trials.
+
+Existing dataset/configuration/result fingerprints, Backtest run manifest and immutable `ResearchEvidence` contracts remain authoritative at their accepted scopes. `ResearchEvidenceStatus.ACCEPTED` records evidence-contract acceptance only and is not strategy qualification.
+
+Research workflow stage, execution/job state, data/validity state and evidence decision are separate authority dimensions. The minimum V1 research-layer vocabulary is:
+
+- workflow: `DRAFT`, `REGISTERED`, `DEVELOPMENT`, `VALIDATION`, `PAPER`, `CLOSED`;
+- execution: `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, `INTERRUPTED`;
+- validity: `VALID`, `INVALID`, `INSUFFICIENT`, `UNKNOWN`; and
+- evidence decision: `INSUFFICIENT`, `REJECTED`, `ELIGIBLE`, `ACCEPTED_FOR_RESEARCH`, `RETIRED`.
+
+A successful computation can therefore have valid data and still be rejected economically, statistically, for robustness, or for OOS evidence.
+
+Research qualification is owned by immutable versioned `QualificationPolicy` documents and append-only `QualificationDecision` records. The minimum criterion outcomes are `SATISFIED`, `NOT_SATISFIED`, `INSUFFICIENT`, `NOT_APPLICABLE` and `INVALID`. Re-evaluating immutable evidence under a successor policy creates a new decision rather than rewriting prior evidence.
+
+A `Candidate` is the lineage anchor for a research proposition. `CandidateRevision` freezes the exact executable claim. A fixed Candidate freezes its executable parameters/configuration. An adaptive Candidate freezes the complete selection/retraining procedure, including search space, objective, tie-breaking and applicable WFA/OOS rules. Fixed and adaptive claims cannot silently transform into one another.
+
+V1 universe research means independent per-instrument simulated accounts plus aggregate research evidence. It does not establish one shared-capital multi-symbol portfolio. Aggregate reports must use truthful distributions, breadth and denominators rather than summed independent P&L.
+
+Universe/data capability must distinguish the initial V1 quality classes `PIT_VERIFIED`, `PIT_RECONSTRUCTED`, `RULE_BASED_PIT`, `CURRENT_SNAPSHOT` and `CUSTOM_FIXED`. These labels describe evidence quality/provenance rather than profitability. A current constituent list projected backward cannot be presented as survivorship-bias-free evidence.
+
+The supported V1 execution timeframes remain 5m and 15m. Daily end-to-end certification is not an M9 prerequisite.
+
+`PaperCampaign` is the persistent research-level forward-observation concept above runtime `PaperSession` episodes. A research-qualified PaperCampaign may start only from the exact CandidateRevision after its applicable registered WFA/OOS evidence has received an eligible qualification decision. Any standalone Paper capability retained for operational smoke must be explicitly labelled as such and cannot bypass or substitute for WFA/OOS research qualification. Detailed continuity/checkpoint semantics require a later M9 design baseline and may not reinterpret accepted M7/M8 causal execution silently.
+
+Complete trial accounting, declared search, holdout/OOS discipline, benchmarks, parameter sensitivity, cost/slippage stress, temporal robustness, cross-sectional breadth, WFA and explicit insufficiency are V1 research requirements. Advanced PSR/DSR/PBO/CSCV/CPCV tooling is not automatically a V1 release requirement; M9 preserves the evidence required for later statistically valid use and implements only separately justified methods.
+
+AI is advisory or generative-under-validation. AI cannot be final qualification authority or silently mutate registered research state. Once an AI-generated research configuration is tested or used for selection, it participates in the same trial/search accounting as human-originated work.
+
+Real-money execution, leverage, short selling, derivatives and true shared-capital multi-symbol portfolio economics remain outside V1.
+
+### AD-022 ? Behavioral specification and implementation traceability
+
+**Status:** ACCEPTED
+
+**Target:** M9.1
+
+Kanasu maintains a natural-language Behavioral System Map for externally meaningful behavior. Its purpose is to make architecture and AI-assisted code changes reviewable without requiring the product owner to read every implementation line.
+
+Behavioral documentation records user-visible flows, important branches, state transitions, financial/research semantics, persistence behavior, failures, external-provider interactions, authority boundaries and safety invariants. It does not narrate incidental implementation mechanics such as helper-function layout, loop syntax or internal refactors unless they change meaningful behavior.
+
+Behavior items use stable identifiers such as `DATA-FLOW-*`, `DATA-RULE-*`, `BT-FLOW-*`, `BT-RULE-*`, `WFA-FLOW-*`, `WFA-RULE-*`, `PAPER-FLOW-*`, `PAPER-RULE-*`, `RESEARCH-FLOW-*`, `RESEARCH-RULE-*` and `SAFETY-RULE-*`. Accepted identifiers are not silently renumbered. Superseded behavior remains traceable to its replacement.
+
+Behavior status is one of `DESIGNED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED` or `SUPERSEDED`. Natural-language prose does not become verified authority merely because it exists. `VERIFIED` requires a checked implementation trace and appropriate test/evidence trace.
+
+Every future implementation change declares one primary `BEHAVIOR IMPACT`: `NONE`, `ADDED`, `CHANGED` or `REMOVED`. A non-`NONE` change identifies affected behavior IDs, before/after semantics, rationale, user/research impact, relevant implementation paths, validating evidence and adjacent invariants that must remain unchanged.
+
+Behavior-changing implementation updates its behavioral specification in the same reviewed change. A declaration of `BEHAVIOR IMPACT: NONE` is itself reviewable; if code inspection shows meaningful behavior changed, the change fails review until the behavioral impact is corrected.
+
+The Behavioral System Map complements rather than replaces technical review. Source code remains executable implementation, tests provide executable evidence, and subtle concurrency, numerical, security or resource defects may require technical inspection beyond the natural-language behavior description.
+
+The intended M9 implementation gate is:
+
+~~~text
+accepted behavior before
+    -> authorized implementation
+    -> behavior after
+    -> natural-language behavior delta
+    -> code/test traceability verification
+    -> product-owner behavioral review
+    -> commit/release gate
+~~~
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

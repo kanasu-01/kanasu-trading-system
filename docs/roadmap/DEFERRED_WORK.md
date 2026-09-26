@@ -202,6 +202,33 @@ The issue was explicitly deferred during M8.4. No normalization, clamping, skipp
 
 Future work, if approved, must define the provider-boundary policy, preserve the canonical non-negative-volume invariant, define retrieval/coverage behavior when a raw provider row is rejected or quarantined, and add deterministic regression evidence without weakening `Candle` validation.
 
+## DW-017 ? Advanced Selection-Bias Statistics Suite
+
+**Status:** DEFERRED TO V1.x / SEPARATELY VALIDATED RESEARCH SCOPE
+**Target:** After M9 establishes complete trial/search evidence and stable periodic-return artifacts.
+
+M9 must preserve the data needed for defensible future PSR, DSR, PBO/CSCV, CPCV and richer multiple-testing analysis, but those methods are not automatically mandatory V1 release gates.
+
+Future implementation must define the statistical estimand, applicable strategy/research class, required return/search matrices, dependence assumptions, trial-family semantics, numerical references and qualification-policy meaning. These methods must not be applied to incomplete winner-only search history or presented as proof of future profitability.
+
+## DW-018 ? Daily End-to-End Research and Paper Certification
+
+**Status:** DEFERRED TO V1.x
+**Target:** Separate timeframe certification after V1 intraday research workflow is complete.
+
+The historical AngelOne adapter can map daily requests, but current V1 application and live-Paper semantics are validated around 5m/15m intraday operation and daily Paper is explicitly unsupported.
+
+Daily certification requires explicit daily/session-close availability, calendar-aware next-session execution, warm-up/reconciliation, overnight and corporate-action assumptions, WFA/search horizons, persistent Paper state between sessions and new end-to-end causal tests. The M9 research domain must remain timeframe-neutral so this can be added without redesign.
+
+## DW-019 ? AngelOne Historical Request Timezone Boundary
+
+**Status:** OPEN
+**Target:** M9.3 data/instrument truthfulness.
+
+Repository review identified a bounded adapter inconsistency: naive historical bounds are localized for AngelOne use, while already-aware non-IST bounds can pass through to request formatting without an explicit conversion/rejection contract. The effect on actual provider responses is not yet established.
+
+M9.3 must define the provider-wall-time contract explicitly: either convert accepted aware bounds to the provider-required timezone before formatting or reject unsupported timezone input at the adapter boundary. Deterministic tests must prove the request representation while preserving canonical dataset timestamp/fingerprint semantics.
+
 ## Maintenance
 
 New entries use the next available DW identifier after inspecting this ledger. Group related symptoms by root cause where practical. A resolution records the exact scope, evidence and related milestone/decision; it does not erase history.

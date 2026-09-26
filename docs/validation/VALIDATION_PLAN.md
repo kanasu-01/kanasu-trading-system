@@ -1020,19 +1020,75 @@ M4 closure requires integrated deterministic reference runs, focused and regress
 
 M4 validation does not establish exact brokerage or tax fidelity. M5 owns WFA validity; M6/M7 own real-data paper and paper-session work; M8 owns authoritative API/frontend workflow; and M9 owns V1 release acceptance.
 
-## 10. V1 release gates
+## 10. M9 ? V1 research platform completion
 
-V1 is release-ready only when all mandatory gates pass:
+### M9.1 ? V1 research product and behavioral traceability design baseline
 
-- trusted historical local-first retrieval and parity;
-- reproducible dataset/configuration identity;
-- validated backtest timing/economics/account metrics;
-- validated WFA windows, propagation and metrics;
-- operational real-market-data paper ingestion;
-- truthful paper-session lifecycle and authoritative portfolio state;
-- durable journals/results adequate for investigation;
-- real API workflows and responsive UI;
-- documented limitations and failure behavior; and
-- an explicit confirmation that real-money execution is unavailable.
+**Status:** ACCEPTED DESIGN BASELINE / DOCUMENTATION ONLY
 
-Progress in one gate cannot compensate for a failed mandatory gate.
+M9.1 is documentation/design only. It must not change production Backtest, WFA, historical-source, risk/accounting, live-Paper or broker execution behavior.
+
+The M9.1 design baseline is acceptable only when:
+
+1. V1 research-product scope and explicit non-goals are unambiguous.
+2. 5m/15m remain the supported V1 execution timeframes and daily certification remains separately scoped.
+3. Universe research is explicitly independent per-instrument simulation rather than shared-capital portfolio economics.
+4. `Study` / immutable `StudyRevision` semantics are defined.
+5. `Trial`, `ExperimentSpec` and `RunAttempt` have distinct identities and retry/search semantics.
+6. Existing dataset/configuration/result fingerprints and `ResearchEvidence` remain distinct from strategy qualification.
+7. Workflow, execution, validity and evidence-decision state dimensions are separated.
+8. Versioned `QualificationPolicy` and append-only `QualificationDecision` semantics are defined.
+9. Fixed and adaptive `CandidateRevision` semantics are distinct.
+10. `PaperCampaign` is defined above runtime `PaperSession` without silently changing accepted M7/M8 execution semantics.
+11. Point-in-time/current/custom universe quality meanings and claim limitations are defined.
+12. Real-money execution, leverage, shorts, derivatives and true shared-capital multi-symbol portfolio economics remain outside V1.
+13. Advanced selection-bias statistics are scoped according to available evidence rather than made mandatory by name.
+14. Behavioral System Map governance, stable behavior IDs and behavior statuses are defined.
+15. Future code changes require a `BEHAVIOR IMPACT` declaration.
+16. Behavior-to-code and behavior-to-test traceability is defined.
+17. A natural-language behavior is not `VERIFIED` until implementation and evidence traces are checked.
+18. M9.2-M9.9 dependency order remains coherent and does not require rebuilding validated M0-M8 engines.
+
+### M9 implementation validation principle
+
+From M9.2 onward, every behavior-changing implementation slice must provide:
+
+~~~text
+accepted behavior before
+    -> implementation
+    -> behavior after
+    -> behavior delta
+    -> implementation trace
+    -> test/evidence trace
+    -> deviation review
+~~~
+
+A refactor may declare `BEHAVIOR IMPACT: NONE`, but that declaration must be independently reviewable against code and tests.
+
+## 11. V1 research-ready release gates
+
+`KANASU V1 ? RESEARCH READY` means the supported product satisfies all applicable gates below. It does not mean any particular strategy is profitable or must qualify.
+
+- **Data validity:** exact consumed data and its assumptions are identifiable; invalid or insufficient data cannot become eligible merely because a job completed.
+- **Universe truthfulness:** every universe Study identifies its immutable membership/snapshot semantics and quality class; present-day constituents projected backward are visibly limited and are not described as survivorship-free.
+- **Reproducibility:** frozen computation specifications retain dataset, effective configuration, result, strategy/procedure and software/evidence identities sufficient for the declared reproducibility contract.
+- **Backtest validity:** accepted M4 timing, accounting, costs, risk, drawdown and terminal-position regressions remain green.
+- **WFA validity:** accepted M5 window, warm-up, configuration propagation, metric and stitching contracts remain green, while product reports describe their actual diagnostic meaning.
+- **Trial lineage:** every registered trial has a durable disposition; losing, invalid, failed, cancelled, interrupted and reused work remains inspectable where it influenced research.
+- **Holdout/OOS discipline:** registered partitions and their exposure history survive restart; inspected OOS data is not silently relabelled untouched.
+- **Qualification lineage:** decisions reference immutable evidence and policy/evaluator versions and preserve prior decisions; missing required evidence produces invalid/insufficient outcomes rather than a fabricated pass.
+- **Candidate integrity:** WFA derives from an exact Candidate revision; research-qualified Paper requires an eligible applicable WFA/OOS qualification decision for that same revision; material changes create a new revision and fixed/adaptive claims cannot silently interchange. Any separately supported operational-smoke Paper path is explicitly labelled and cannot satisfy research-progression gates.
+- **Persistence/retrieval:** Studies, results, decisions, Candidates and Paper campaigns survive application restart to the extent promised by their accepted milestone contracts.
+- **Batch workflow:** supported universe workloads have truthful progress, bounded resource use, cancellation, partial-failure and restart semantics backed by measured evidence.
+- **Research reporting:** aggregate statistics describe independent accounts truthfully, show denominators and never present summed independent P&L as a portfolio.
+- **Frontend authority:** account metrics, research statistics, qualification and lifecycle state originate from backend authority rather than independent React financial calculations.
+- **Failure semantics:** invalid inputs/data, insufficient history, deterministic failure, transient provider/worker failure, cancellation, interruption and research rejection remain distinct.
+- **Paper campaign evidence:** a research-qualified campaign references the exact WFA/OOS-qualified Candidate revision; Candidate configuration, session history, incidents and declared continuity state persist according to the accepted campaign contract; missing observations never manufacture fills.
+- **Paper honesty:** simulated Paper P&L is not presented as proof of achievable live fills, capacity or future profitability.
+- **No real-money path:** supported V1 CLI/API/UI composition cannot submit real broker orders and negative-path evidence verifies the boundary.
+- **Behavioral traceability:** all release-relevant behavior changes have current natural-language behavior, implementation and test/evidence traces with no unresolved deviation.
+- **Operational envelope:** authentication behavior, process ownership, restart limitations, backup/restore expectations, credentials handling and supported deployment assumptions are documented and tested where applicable.
+- **Documentation:** Project Status, Architecture, Decisions, Roadmap, Deferred Work, Validation Plan and behavioral documentation agree with the release implementation.
+- **Regression and acceptance:** deterministic Python regression, frontend tests/build/lint and representative end-to-end/browser evidence pass on the actual release candidate.
+
+Progress in one gate cannot compensate for a failed mandatory gate. A complete Study may produce no eligible Candidate and still demonstrate a successful research product.

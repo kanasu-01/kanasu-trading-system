@@ -6,7 +6,7 @@
 |---|---|
 | Project | Kanasu Trading System |
 | Migration baseline | 2026-09-13 |
-| Branch | `m8-research-paper-application` |
+| Branch | `m9-v1-research-platform` |
 | Documentation governance baseline | `2a305a5 Optimize agent context loading` |
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
@@ -15,11 +15,15 @@
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
-| Phase | P4 — Research and Paper Application |
-| Milestone | M8 — Research and paper application |
-| Step | M8.5 - application integration validation and closure - DONE |
-| Lifecycle | M0-M8 DONE at accepted scopes; M9 RESERVED |
-| Next planned review | M9 V1 acceptance and release validation |
+| Phase | P5 — V1 Research Platform Completion |
+| Milestone | M9 — V1 research platform completion |
+| Step | M9.1 — V1 research product and behavioral traceability design baseline - DONE |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DESIGN BASELINE ACCEPTED |
+| Next planned review | M9.2 durable research catalog and automatic-evidence design |
+
+M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
+
+The V1 research target remains single-user NSE cash-equity research with long-only, unlevered simulated execution. The supported V1 execution timeframes remain 5m and 15m. Universe research means independent per-instrument simulated accounts plus research aggregation; it does not establish shared-capital multi-symbol portfolio economics.
 
 M8.1-M8.4 implementation is committed through `3694a2e07cd43289b68cd8bb04755d2c508ff67a`. M8.5 closure validation ran on parent baseline `83ae719f15ba0d5f681b35b955dbf46cad6b8ce9`. The closure candidate adds integration tests, synchronized closure documentation and a bounded responsive-shell correction; it does not change Backtest/Paper trading authority, broker/runtime semantics or the real-money boundary.
 ## Completed foundation
@@ -54,7 +58,7 @@ M8.1-M8.4 implementation is committed through `3694a2e07cd43289b68cd8bb04755d2c5
 - M6 — Live Market-Data Foundation
 - M7 — Paper-Session Integration through M7.9
 
-Completion here refers to each milestone's accepted scope. It does not imply that M8 application integration or M9 V1 release acceptance is complete.
+Completion here refers to each milestone's accepted scope. M8 application integration is also DONE/CLOSED at its accepted scope. M9 now owns the additional research-product workflow, evidence governance, persistent application research lifecycle and final V1 research-ready acceptance defined by the M9 design.
 
 ## M3.6b validation evidence
 
