@@ -222,6 +222,14 @@ class BacktestTradeResponse(StrictApiModel):
 class BacktestRunResponse(StrictApiModel):
     run_id: str
 
+    attempt_id: str | None
+    evidence_id: str
+    evidence_status: Literal[
+        "ACCEPTED",
+        "FAILED",
+        "INCOMPLETE",
+    ]
+
     status: Literal["completed"]
 
     symbol: str

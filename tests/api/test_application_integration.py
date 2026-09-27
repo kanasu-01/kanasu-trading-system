@@ -11,6 +11,7 @@ from core.market_data.historical_coverage import TimeRange
 from core.market_data.historical_source import HistoricalSource
 from core.market_data.sqlite_candle_store import SQLiteCandleStore
 from core.paper_trading.paper_trading_session import PaperTradingSession
+from core.research.software_identity import SoftwareIdentity
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.paper_runtime import PreparedLivePaperRun
 
@@ -39,6 +40,16 @@ PAPER_END = datetime(
     30,
     tzinfo=INDIA,
 )
+
+
+class StaticSoftwareIdentityProvider:
+    def resolve(self):
+        return SoftwareIdentity(
+            repository_revision=(
+                "d21c204da909f3e2c6201c8ca9e8af005074372f"
+            ),
+            worktree_clean=True,
+        )
 
 
 class ControlledRuntime:
@@ -159,6 +170,12 @@ def test_route_backtest_runs_authoritative_application_path(
         "load_app_config",
         lambda: AppConfig(
             risk_per_trade_pct=1.0,
+            research_database_path=str(
+                tmp_path / "research.sqlite3"
+            ),
+            research_artifact_root=str(
+                tmp_path / "research_artifacts"
+            ),
         ),
     )
 
@@ -166,6 +183,12 @@ def test_route_backtest_runs_authoritative_application_path(
         backtest_application,
         "create_historical_source",
         lambda _config: source,
+    )
+
+    monkeypatch.setattr(
+        backtest_application,
+        "GitSoftwareIdentityProvider",
+        lambda: StaticSoftwareIdentityProvider(),
     )
 
     import asyncio
@@ -194,6 +217,9 @@ def test_route_backtest_runs_authoritative_application_path(
 
     assert payload["status"] == "completed"
     assert payload["run_id"] != "bt_mock_001"
+    assert payload["attempt_id"] is not None
+    assert payload["evidence_id"]
+    assert payload["evidence_status"] == "ACCEPTED"
     assert len(payload["run_id"]) == 8
 
     assert (

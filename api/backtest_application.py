@@ -11,10 +11,56 @@ from core.config.backtest_config import BacktestConfig
 from core.config.loaders import load_app_config
 from core.market_data.historical_source import HistoricalSource
 from core.market_data.historical_source_factory import create_historical_source
-from core.runtime.backtest_runtime import execute_backtest
+from core.research.backtest_research_orchestrator import (
+    BacktestResearchOrchestrator,
+)
+from core.research.research_artifact_store import (
+    ContentAddressedResearchArtifactStore,
+)
+from core.research.software_identity import (
+    GitSoftwareIdentityProvider,
+    SoftwareIdentityProvider,
+)
+from core.research.sqlite_research_catalog_store import (
+    SQLiteResearchCatalogStore,
+)
+from core.research.sqlite_research_evidence_store import (
+    SQLiteResearchEvidenceStore,
+)
+from core.runtime.backtest_runtime import (
+    execute_backtest_candles,
+    retrieve_backtest_candles,
+)
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.strategy_factory import create_strategy
+
+
+def _create_backtest_research_orchestrator(
+    app_config: AppConfig,
+    *,
+    software_identity_provider: SoftwareIdentityProvider | None = None,
+) -> BacktestResearchOrchestrator:
+    provider = (
+        software_identity_provider
+        if software_identity_provider is not None
+        else GitSoftwareIdentityProvider()
+    )
+
+    return BacktestResearchOrchestrator(
+        catalog_store=SQLiteResearchCatalogStore(
+            app_config.research_database_path
+        ),
+        evidence_store=SQLiteResearchEvidenceStore(
+            app_config.research_database_path
+        ),
+        artifact_store=ContentAddressedResearchArtifactStore(
+            app_config.research_artifact_root
+        ),
+        software_identity_provider=provider,
+        retrieve_candles=retrieve_backtest_candles,
+        execute_candles=execute_backtest_candles,
+    )
 
 
 def execute_backtest_request(
@@ -22,6 +68,7 @@ def execute_backtest_request(
     *,
     app_config: AppConfig | None = None,
     historical_source: HistoricalSource | None = None,
+    software_identity_provider: SoftwareIdentityProvider | None = None,
 ) -> BacktestRunResponse:
     resolved_app_config = (
         app_config
@@ -57,17 +104,28 @@ def execute_backtest_request(
 
     strategy = create_strategy(config)
 
-    result = execute_backtest(
-        historical_source=source,
-        strategy=strategy,
-        config=config,
-        runtime_context=RuntimeContext(
-            risk_per_trade_pct=(
-                resolved_app_config.risk_per_trade_pct
-            ),
+    runtime_context = RuntimeContext(
+        risk_per_trade_pct=(
+            resolved_app_config.risk_per_trade_pct
         ),
-        dataset_context=dataset_context,
     )
+
+    research_execution = (
+        _create_backtest_research_orchestrator(
+            resolved_app_config,
+            software_identity_provider=(
+                software_identity_provider
+            ),
+        ).execute(
+            historical_source=source,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+    )
+
+    result = research_execution.result
 
     summary = BacktestSummaryResponse.model_validate(
         PerformanceMetrics.summarize_backtest(result)
@@ -100,6 +158,11 @@ def execute_backtest_request(
 
     return BacktestRunResponse(
         run_id=result.session_id,
+        attempt_id=research_execution.attempt_id,
+        evidence_id=research_execution.evidence_id,
+        evidence_status=(
+            research_execution.evidence_status.value
+        ),
         status="completed",
         symbol=request.symbol,
         timeframe=request.timeframe,

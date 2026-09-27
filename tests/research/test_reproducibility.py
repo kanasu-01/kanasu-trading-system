@@ -24,6 +24,7 @@ from core.research.reproducibility import (
     stable_backtest_result_fingerprint,
 )
 from core.runtime.dataset_context import DatasetContext
+from core.strategies.signal import SignalType
 
 
 INDIA = timezone(timedelta(hours=5, minutes=30), name="Asia/Kolkata")
@@ -383,6 +384,28 @@ def test_decision_snapshot_mapping_order_does_not_affect_result_identity():
 def test_unsupported_decision_snapshot_value_is_rejected():
     with pytest.raises(TypeError, match="unsupported canonical value"):
         stable_backtest_result_fingerprint(result(snapshot={"bad": object()}))
+
+def test_runtime_enums_normalize_to_stable_result_values():
+    enum_result = result()
+    string_result = result()
+
+    enum_result.bar_records[0].signal = SignalType.BUY
+    enum_result.bar_records[0].execution_event = SignalType.BUY
+    enum_result.bar_records[0].decision_snapshot["last_signal"] = (
+        SignalType.BUY
+    )
+
+    string_result.bar_records[0].signal = "BUY"
+    string_result.bar_records[0].execution_event = "BUY"
+    string_result.bar_records[0].decision_snapshot["last_signal"] = "BUY"
+
+    assert stable_backtest_result_bytes(enum_result) == (
+        stable_backtest_result_bytes(string_result)
+    )
+    assert stable_backtest_result_fingerprint(enum_result) == (
+        stable_backtest_result_fingerprint(string_result)
+    )
+
 
 def test_stable_result_bytes_hash_to_existing_result_fingerprint():
     value = result()

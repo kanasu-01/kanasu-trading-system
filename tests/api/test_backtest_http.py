@@ -47,6 +47,9 @@ def request() -> BacktestRunRequest:
 def response() -> BacktestRunResponse:
     return BacktestRunResponse(
         run_id="run-123",
+        attempt_id="attempt-123",
+        evidence_id="evidence-123",
+        evidence_status="ACCEPTED",
         status="completed",
         symbol="RELIANCE",
         timeframe="15m",

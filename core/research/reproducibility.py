@@ -6,6 +6,7 @@ unsupported values fail, and timestamps retain their supplied representation.
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from enum import Enum
 import hashlib
 import json
 import math
@@ -407,13 +408,42 @@ def stable_backtest_result_payload(
     }
 
 
+def _stable_backtest_result_value(value: Any) -> Any:
+    """Normalize runtime enum values without relaxing canonical_bytes."""
+
+    if isinstance(value, Enum):
+        return _stable_backtest_result_value(value.value)
+
+    if isinstance(value, list):
+        return [
+            _stable_backtest_result_value(item)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return tuple(
+            _stable_backtest_result_value(item)
+            for item in value
+        )
+
+    if isinstance(value, Mapping):
+        return {
+            key: _stable_backtest_result_value(item)
+            for key, item in value.items()
+        }
+
+    return value
+
+
 def stable_backtest_result_bytes(
     result: BacktestResult,
 ) -> bytes:
     """Serialize the stable Backtest result with its canonical schema."""
 
     return canonical_bytes(
-        stable_backtest_result_payload(result),
+        _stable_backtest_result_value(
+            stable_backtest_result_payload(result)
+        ),
         schema=BACKTEST_RESULT_SCHEMA,
     )
 
