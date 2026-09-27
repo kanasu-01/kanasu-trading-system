@@ -9,6 +9,7 @@ from datetime import datetime
 import hashlib
 import json
 import math
+import re
 from typing import Any
 
 from core.backtest.backtest_result import BacktestResult
@@ -19,6 +20,10 @@ from core.entities.candle import Candle
 from core.entities.candle_series import CandleSeries
 from core.market_data.historical_coverage import TimeRange
 from core.research.models.backtest_run_manifest import BacktestRunManifest
+from core.research.models.research_catalog import (
+    ComputationKind,
+    EXPERIMENT_SPEC_SCHEMA_ID,
+)
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
@@ -109,6 +114,60 @@ def canonical_fingerprint(value: Any, *, schema: str) -> str:
 
     digest = hashlib.sha256(canonical_bytes(value, schema=schema)).hexdigest()
     return f"sha256:{digest}"
+
+
+_SHA256_FINGERPRINT_PATTERN = re.compile(
+    r"^sha256:[0-9a-f]{64}$"
+)
+
+
+def experiment_spec_fingerprint(
+    *,
+    computation_kind: ComputationKind,
+    manifest_artifact_id: str,
+    dataset_fingerprint: str,
+    configuration_fingerprint: str,
+    repository_revision: str,
+) -> str:
+    """Identify one exact deterministic research computation definition."""
+
+    if not isinstance(computation_kind, ComputationKind):
+        raise TypeError(
+            "computation_kind must be a ComputationKind"
+        )
+
+    for field_name, value in (
+        ("manifest_artifact_id", manifest_artifact_id),
+        ("dataset_fingerprint", dataset_fingerprint),
+        ("configuration_fingerprint", configuration_fingerprint),
+    ):
+        if (
+            not isinstance(value, str)
+            or not _SHA256_FINGERPRINT_PATTERN.fullmatch(value)
+        ):
+            raise ValueError(
+                f"{field_name} must use "
+                "sha256:<64 lowercase hexadecimal>"
+            )
+
+    if (
+        not isinstance(repository_revision, str)
+        or not repository_revision
+    ):
+        raise ValueError(
+            "repository_revision must be a non-empty string"
+        )
+
+    return canonical_fingerprint(
+        {
+            "computation_kind": computation_kind.value,
+            "manifest_artifact_id": manifest_artifact_id,
+            "dataset_fingerprint": dataset_fingerprint,
+            "configuration_fingerprint": configuration_fingerprint,
+            "repository_revision": repository_revision,
+        },
+        schema=EXPERIMENT_SPEC_SCHEMA_ID,
+    )
 
 
 def _context_payload(context: DatasetContext) -> dict[str, Any]:
