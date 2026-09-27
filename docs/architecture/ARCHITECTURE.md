@@ -62,6 +62,54 @@ A Candidate freezes either a fixed executable configuration or an adaptive proce
 
 AI may assist future research, but it cannot silently mutate registered protocols/policies/Candidates or act as qualification authority. AI-generated configurations that are actually evaluated participate in the same research search/trial history as human-generated configurations.
 
+### M9.2 durable research-catalog design boundary
+
+**Status: DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED**
+
+M9.2 is the first implementation-oriented layer beneath the complete M9 research workflow. It adds durable computation/evidence lineage to the existing authoritative Backtest application before M9.4 introduces registered Study/Trial workflow.
+
+The designed M9.2 Backtest lineage is:
+
+~~~text
+validated Backtest request
+        |
+        v
+retrieve canonical candles once
+        |
+        v
+dataset fingerprint
+        |
+        v
+BacktestRunManifest artifact
+        |
+        v
+ExperimentSpec
+        |
+        v
+RunAttempt
+        |
+        v
+existing authoritative BacktestEngine
+        |
+        v
+existing stable Backtest result identity/artifact
+        |
+        v
+ResearchEvidence
+~~~
+
+Historical candles remain in the historical SQLite boundary. Research metadata uses the separate research database and potentially large immutable result/manifest payloads use content-addressed research artifacts.
+
+`ExperimentSpec` is deterministic computation identity; `RunAttempt` is physical execution identity; existing `BacktestResult.session_id` remains runtime/session identity. These identities must not be collapsed.
+
+The exact canonical candle sequence fingerprinted for one automatic-evidence Backtest is the sequence consumed by authoritative execution. Evidence creation must not perform a second historical retrieval.
+
+The existing stable result fingerprint remains the result-artifact content identity. M9.2 does not establish a second Backtest-result identity domain.
+
+Accepted automatic evidence requires exact executable software identity. Without exact executable software identity, an exact ExperimentSpec cannot be established and M9.2 does not create a RunAttempt. The financial computation may still succeed while its reproducibility evidence remains incomplete; execution success therefore remains distinct from evidence completeness and future research qualification. A successful RunAttempt with incomplete evidence is possible only when its exact ExperimentSpec already existed and another evidence requirement later became incomplete.
+
+Before M9.4, these durable application Backtests are not represented as pre-registered Trials. Later research workflow may explicitly reference compatible pre-existing evidence, but it may not rewrite registration history.
+
 ### Behavioral specification and traceability
 
 M9 introduces a natural-language Behavioral System Map under `docs/behavior/`. It records externally meaningful flows, decisions, state transitions, financial/research invariants, failures and safety boundaries in language understandable without reading implementation code.
@@ -368,7 +416,7 @@ M4.6 subsequently introduced the successor research-configuration identity and a
 
 M5 subsequently resolved the WFA termination, configuration/economic propagation, account-metric, stitching and verdict issues described by the earlier baseline. M4.6/M4.7 implemented and integrated the successor Backtest economic-policy/manifest identity.
 
-Automatic application-level research job/evidence persistence is still not wired through the API, and PivotBoss remains unvalidated and must not be treated as the reference strategy.
+Automatic application-level research job/evidence persistence is still not wired through the API at the current implementation baseline. M9.2 now has an accepted design baseline for that bounded gap, but no implementation claim is made until its catalog/evidence slices and validation gates pass. PivotBoss remains unvalidated and must not be treated as the reference strategy.
 
 ## 8. Paper-runtime architecture
 

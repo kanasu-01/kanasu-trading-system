@@ -17,11 +17,15 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.1 — V1 research product and behavioral traceability design baseline - DONE |
-| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DESIGN BASELINE ACCEPTED |
-| Next planned review | M9.2 durable research catalog and automatic-evidence design |
+| Step | M9.2 - Durable research catalog and automatic evidence - DESIGN BASELINE ACCEPTED |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DESIGN BASELINE ACCEPTED; M9.2 DESIGN BASELINE ACCEPTED |
+| Next planned review | M9.2 implementation in gated slices under the accepted design baseline |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
+
+M9.2 design baseline is accepted. The accepted design introduces a durable research catalog, immutable content-addressed Backtest artifacts, deterministic `ExperimentSpec` identity, distinct `RunAttempt` identity, automatic reproducibility evidence and restart-safe execution lineage. It preserves the accepted M3/M4 fingerprint, manifest, ResearchEvidence and financial-result contracts rather than creating competing identities or accounting.
+
+M9.2 does not yet claim implementation. Its clean pre-implementation baseline is 111 focused research/API tests and 792 complete Python tests, with `git diff --check` passing.
 
 The V1 research target remains single-user NSE cash-equity research with long-only, unlevered simulated execution. The supported V1 execution timeframes remain 5m and 15m. Universe research means independent per-instrument simulated accounts plus research aggregation; it does not establish shared-capital multi-symbol portfolio economics.
 
@@ -312,7 +316,9 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M0 through M8 are complete at their accepted scopes. M8.5 closes application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
+M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. Current work is M9.2 implementation preparation under the accepted design baseline; no M9.2 production implementation has yet been accepted.
+
+M8.5 closed application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
 
 The accepted M8 implementation chain is:
 

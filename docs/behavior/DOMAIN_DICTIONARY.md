@@ -18,9 +18,13 @@ One registered research test or disposition within a Study's search history. A T
 
 The exact immutable instructions for one deterministic computation. Equivalent retries reference the same specification.
 
+For the M9.2 Backtest scope, its deterministic identity includes the exact manifest/data/configuration identity and executable software revision. Creation time is catalog metadata rather than computation identity.
+
 ### RunAttempt
 
 One physical attempt to execute an ExperimentSpec. Retries have distinct attempt identities.
+
+A RunAttempt is distinct from the computation specification and from the existing Backtest runtime/session ID. A computation can succeed while its reproducibility evidence remains incomplete.
 
 ### Result
 
@@ -79,6 +83,8 @@ One runtime episode inside a PaperCampaign. A runtime session is not by itself t
 ### Artifact
 
 Immutable supporting material such as a manifest, serialized result, report, input snapshot or evidence document.
+
+M9.2 uses content-addressed immutable artifacts for automatic Backtest manifest/result evidence. The stable Backtest result artifact reuses the existing result fingerprint as its content identity rather than defining another financial-result identity.
 
 ### AuditEvent
 

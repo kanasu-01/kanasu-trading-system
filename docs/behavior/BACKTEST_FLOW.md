@@ -118,6 +118,48 @@ The runtime constructs `BacktestEngine` with the selected strategy, initial capi
 
 The engine owns the validated M4 execution lifecycle. Results flow back through `BacktestResult`; the API projects that result rather than inventing a separate frontend accounting model.
 
+## RESEARCH-FLOW-001 - Automatic durable Backtest evidence
+
+**Status:** DESIGNED for M9.2; not yet implemented
+
+The existing authoritative Backtest financial path remains unchanged. M9.2 designs an evidence/orchestration layer around it:
+
+~~~text
+validated Backtest request
+        |
+        v
+retrieve canonical candles once
+        |
+        v
+fingerprint exact dataset
+        |
+        v
+persist immutable manifest artifact
+        |
+        v
+resolve ExperimentSpec
+        |
+        v
+create distinct RunAttempt
+        |
+        v
+run authoritative BacktestEngine
+on the exact same candle sequence
+        |
+        v
+persist stable result artifact
+        |
+        v
+persist ResearchEvidence
+and terminal RunAttempt state
+~~~
+
+A retry may reuse the same ExperimentSpec but receives a different RunAttempt identity. The authoritative Backtest session/run ID remains a separate runtime identity.
+
+Before registered Study/Trial workflow exists, these durable executions are not represented as pre-registered Trials.
+
+A Backtest computation may succeed while its automatic reproducibility evidence is incomplete. That distinction is visible and must not be converted into strategy qualification.
+
 ## Important failure branches
 
 A Backtest may stop before financial execution when:

@@ -94,3 +94,11 @@ Real-money execution, leverage, short selling, derivatives and true shared-capit
 M9 reuses the accepted historical-source, Backtest, risk/accounting, WFA, live-market-data and Paper-runtime cores.
 
 M9 primarily adds persistent research workflow, evidence governance, universe/data truthfulness, qualification, Candidate lineage, PaperCampaigns and complete research UX around those foundations.
+
+## M9.2 first implementation layer
+
+Before the complete registered Study workflow is introduced, M9.2 designs the lower-level durable execution/evidence substrate around the existing Backtest application.
+
+A current application Backtest can therefore gain an immutable ExperimentSpec, a distinct RunAttempt, stable result/manifest artifacts and ResearchEvidence without being falsely represented as a Trial that was registered beforehand.
+
+M9.4 later owns explicit StudyRevision/Trial registration and bounded batch execution. It may reference compatible prior evidence as reused evidence where allowed, but it must not rewrite the historical timing of registration.

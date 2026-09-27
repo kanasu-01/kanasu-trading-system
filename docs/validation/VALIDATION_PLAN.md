@@ -1049,6 +1049,42 @@ The M9.1 design baseline is acceptable only when:
 17. A natural-language behavior is not `VERIFIED` until implementation and evidence traces are checked.
 18. M9.2-M9.9 dependency order remains coherent and does not require rebuilding validated M0-M8 engines.
 
+### M9.2 - Durable research catalog and automatic evidence
+
+**Status:** DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED
+
+M9.2 begins from the clean M9.1 baseline `c8cdcbe042a5f2af528859218927bcd8d4e971d5`.
+
+Pre-implementation evidence:
+
+- focused research/API baseline: 111 passed;
+- complete Python regression: 792 passed;
+- `git diff --check`: passed;
+- worktree contained no production changes before the design candidate.
+
+The M9.2 design is acceptable only when:
+
+1. existing dataset/configuration/result fingerprint domains remain authoritative;
+2. existing `BacktestRunManifest` and immutable `ResearchEvidence` contracts remain backward-compatible;
+3. historical candle storage remains physically/logically separate from research-catalog storage;
+4. research SQLite schema versioning is explicit, additive and fail-closed for unknown newer versions;
+5. potentially large immutable artifacts are content-addressed outside the historical database;
+6. Backtest result artifact identity reuses the accepted stable result fingerprint rather than introducing a competing result identity;
+7. `ExperimentSpec`, `RunAttempt` and runtime/session identity remain distinct;
+8. ExperimentSpec identity includes exact effective input identity and exact executable software revision while creation timestamp remains metadata;
+9. automatic evidence fingerprints and executes the exact same canonical candle sequence without a second historical retrieval;
+10. dirty or unknown executable software identity cannot create an exact ExperimentSpec or RunAttempt and cannot produce accepted automatic reproducibility evidence; the financial computation may still return a result with incomplete evidence when possible;
+11. computation success remains independent from evidence completeness and future qualification;
+12. terminal ResearchEvidence and successful RunAttempt state cannot commit independently;
+13. stale non-terminal M9.2-owned attempts have an explicit `INTERRUPTED` recovery contract;
+14. pre-M9.4 application Backtests are not rewritten as though they had been pre-registered Trials;
+15. M9.3-M9.9 ownership boundaries remain intact;
+16. accepted M3/M4 Backtest economics, WFA mathematics, Paper causality and real-money safety boundaries are unchanged;
+17. behavior additions have stable IDs and remain `DESIGNED` until implementation/test trace is verified; and
+18. implementation is sliced and validated incrementally before milestone closure.
+
+The detailed design and implementation gates are owned by `docs/design/RESEARCH_CATALOG.md`.
+
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:

@@ -100,5 +100,10 @@ product-owner behavioral review
 | RESEARCH-RULE-004 | Independent universe accounts are not presented as a portfolio | future Study aggregation | future M9 tests | DESIGNED |
 | RESEARCH-RULE-005 | Candidate progression preserves exact lineage and WFA-before-Paper stage order | future Candidate/WFA/Paper application services | future M9 tests | DESIGNED |
 | RESEARCH-RULE-006 | Universe quality constrains historical claims | future universe/data catalog | future M9 tests | DESIGNED |
+| RESEARCH-FLOW-001 | Application Backtests create durable execution/evidence lineage without changing financial authority | future M9.2 research orchestration service and Backtest application integration | future M9.2 automatic-evidence integration tests | DESIGNED |
+| RESEARCH-RULE-007 | Fingerprinted Backtest candles are the exact candles executed | future M9.2 runtime-input/evidence orchestration boundary | future single-retrieval and exact-input tests | DESIGNED |
+| RESEARCH-RULE-008 | Retries preserve ExperimentSpec identity while receiving distinct RunAttempt identity | future M9.2 research catalog | future retry/identity tests | DESIGNED |
+| RESEARCH-RULE-009 | Failed/incomplete evidence cannot become accepted reproducibility evidence | existing ResearchEvidence contract plus future M9.2 orchestration | future failure/evidence-state tests | DESIGNED |
+| RESEARCH-RULE-010 | Exact executable software identity gates ExperimentSpec/RunAttempt creation and accepted automatic evidence | future M9.2 software-identity boundary | future clean/dirty/unknown identity and pre-spec failure tests | DESIGNED |
 
 Exact test names and symbol-level references should be tightened whenever a row is independently audited or affected by an implementation change.

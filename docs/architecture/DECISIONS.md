@@ -531,6 +531,34 @@ accepted behavior before
     -> commit/release gate
 ~~~
 
+### AD-023 - Durable research catalog and automatic Backtest evidence
+
+**Status:** ACCEPTED at M9.2 design scope
+
+**Target:** M9.2
+
+M9.2 introduces durable application-owned execution/evidence lineage without replacing the accepted M3/M4 reproducibility or Backtest-financial contracts.
+
+Historical candles and retrieval coverage remain owned by the separate historical database. Research metadata uses an explicitly versioned research SQLite schema. Potentially large immutable research payloads are stored as content-addressed files under a separate research-artifact root rather than as historical-store rows or large catalog BLOBs.
+
+The existing `ResearchEvidence` logical contract and `research_evidence` table remain backward-compatible. Existing evidence-only research databases are upgraded only through additive/non-destructive migration, and an unknown newer schema version fails closed.
+
+A Backtest manifest artifact uses the existing canonical `backtest_run_manifest_bytes(...)` representation. A Backtest result artifact uses the same canonical payload underlying `stable_backtest_result_fingerprint(...)`; therefore its content-addressed artifact identity is the existing stable result fingerprint rather than a new result-identity domain.
+
+`ExperimentSpec` identifies one exact deterministic computation under one executable software revision. Its identity includes computation kind, manifest artifact identity, dataset fingerprint, effective configuration fingerprint and repository/software revision. Creation time is metadata and does not participate in deterministic identity.
+
+`RunAttempt` identifies one physical execution of an ExperimentSpec. Retries may share one ExperimentSpec but always have distinct RunAttempt identities. Existing `BacktestResult.session_id` remains runtime/session identity and is retained separately.
+
+Automatic evidence retrieves canonical historical candles once. The exact sequence fingerprinted is passed into the existing authoritative Backtest execution engine. M9.2 must not retrieve another sequence merely to create evidence or create a competing financial execution path.
+
+Accepted automatic reproducibility evidence requires exact executable software identity. If the worktree differs from the claimed revision, or required software identity is unavailable, an exact ExperimentSpec cannot be established and M9.2 must not fabricate an ExperimentSpec or RunAttempt. The financial computation may still succeed and may persist `INCOMPLETE` evidence when possible. A `SUCCEEDED` RunAttempt with `INCOMPLETE` evidence is permitted only when the exact ExperimentSpec had already been established and a different evidence requirement later became incomplete. `ResearchEvidenceStatus.ACCEPTED` remains evidence-contract acceptance only and does not become strategy qualification.
+
+Successful terminalization coordinates required artifact metadata, immutable ResearchEvidence insertion and the RunAttempt transition in one research-database transaction. A committed successful attempt must not exist without its required evidence, and startup recovery classifies stale M9.2-owned running attempts as `INTERRUPTED`.
+
+Before M9.4, automatically cataloged Backtests are durable application executions, not retrospectively registered Trials. M9.4 owns registered Study/Trial semantics, bounded batch execution and cancellation.
+
+This decision adds persistence/orchestration behavior only. It does not alter accepted M4 Backtest timing, fills, risk sizing, costs, accounting, drawdown, WFA behavior, Paper causality, real-money boundaries or shared-capital portfolio semantics.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.
