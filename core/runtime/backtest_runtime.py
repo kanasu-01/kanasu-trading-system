@@ -1,3 +1,5 @@
+from typing import List
+
 from core.backtest.backtest_engine import (
     BacktestEngine,
 )
@@ -20,24 +22,35 @@ from core.config.backtest_config import (
     BacktestConfig,
 )
 from core.market_data.historical_coverage import TimeRange
+from core.entities.candle import Candle
 from core.market_data.historical_source import HistoricalSource
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 
 
-def execute_backtest(
+def retrieve_backtest_candles(
     historical_source: HistoricalSource,
+    config: BacktestConfig,
+    dataset_context: DatasetContext,
+) -> List[Candle]:
+    """Retrieve and materialize the canonical Backtest candle sequence."""
+
+    return list(
+        historical_source.retrieve(
+            dataset_context,
+            TimeRange(config.start, config.end),
+        )
+    )
+
+
+def execute_backtest_candles(
+    candles: List[Candle],
     strategy: BaseStrategy,
     config: BacktestConfig,
     runtime_context: RuntimeContext,
     dataset_context: DatasetContext,
 ) -> BacktestResult:
-    """Execute the authoritative Backtest path without presentation side effects."""
-
-    candles = historical_source.retrieve(
-        dataset_context,
-        TimeRange(config.start, config.end),
-    )
+    """Execute the authoritative engine over already-retrieved candles."""
 
     engine = BacktestEngine(
         strategy=strategy,
@@ -47,6 +60,30 @@ def execute_backtest(
     )
 
     return engine.run_stream(candles)
+
+
+def execute_backtest(
+    historical_source: HistoricalSource,
+    strategy: BaseStrategy,
+    config: BacktestConfig,
+    runtime_context: RuntimeContext,
+    dataset_context: DatasetContext,
+) -> BacktestResult:
+    """Retrieve once and execute the authoritative Backtest path."""
+
+    candles = retrieve_backtest_candles(
+        historical_source=historical_source,
+        config=config,
+        dataset_context=dataset_context,
+    )
+
+    return execute_backtest_candles(
+        candles=candles,
+        strategy=strategy,
+        config=config,
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+    )
 
 
 def run_backtest(

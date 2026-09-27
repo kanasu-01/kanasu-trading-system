@@ -2,6 +2,8 @@
 
 from datetime import datetime
 import hashlib
+
+from core.backtest.backtest_result import BacktestResult
 import os
 from pathlib import Path
 import re
@@ -13,8 +15,10 @@ from core.research.models.research_catalog import (
     ResearchArtifactKind,
 )
 from core.research.reproducibility import (
+    BACKTEST_RESULT_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
     backtest_run_manifest_bytes,
+    stable_backtest_result_bytes,
 )
 
 
@@ -234,5 +238,20 @@ class ContentAddressedResearchArtifactStore:
             backtest_run_manifest_bytes(manifest),
             artifact_kind=ResearchArtifactKind.BACKTEST_RUN_MANIFEST,
             schema_id=BACKTEST_RUN_MANIFEST_SCHEMA,
+            created_at=created_at,
+        )
+
+    def persist_backtest_result(
+        self,
+        result: BacktestResult,
+        *,
+        created_at: datetime,
+    ) -> ResearchArtifact:
+        """Persist the exact canonical stable Backtest result bytes."""
+
+        return self.persist_bytes(
+            stable_backtest_result_bytes(result),
+            artifact_kind=ResearchArtifactKind.BACKTEST_RESULT,
+            schema_id=BACKTEST_RESULT_SCHEMA,
             created_at=created_at,
         )

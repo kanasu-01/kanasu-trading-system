@@ -5,14 +5,18 @@ import os
 
 import pytest
 
+from core.backtest.backtest_result import BacktestResult
 from core.config.backtest_economic_policy import BACKTEST_ECONOMIC_POLICY
 from core.config.execution_config import ExecutionConfig
 from core.market_data.historical_coverage import TimeRange
 from core.research.models.backtest_run_manifest import BacktestRunManifest
 from core.research.models.research_catalog import ResearchArtifactKind
 from core.research.reproducibility import (
+    BACKTEST_RESULT_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
     backtest_run_manifest_bytes,
+    stable_backtest_result_bytes,
+    stable_backtest_result_fingerprint,
 )
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
@@ -290,3 +294,41 @@ def test_persist_bytes_rejects_mutable_byte_buffers(tmp_path):
 def test_logical_artifact_reference_requires_valid_identity(artifact_id):
     with pytest.raises(ValueError, match="artifact_id"):
         research_artifact_reference(artifact_id)
+
+def test_backtest_result_artifact_uses_existing_stable_result_identity(
+    tmp_path,
+):
+    root = tmp_path / "research_artifacts"
+    store = ContentAddressedResearchArtifactStore(root)
+
+    first_result = BacktestResult(
+        trades=[],
+        bar_records=[],
+        session_id="runtime-one",
+    )
+    retry_result = BacktestResult(
+        trades=[],
+        bar_records=[],
+        session_id="runtime-two",
+    )
+
+    raw = stable_backtest_result_bytes(first_result)
+
+    first = store.persist_backtest_result(
+        first_result,
+        created_at=CREATED_AT,
+    )
+    retry = store.persist_backtest_result(
+        retry_result,
+        created_at=CREATED_AT + timedelta(seconds=1),
+    )
+
+    assert first.artifact_kind is ResearchArtifactKind.BACKTEST_RESULT
+    assert first.schema_id == BACKTEST_RESULT_SCHEMA
+    assert first.artifact_id == stable_backtest_result_fingerprint(
+        first_result
+    )
+    assert retry.artifact_id == first.artifact_id
+    assert retry.relative_path == first.relative_path
+    assert store.load_bytes(first.artifact_id) == raw
+    assert len(list(root.rglob("*.json"))) == 1

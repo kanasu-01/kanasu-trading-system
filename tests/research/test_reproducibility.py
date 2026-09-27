@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import hashlib
 import re
 
 import pytest
@@ -19,6 +20,7 @@ from core.research.reproducibility import (
     canonical_bytes,
     canonical_fingerprint,
     dataset_fingerprint,
+    stable_backtest_result_bytes,
     stable_backtest_result_fingerprint,
 )
 from core.runtime.dataset_context import DatasetContext
@@ -381,3 +383,24 @@ def test_decision_snapshot_mapping_order_does_not_affect_result_identity():
 def test_unsupported_decision_snapshot_value_is_rejected():
     with pytest.raises(TypeError, match="unsupported canonical value"):
         stable_backtest_result_fingerprint(result(snapshot={"bad": object()}))
+
+def test_stable_result_bytes_hash_to_existing_result_fingerprint():
+    value = result()
+    raw = stable_backtest_result_bytes(value)
+
+    assert (
+        "sha256:" + hashlib.sha256(raw).hexdigest()
+        == stable_backtest_result_fingerprint(value)
+    )
+
+
+def test_stable_result_bytes_exclude_runtime_session_id():
+    fresh = result(session_id="fresh-runtime")
+    retry = result(session_id="retry-runtime")
+
+    assert stable_backtest_result_bytes(fresh) == (
+        stable_backtest_result_bytes(retry)
+    )
+    assert stable_backtest_result_fingerprint(fresh) == (
+        stable_backtest_result_fingerprint(retry)
+    )

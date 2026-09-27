@@ -977,3 +977,130 @@ def test_main_paper_angelone_passes_historical_source_to_live_runtime(
         captured["live_runtime_kwargs"]["historical_source"]
         is source
     )
+
+def test_backtest_runtime_split_executes_exact_retrieved_candle_list(
+    monkeypatch,
+):
+    source = SpyHistoricalSource([candle()])
+    dataset_context = DatasetContext(
+        symbol="RELIANCE",
+        timeframe="15m",
+        timezone="Asia/Kolkata",
+    )
+
+    retrieved = backtest_runtime_module.retrieve_backtest_candles(
+        historical_source=source,
+        config=config(),
+        dataset_context=dataset_context,
+    )
+
+    assert source.requests == [
+        (
+            dataset_context,
+            TimeRange(
+                config().start,
+                config().end,
+            ),
+        )
+    ]
+
+    captured = {}
+    expected_result = object()
+
+    class SpyBacktestEngine:
+        def __init__(self, **kwargs):
+            captured["engine_kwargs"] = kwargs
+
+        def run_stream(self, candles):
+            captured["candles"] = candles
+            return expected_result
+
+    monkeypatch.setattr(
+        backtest_runtime_module,
+        "BacktestEngine",
+        SpyBacktestEngine,
+    )
+
+    runtime_context = RuntimeContext(
+        risk_per_trade_pct=2.5,
+    )
+
+    actual_result = (
+        backtest_runtime_module.execute_backtest_candles(
+            candles=retrieved,
+            strategy=object(),
+            config=config(),
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+    )
+
+    assert actual_result is expected_result
+    assert captured["candles"] is retrieved
+    assert captured["engine_kwargs"]["dataset_context"] is (
+        dataset_context
+    )
+    assert captured["engine_kwargs"]["runtime_context"] is (
+        runtime_context
+    )
+    assert captured["engine_kwargs"]["initial_capital"] == 100000
+    assert len(source.requests) == 1
+
+
+def test_execute_backtest_composes_one_retrieval_with_exact_execution_input(
+    monkeypatch,
+):
+    dataset_context = DatasetContext(
+        symbol="RELIANCE",
+        timeframe="15m",
+        timezone="Asia/Kolkata",
+    )
+    runtime_context = RuntimeContext()
+    strategy = object()
+    retrieved = [candle()]
+    expected_result = object()
+    captured = {}
+
+    def retrieve_backtest_candles(**kwargs):
+        captured["retrieve_kwargs"] = kwargs
+        return retrieved
+
+    def execute_backtest_candles(**kwargs):
+        captured["execute_kwargs"] = kwargs
+        return expected_result
+
+    monkeypatch.setattr(
+        backtest_runtime_module,
+        "retrieve_backtest_candles",
+        retrieve_backtest_candles,
+    )
+    monkeypatch.setattr(
+        backtest_runtime_module,
+        "execute_backtest_candles",
+        execute_backtest_candles,
+    )
+
+    source = object()
+
+    actual_result = backtest_runtime_module.execute_backtest(
+        historical_source=source,
+        strategy=strategy,
+        config=config(),
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+    )
+
+    assert actual_result is expected_result
+    assert captured["retrieve_kwargs"] == {
+        "historical_source": source,
+        "config": config(),
+        "dataset_context": dataset_context,
+    }
+    assert captured["execute_kwargs"]["candles"] is retrieved
+    assert captured["execute_kwargs"]["strategy"] is strategy
+    assert captured["execute_kwargs"]["runtime_context"] is (
+        runtime_context
+    )
+    assert captured["execute_kwargs"]["dataset_context"] is (
+        dataset_context
+    )

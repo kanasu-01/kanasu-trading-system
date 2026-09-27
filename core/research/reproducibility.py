@@ -386,16 +386,45 @@ def _bar_record_payload(record) -> dict[str, Any]:
     }
 
 
-def stable_backtest_result_fingerprint(result: BacktestResult) -> str:
-    """Identify stable Backtest output while excluding execution session ID."""
+def stable_backtest_result_payload(
+    result: BacktestResult,
+) -> dict[str, Any]:
+    """Return the stable authoritative Backtest financial-result payload."""
 
-    return canonical_fingerprint(
-        {
-            "trades": [_trade_payload(trade) for trade in result.trades],
-            "bar_records": [
-                _bar_record_payload(record) for record in result.bar_records
-            ],
-            "equity_curve": result.equity_curve,
-        },
+    if not isinstance(result, BacktestResult):
+        raise TypeError("result must be a BacktestResult")
+
+    return {
+        "trades": [
+            _trade_payload(trade)
+            for trade in result.trades
+        ],
+        "bar_records": [
+            _bar_record_payload(record)
+            for record in result.bar_records
+        ],
+        "equity_curve": result.equity_curve,
+    }
+
+
+def stable_backtest_result_bytes(
+    result: BacktestResult,
+) -> bytes:
+    """Serialize the stable Backtest result with its canonical schema."""
+
+    return canonical_bytes(
+        stable_backtest_result_payload(result),
         schema=BACKTEST_RESULT_SCHEMA,
     )
+
+
+def stable_backtest_result_fingerprint(
+    result: BacktestResult,
+) -> str:
+    """Identify the exact canonical stable Backtest result bytes."""
+
+    digest = hashlib.sha256(
+        stable_backtest_result_bytes(result)
+    ).hexdigest()
+
+    return f"sha256:{digest}"
