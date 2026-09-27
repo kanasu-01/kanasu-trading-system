@@ -11,6 +11,7 @@ from core.research.models.research_evidence import (
     ResearchEvidence,
     ResearchEvidenceStatus,
 )
+from core.research.research_schema import initialize_research_schema
 from core.runtime.dataset_context import DatasetContext
 
 
@@ -25,28 +26,7 @@ class SQLiteResearchEvidenceStore:
 
     def _initialize_schema(self) -> None:
         with closing(self._connect()) as connection:
-            with connection:
-                connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS research_evidence (
-                        evidence_id TEXT PRIMARY KEY,
-                        created_at TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        symbol TEXT NOT NULL,
-                        timeframe TEXT,
-                        timezone TEXT,
-                        request_start TEXT NOT NULL,
-                        request_end TEXT NOT NULL,
-                        dataset_fingerprint TEXT,
-                        configuration_fingerprint TEXT,
-                        result_fingerprint TEXT,
-                        provenance TEXT NOT NULL,
-                        repository_revision TEXT,
-                        summary TEXT NOT NULL,
-                        artifact_references TEXT NOT NULL
-                    )
-                    """
-                )
+            initialize_research_schema(connection)
 
     def save(self, record: ResearchEvidence) -> None:
         """Persist one record atomically; existing evidence is immutable."""
