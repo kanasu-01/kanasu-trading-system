@@ -46,4 +46,8 @@ class AppConfig:
 
     historical_database_path: str = "data/historical.sqlite3"
 
+    # Durable research storage
+    research_database_path: str = "data/research.sqlite3"
+    research_artifact_root: str = "data/research_artifacts"
+
     historical_request_delay_sec: float = 0.5

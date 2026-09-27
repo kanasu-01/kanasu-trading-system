@@ -47,6 +47,14 @@ def load_app_config() -> AppConfig:
             "HISTORICAL_DATABASE_PATH",
             "data/historical.sqlite3",
         ),
+        research_database_path=os.getenv(
+            "RESEARCH_DATABASE_PATH",
+            "data/research.sqlite3",
+        ),
+        research_artifact_root=os.getenv(
+            "RESEARCH_ARTIFACT_ROOT",
+            "data/research_artifacts",
+        ),
         historical_request_delay_sec=float(
             os.getenv("HISTORICAL_REQUEST_DELAY_SEC", 0.5)
         ),
