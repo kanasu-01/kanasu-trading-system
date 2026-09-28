@@ -22,6 +22,23 @@ Historical-source composition may use trusted local coverage or an allowed provi
 
 When trusted local coverage fully satisfies a LOCAL_FIRST request, Kanasu can return local data without constructing/authenticating the external provider.
 
+### DATA-RULE-003 - Historical provider bindings are explicit and effective-dated
+
+**Status:** DESIGNED
+
+Provider-backed historical retrieval uses explicit effective-dated provider bindings. A request may span multiple applicable bindings, but unexplained gaps, conflicting overlaps or ambiguous mappings fail rather than being guessed. Provenance retains each binding and its applied subrange.
+
+### DATA-RULE-004 - Provider wall time does not rewrite canonical time identity
+
+**Status:** DESIGNED
+
+AngelOne-aware request bounds are converted to `Asia/Kolkata` for provider request formatting and naive bounds retain explicit India-wall-time interpretation. Provider formatting does not rewrite the canonical requested range, candle timestamps or dataset fingerprint semantics.
+
+### DATA-RULE-005 - Dataset identity and provenance evolution is versioned
+
+**Status:** DESIGNED
+
+`kanasu.dataset.v1` and existing storage keys are not silently redefined. Successor identity/provenance semantics are versioned, incompatible acquisition streams are not silently mixed, and conflicting stored candle values are not silently overwritten.
 ### BT-RULE-001 ? Completed-bar decisions obey accepted next-interval execution
 
 **Status:** VERIFIED
@@ -94,7 +111,7 @@ WFA derives from an exact CandidateRevision. Research-qualified Paper may begin 
 
 **Status:** DESIGNED
 
-Universe quality and provenance constrain the research claims that may be made from a Study.
+Universe quality, provenance and effective-dated membership constrain the research claims that may be made from a Study. Current constituents projected backward are not survivorship-free. A point-in-time claim cannot silently apply a future membership state to an earlier research time.
 
 ### RESEARCH-RULE-007 - Fingerprinted Backtest input is the executed input
 
@@ -119,3 +136,14 @@ A failed or incomplete reproducibility record cannot be labelled `ResearchEviden
 **Status:** VERIFIED
 
 Automatic evidence may be `ACCEPTED` only when the executable software revision is exactly identifiable. If executable software identity is dirty or unknown, an exact ExperimentSpec cannot be established and no RunAttempt may be fabricated. The financial computation may still produce a result and may persist incomplete evidence when possible. A `SUCCEEDED` RunAttempt with incomplete evidence is valid only when the exact ExperimentSpec had already been established and another evidence requirement later became incomplete.
+### RESEARCH-RULE-011 - Instrument lineage is not ticker or provider identity
+
+**Status:** DESIGNED
+
+Canonical instrument lineage uses a Kanasu-owned immutable `instrument_id`. Effective-dated symbol or provider-token changes do not silently create, merge or rewrite canonical instrument identity.
+
+### RESEARCH-RULE-012 - Point-in-time universe membership does not use future membership state
+
+**Status:** DESIGNED
+
+When research is represented as point-in-time universe evidence, the membership applied at each research time corresponds to that time rather than a future membership state. Joins, departures and quality/provenance changes remain explicit. Retrospective `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` use is permitted with its explicitly limited non-PIT semantics.

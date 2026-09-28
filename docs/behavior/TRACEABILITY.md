@@ -88,6 +88,9 @@ product-owner behavioral review
 |---|---|---|---|---|
 | DATA-RULE-001 | Missing history is not silently invented | `core/market_data/historical_source.py`, historical retrieval/coverage boundaries | `test_local_only_reports_exact_missing_ranges_without_factory`; `test_old_local_coverage_cannot_mask_partial_provider_evidence` | VERIFIED |
 | DATA-RULE-002 | Fully covered LOCAL_FIRST avoids provider creation | `HistoricalSource._retrieve_local_first()` | `test_local_first_returns_warm_cache_without_factory` | VERIFIED |
+| DATA-RULE-003 | Historical provider bindings are explicit, effective-dated and unambiguous | future M9.3 provider-binding resolver | future M9.3 tests | DESIGNED |
+| DATA-RULE-004 | Provider wall-time formatting preserves canonical request/timestamp identity | future M9.3 AngelOne historical adapter boundary | future M9.3 tests | DESIGNED |
+| DATA-RULE-005 | Dataset identity/provenance evolution is versioned and incompatible acquisition streams are not silently mixed | future M9.3 dataset/provenance layer | future M9.3 tests | DESIGNED |
 | BT-RULE-001 | Completed-bar decisions follow accepted next-interval execution | Backtest execution/engine boundaries | `test_backtest_queues_completed_bar_signals_for_following_open` | VERIFIED |
 | BT-RULE-002 | Backend execution/portfolio state owns financial truth | execution/portfolio/Backtest result boundaries | `test_backtest_reports_authoritative_execution_portfolio_state`; frontend `BacktestPage.test.tsx` ? `submits the authoritative request and renders the response` | VERIFIED |
 | WFA-RULE-001 | OOS does not select preceding parameters | `core/walk_forward/runner.py`, window/optimizer boundaries | `test_m5_5_end_to_end_wfa_validity_chain`; accepted M5 window/runner regression | VERIFIED |
@@ -99,11 +102,13 @@ product-owner behavioral review
 | RESEARCH-RULE-003 | Execution success and research qualification are distinct | future M9 state model | future M9 tests | DESIGNED |
 | RESEARCH-RULE-004 | Independent universe accounts are not presented as a portfolio | future Study aggregation | future M9 tests | DESIGNED |
 | RESEARCH-RULE-005 | Candidate progression preserves exact lineage and WFA-before-Paper stage order | future Candidate/WFA/Paper application services | future M9 tests | DESIGNED |
-| RESEARCH-RULE-006 | Universe quality constrains historical claims | future universe/data catalog | future M9 tests | DESIGNED |
+| RESEARCH-RULE-006 | Universe quality, provenance and effective membership constrain historical claims | future M9.3 universe/data truthfulness layer | future M9.3 tests | DESIGNED |
 | RESEARCH-FLOW-001 | Application Backtests create durable execution/evidence lineage without changing financial authority | `api/backtest_application.py`; `core/research/backtest_research_orchestrator.py` | `test_application_runs_real_backtest_from_local_history`; `test_application_exposes_incomplete_identity_without_attempt` | VERIFIED |
 | RESEARCH-RULE-007 | Fingerprinted Backtest candles are the exact candles executed | `core/research/backtest_research_orchestrator.py` | `test_clean_execution_uses_one_exact_candle_sequence_and_accepts_evidence` | VERIFIED |
 | RESEARCH-RULE-008 | Retries preserve ExperimentSpec identity while receiving distinct RunAttempt identity | `core/research/sqlite_research_catalog_store.py`; `core/research/reproducibility.py` | `test_equivalent_spec_reuses_identity_and_first_creation_time`; `test_retries_use_distinct_attempt_ids_for_same_spec` | VERIFIED |
 | RESEARCH-RULE-009 | Failed/incomplete evidence cannot become accepted reproducibility evidence | `core/research/models/research_evidence.py`; `core/research/backtest_research_orchestrator.py`; `core/research/sqlite_research_catalog_store.py` | `test_accepted_evidence_requires_all_three_fingerprints`; `test_execution_failure_creates_failed_evidence_and_failed_attempt`; `test_terminal_persistence_failure_does_not_claim_durable_success` | VERIFIED |
 | RESEARCH-RULE-010 | Exact executable software identity gates ExperimentSpec/RunAttempt creation and accepted automatic evidence | `core/research/software_identity.py`; `core/research/backtest_research_orchestrator.py` | `test_clean_repository_identity_is_exact`; `test_dirty_repository_identity_is_not_exact`; `test_unknown_revision_does_not_query_worktree_status`; `test_nonexact_software_identity_never_fabricates_spec_or_attempt` | VERIFIED |
+| RESEARCH-RULE-011 | Canonical instrument lineage is independent of ticker/provider identity | future M9.3 instrument identity layer | future M9.3 tests | DESIGNED |
+| RESEARCH-RULE-012 | Point-in-time universe evidence cannot apply a future membership state to an earlier research time | future M9.3 universe snapshot resolver | future M9.3 tests | DESIGNED |
 
 Exact test names and symbol-level references should be tightened whenever a row is independently audited or affected by an implementation change.

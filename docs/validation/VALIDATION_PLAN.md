@@ -1096,6 +1096,33 @@ Closure evidence:
 
 The detailed design and implementation gates are owned by `docs/design/RESEARCH_CATALOG.md`.
 
+### M9.3 - Instrument, universe and dataset truthfulness
+
+**Status:** DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED
+
+The M9.3 design baseline must establish and preserve all of the following before production implementation begins:
+
+1. canonical instrument lineage uses a Kanasu-owned immutable `instrument_id` rather than ticker text or provider token;
+2. symbol and provider mappings may be effective-dated without silently rewriting instrument lineage;
+3. historical provider retrieval may span multiple applicable bindings, while gaps, conflicting overlaps and ambiguity fail clearly;
+4. retrieval provenance retains every provider binding used and its exact applied subrange;
+5. `UniverseSnapshot` identity is immutable and deterministic;
+6. historical universe membership can change through time; point-in-time evidence must apply the membership state corresponding to each research time rather than a future membership state, while retrospective `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` use remains explicitly non-PIT;
+7. the accepted `PIT_VERIFIED`, `PIT_RECONSTRUCTED`, `RULE_BASED_PIT`, `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` meanings remain intact;
+8. current constituents projected backward remain visibly limited rather than described as survivorship-free;
+9. independent universe accounts remain research aggregation rather than shared-capital portfolio economics;
+10. `kanasu.dataset.v1` and existing storage keys are not silently redefined;
+11. successor dataset/provenance semantics are explicitly versioned and keep incompatible acquisition streams separate;
+12. unknown price-adjustment/corporate-action status remains unknown rather than being silently strengthened;
+13. conflicting stored candles and invalid provider rows are not silently repaired or overwritten to manufacture valid coverage;
+14. aware AngelOne historical bounds are converted to `Asia/Kolkata` before provider formatting, while naive bounds retain explicit India-wall-time interpretation;
+15. provider-wall-time formatting does not rewrite canonical request, timestamp or fingerprint semantics;
+16. M9.4 retains ownership of registered Study/Trial batch execution;
+17. accepted Backtest/WFA/Paper financial and causal behavior remains unchanged;
+18. real-money execution remains outside V1; and
+19. new M9.3 behavior IDs remain `DESIGNED` until implementation and checked test/evidence traces exist.
+
+The accepted detailed design is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. The proposed implementation slices are M9.3a through M9.3f and still require separate review and authorization before production implementation.
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:

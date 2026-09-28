@@ -53,6 +53,11 @@ Existing deterministic dataset/configuration/result identities and `ResearchEvid
 Research workflow, execution/job state, data/validity state and evidence decision are separate dimensions. A computation may succeed while its research evidence is rejected or insufficient.
 
 Universe studies run independent per-instrument simulated accounts. Their aggregate reports describe breadth, distributions and explicit denominators. Independent P&L or returns must not be summed and presented as one shared-capital portfolio.
+The accepted M9.3 design baseline introduces a Kanasu-owned immutable `instrument_id` that is distinct from trading symbols and provider tokens. Symbol and provider mappings are effective-dated. A provider-backed historical request may therefore span multiple non-overlapping provider bindings, and retrieval provenance must retain each binding with the exact subrange for which it was used.
+
+`UniverseDefinition` describes selection intent while each `UniverseSnapshot` is an immutable resolved membership state with explicit effective/as-of meaning, quality class and provenance. Historical universe research may use a deterministic sequence of effective-dated snapshots or equivalent membership records. For point-in-time evidence, membership applied at each research time must correspond to that time rather than a future membership state. Retrospective `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` use remains permitted with its explicit non-PIT limitations.
+
+The accepted design preserves `kanasu.dataset.v1` and existing storage keys rather than silently redefining them. New instrument/data semantics require a separately versioned successor contract. Provider/source history remains inspectable provenance rather than silently replacing canonical candle-content identity, while incompatible acquisition streams must not be silently mixed. For AngelOne historical requests, aware request bounds are converted to `Asia/Kolkata` before provider formatting and naive bounds retain explicit India-wall-time interpretation; this provider-boundary representation must not rewrite canonical dataset timestamp/fingerprint semantics. These contracts are not yet implemented.
 
 The V1 supported execution timeframes remain 5m and 15m. The research domain remains timeframe-neutral so other horizons can be separately certified later.
 
@@ -490,7 +495,7 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 
 - Backtest execution is authoritative but remains request-scoped rather than owned by a durable Study/job catalog;
 - automatic Backtest research-result/evidence persistence is implemented by M9.2, while registered Study/Trial job ownership remains later M9 scope;
-- no first-class universe definition/snapshot and universe-quality contract currently exists;
+- no implemented first-class instrument/universe truthfulness layer currently exists; the accepted M9.3 design baseline defines canonical instrument identity, effective-dated provider bindings, temporal universe snapshots and dataset/provenance rules, but implementation remains pending;
 - no persistent Study/Trial research lifecycle currently exists; M9.2 now provides durable ExperimentSpec and RunAttempt computation/execution lineage;
 - the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
 - no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;

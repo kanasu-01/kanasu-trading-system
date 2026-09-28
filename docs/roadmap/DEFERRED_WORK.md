@@ -228,6 +228,7 @@ Daily certification requires explicit daily/session-close availability, calendar
 Repository review identified a bounded adapter inconsistency: naive historical bounds are localized for AngelOne use, while already-aware non-IST bounds can pass through to request formatting without an explicit conversion/rejection contract. The effect on actual provider responses is not yet established.
 
 M9.3 must define the provider-wall-time contract explicitly: either convert accepted aware bounds to the provider-required timezone before formatting or reject unsupported timezone input at the adapter boundary. Deterministic tests must prove the request representation while preserving canonical dataset timestamp/fingerprint semantics.
+The accepted M9.3 design baseline selects conversion rather than rejection: aware bounds are converted to `Asia/Kolkata` before AngelOne formatting, while naive bounds retain explicit India-wall-time interpretation. This accepted design choice does not close DW-019. Adapter implementation and deterministic regression evidence remain required before the item can be resolved.
 
 ## Maintenance
 

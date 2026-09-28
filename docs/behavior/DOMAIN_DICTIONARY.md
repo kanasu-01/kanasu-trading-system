@@ -56,13 +56,20 @@ A fixed Candidate freezes its effective configuration and parameters.
 
 An adaptive Candidate freezes its complete selection/retraining procedure rather than one historically selected parameter set.
 
+### InstrumentIdentity
+
+A Kanasu-owned immutable `instrument_id` representing one identified exchange-listed security/listing across permitted effective-dated symbol or provider-identifier changes. Provider token identity is not canonical instrument identity.
+
+### ProviderInstrumentBinding
+
+An immutable effective-dated mapping between one canonical `instrument_id` and the identifiers required by one external provider. One historical request may use multiple ordered bindings when identifiers change through time; provenance retains each applied binding and subrange.
 ### UniverseDefinition
 
 A named or rule-based description of a set of instruments.
 
 ### UniverseSnapshot
 
-An immutable, identifiable resolution of universe membership and its provenance/quality semantics.
+An immutable, identifiable resolved membership state with explicit effective/as-of meaning and provenance/quality semantics. Historical research may require multiple effective-dated snapshots or equivalent membership records. A point-in-time claim applies membership corresponding to the represented research time rather than a future membership state. `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` may be used retrospectively with their explicit non-PIT limitations.
 
 Initial V1 universe-quality classes are:
 

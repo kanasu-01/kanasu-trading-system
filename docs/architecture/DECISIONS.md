@@ -561,6 +561,23 @@ This decision adds persistence/orchestration behavior only. It does not alter ac
 
 Implementation evidence: design baseline `4eb28d8`; implementation slices `07f4be1`, `24cdf67`, `ba2129f`, `d21c204`, `0f4cc98` and `4b44050`; final committed-head validation at `4b44050b46ab4dfa6d5b5729b7876231c50671bf` passed 198 focused M9.2 research/API tests and 897 complete Python tests with `git diff --check` clean.
 
+### AD-024 - Instrument, universe and dataset truthfulness
+
+**Status:** ACCEPTED - M9.3 DESIGN BASELINE / NOT IMPLEMENTED
+
+**Target:** M9.3
+
+Kanasu owns an immutable canonical `instrument_id` for an identified exchange-listed security/listing. Trading symbols, provider symbols and provider tokens are effective-dated metadata/bindings rather than canonical identity. A documented symbol change may preserve the same instrument lineage when continuity is established; identity is not guessed from ticker text or provider token.
+
+Provider instrument bindings are immutable and effective-dated. Historical provider retrieval may resolve across multiple applicable bindings when identifiers change through time. The applicable provider-backed period must not contain unexplained binding gaps, conflicting overlaps or ambiguous mappings, and provenance preserves every binding used together with its exact applied subrange.
+
+`UniverseDefinition` describes selection intent. `UniverseSnapshot` is an immutable resolved membership state with explicit effective/as-of meaning, quality class and provenance. Historical membership may change through time. For point-in-time evidence, membership applied at each research instant must correspond to that instant rather than a future membership state. Retrospective `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` use remains permitted with its explicit non-PIT limitations. The accepted quality classes remain `PIT_VERIFIED`, `PIT_RECONSTRUCTED`, `RULE_BASED_PIT`, `CURRENT_SNAPSHOT` and `CUSTOM_FIXED`; they describe evidence/provenance quality rather than profitability.
+
+The existing `kanasu.dataset.v1` schema and existing historical storage keys are not silently redefined. New instrument/data semantics require a versioned successor contract. Canonical dataset semantics include canonical instrument identity and declared price/corporate-action basis together with the exact requested/candle content, while provider/source/retrieval details remain inspectable provenance. Incompatible acquisition streams are not silently merged, and conflicting stored candle values are not silently overwritten.
+
+For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wall-time interpretation and aware bounds are converted to `Asia/Kolkata` before provider request formatting. Provider-wall-time conversion does not rewrite the canonical requested range, candle timestamps or accepted dataset fingerprint semantics.
+
+M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.
