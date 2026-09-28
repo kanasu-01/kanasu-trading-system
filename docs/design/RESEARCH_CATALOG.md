@@ -2,7 +2,7 @@
 
 ## Status
 
-**DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED**
+**DONE/CLOSED at accepted implementation/validation scope**
 
 M9.2 builds the durable execution/evidence substrate required by later
 M9 research workflows.
@@ -11,13 +11,27 @@ It reuses the accepted historical-data, Backtest, reproducibility,
 risk/accounting and application contracts. It does not reopen their
 validated financial semantics.
 
-Pre-implementation baseline:
+Starting baseline:
 
 - branch: `m9-v1-research-platform`;
 - parent baseline: `c8cdcbe042a5f2af528859218927bcd8d4e971d5`;
 - focused research/API regression: 111 passed;
 - full Python regression: 792 passed;
 - `git diff --check`: passed.
+
+Implementation and closure evidence:
+
+- design baseline: `4eb28d8` - `Baseline M9.2 durable research catalog design`;
+- M9.2a: `07f4be1` - durable research catalog schema;
+- M9.2b: `24cdf67` - immutable research artifact persistence;
+- M9.2c: `ba2129f` - research experiment lifecycle;
+- M9.2d: `d21c204` - canonical Backtest result serialization;
+- M9.2e: `0f4cc98` - automatic Backtest research evidence;
+- M9.2f: `4b44050` - terminal research recovery;
+- final committed-head focused validation: 198 passed in 8.19s;
+- final committed-head full Python regression: 897 passed in 8.80s;
+- final `git diff --check`: passed;
+- local and remote branch heads synchronized at `4b44050b46ab4dfa6d5b5729b7876231c50671bf`.
 
 ## 1. Purpose
 
@@ -26,14 +40,16 @@ already has deterministic dataset/configuration/result fingerprints,
 `BacktestRunManifest`, immutable `ResearchEvidence`, and dedicated
 SQLite evidence persistence.
 
-What is missing is application-owned durable execution lineage.
+Before M9.2, application-owned durable execution lineage was missing.
 
-A successful `/api/backtest/run` request currently returns an
-authoritative result to the caller, but the application does not
-automatically preserve the exact manifest, result artifact, execution
-attempt and reproducibility evidence as one durable research record.
+A successful `/api/backtest/run` request returned an authoritative
+result to the caller without automatically preserving the exact
+manifest, result artifact, execution attempt and reproducibility
+evidence as one durable research record.
 
-M9.2 closes that bounded gap.
+M9.2 closes that bounded gap through the implemented catalog,
+artifact, orchestration, automatic-evidence and restart-recovery
+boundaries.
 
 ## 2. Scope
 

@@ -1051,18 +1051,18 @@ The M9.1 design baseline is acceptable only when:
 
 ### M9.2 - Durable research catalog and automatic evidence
 
-**Status:** DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED
+**Status:** DONE/CLOSED at accepted implementation/validation scope
 
 M9.2 begins from the clean M9.1 baseline `c8cdcbe042a5f2af528859218927bcd8d4e971d5`.
 
-Pre-implementation evidence:
+Starting evidence:
 
 - focused research/API baseline: 111 passed;
 - complete Python regression: 792 passed;
 - `git diff --check`: passed;
 - worktree contained no production changes before the design candidate.
 
-The M9.2 design is acceptable only when:
+M9.2 implementation and closure preserve the accepted contract below:
 
 1. existing dataset/configuration/result fingerprint domains remain authoritative;
 2. existing `BacktestRunManifest` and immutable `ResearchEvidence` contracts remain backward-compatible;
@@ -1082,6 +1082,17 @@ The M9.2 design is acceptable only when:
 16. accepted M3/M4 Backtest economics, WFA mathematics, Paper causality and real-money safety boundaries are unchanged;
 17. behavior additions have stable IDs and remain `DESIGNED` until implementation/test trace is verified; and
 18. implementation is sliced and validated incrementally before milestone closure.
+
+Closure evidence:
+
+- design baseline: `4eb28d8`;
+- implementation slices: `07f4be1`, `24cdf67`, `ba2129f`, `d21c204`, `0f4cc98`, `4b44050`;
+- final published implementation head: `4b44050b46ab4dfa6d5b5729b7876231c50671bf`;
+- focused M9.2 research/API validation: 198 passed in 8.19s;
+- complete Python regression: 897 passed in 8.80s;
+- `git diff --check`: passed;
+- branch synchronized with `origin/m9-v1-research-platform`;
+- no M9.3 production implementation is included in M9.2 closure.
 
 The detailed design and implementation gates are owned by `docs/design/RESEARCH_CATALOG.md`.
 

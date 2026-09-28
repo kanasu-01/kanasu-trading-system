@@ -62,13 +62,13 @@ A Candidate freezes either a fixed executable configuration or an adaptive proce
 
 AI may assist future research, but it cannot silently mutate registered protocols/policies/Candidates or act as qualification authority. AI-generated configurations that are actually evaluated participate in the same research search/trial history as human-generated configurations.
 
-### M9.2 durable research-catalog design boundary
+### M9.2 durable research-catalog boundary
 
-**Status: DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED**
+**Status: DONE/CLOSED at accepted implementation/validation scope**
 
-M9.2 is the first implementation-oriented layer beneath the complete M9 research workflow. It adds durable computation/evidence lineage to the existing authoritative Backtest application before M9.4 introduces registered Study/Trial workflow.
+M9.2 is the implemented durable computation/evidence layer beneath the complete M9 research workflow. It adds durable computation/evidence lineage to the existing authoritative Backtest application before M9.4 introduces registered Study/Trial workflow.
 
-The designed M9.2 Backtest lineage is:
+The implemented M9.2 Backtest lineage is:
 
 ~~~text
 validated Backtest request
@@ -408,7 +408,7 @@ three fingerprints + provenance + evidence metadata
               separate research-evidence SQLite store
 ~~~
 
-The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8d validates the complete fresh/local repeated-run composition through deterministic integration tests without changing the production runtime boundaries. Automatic evidence creation remains outside Backtest, HistoricalSource, main, WFA, API and frontend composition.
+The M3.8c implementation owns versioned canonical serialization and the three deterministic identity domains, a minimal evidence model, and dedicated evidence persistence. Historical SQLite continues to own only historical candles and retrieval coverage. Research evidence is stored separately, and provenance remains inspectable without becoming part of canonical dataset identity. M3.8d validates the complete fresh/local repeated-run composition through deterministic integration tests without changing the production runtime boundaries. At the M3.8c/M3.8d baseline, automatic evidence creation remained outside Backtest, HistoricalSource, main, WFA, API and frontend composition; M9.2 subsequently wires automatic Backtest evidence through the application-owned research orchestration boundary.
 
 M4.6 subsequently introduced the successor research-configuration identity and accepted Backtest economic-policy manifest without reinterpreting immutable AD-015 v1; M4.7 then integrated the complete M4 contract.
 
@@ -416,7 +416,7 @@ M4.6 subsequently introduced the successor research-configuration identity and a
 
 M5 subsequently resolved the WFA termination, configuration/economic propagation, account-metric, stitching and verdict issues described by the earlier baseline. M4.6/M4.7 implemented and integrated the successor Backtest economic-policy/manifest identity.
 
-Automatic application-level research job/evidence persistence is still not wired through the API at the current implementation baseline. M9.2 now has an accepted design baseline for that bounded gap, but no implementation claim is made until its catalog/evidence slices and validation gates pass. PivotBoss remains unvalidated and must not be treated as the reference strategy.
+Automatic application-level Backtest research execution/evidence persistence is now wired through the M9.2 orchestration boundary and exposed through the authoritative Backtest application response. Registered Study/Trial job ownership remains M9.4 scope. PivotBoss remains unvalidated and must not be treated as the reference strategy.
 
 ## 8. Paper-runtime architecture
 
@@ -489,9 +489,9 @@ M8 authoritative frontend scope is Backtest and Paper. Legacy Replay/export beha
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
 
 - Backtest execution is authoritative but remains request-scoped rather than owned by a durable Study/job catalog;
-- automatic application-level research-result/evidence persistence remains unwired;
+- automatic Backtest research-result/evidence persistence is implemented by M9.2, while registered Study/Trial job ownership remains later M9 scope;
 - no first-class universe definition/snapshot and universe-quality contract currently exists;
-- no persistent Study/Trial/ExperimentSpec/RunAttempt research lifecycle currently exists;
+- no persistent Study/Trial research lifecycle currently exists; M9.2 now provides durable ExperimentSpec and RunAttempt computation/execution lineage;
 - the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
 - no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;
 - current Paper ownership is one process-local authoritative session rather than a durable multi-session `PaperCampaign`;

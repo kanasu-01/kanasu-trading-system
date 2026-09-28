@@ -11,21 +11,21 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest full Python regression | M8.5: `792 passed in 7.56s` |
+| Latest full Python regression | M9.2 closure on `4b44050`: `897 passed in 8.80s` |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.2 - Durable research catalog and automatic evidence - DESIGN BASELINE ACCEPTED |
-| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DESIGN BASELINE ACCEPTED; M9.2 DESIGN BASELINE ACCEPTED |
-| Next planned review | M9.2 implementation in gated slices under the accepted design baseline |
+| Step | M9.2 - Durable research catalog and automatic evidence - DONE/CLOSED |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED at accepted implementation/validation scope |
+| Next planned review | Separate M9.3 instrument, universe and dataset truthfulness design/baselining review; M9.3 implementation is not authorized automatically |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
 
-M9.2 design baseline is accepted. The accepted design introduces a durable research catalog, immutable content-addressed Backtest artifacts, deterministic `ExperimentSpec` identity, distinct `RunAttempt` identity, automatic reproducibility evidence and restart-safe execution lineage. It preserves the accepted M3/M4 fingerprint, manifest, ResearchEvidence and financial-result contracts rather than creating competing identities or accounting.
+M9.2 is DONE/CLOSED at its accepted implementation and validation scope. It implements the durable research catalog, immutable content-addressed Backtest artifacts, deterministic `ExperimentSpec` identity, distinct `RunAttempt` identity, automatic reproducibility evidence and restart-safe execution lineage while preserving the accepted M3/M4 fingerprint, manifest, ResearchEvidence and financial-result contracts.
 
-M9.2 does not yet claim implementation. Its clean pre-implementation baseline is 111 focused research/API tests and 792 complete Python tests, with `git diff --check` passing.
+M9.2 began from the clean 111-focused / 792-full-test baseline. The accepted implementation chain is `07f4be1` M9.2a, `24cdf67` M9.2b, `ba2129f` M9.2c, `d21c204` M9.2d, `0f4cc98` M9.2e and `4b44050` M9.2f after design baseline `4eb28d8`. Final committed-head closure validation at `4b44050` passed 198 focused research/API tests and 897 complete Python tests with `git diff --check` clean.
 
 The V1 research target remains single-user NSE cash-equity research with long-only, unlevered simulated execution. The supported V1 execution timeframes remain 5m and 15m. Universe research means independent per-instrument simulated accounts plus research aggregation; it does not establish shared-capital multi-symbol portfolio economics.
 
@@ -316,7 +316,7 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. Current work is M9.2 implementation preparation under the accepted design baseline; no M9.2 production implementation has yet been accepted.
+M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. M9.2 is DONE/CLOSED at accepted implementation/validation scope on `4b44050b46ab4dfa6d5b5729b7876231c50671bf`. The next activity is a separate M9.3 design/baselining review; no M9.3 implementation is authorized by M9.2 closure.
 
 M8.5 closed application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
 

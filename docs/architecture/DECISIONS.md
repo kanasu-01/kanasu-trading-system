@@ -533,7 +533,7 @@ accepted behavior before
 
 ### AD-023 - Durable research catalog and automatic Backtest evidence
 
-**Status:** ACCEPTED at M9.2 design scope
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED IN M9.2
 
 **Target:** M9.2
 
@@ -558,6 +558,8 @@ Successful terminalization coordinates required artifact metadata, immutable Res
 Before M9.4, automatically cataloged Backtests are durable application executions, not retrospectively registered Trials. M9.4 owns registered Study/Trial semantics, bounded batch execution and cancellation.
 
 This decision adds persistence/orchestration behavior only. It does not alter accepted M4 Backtest timing, fills, risk sizing, costs, accounting, drawdown, WFA behavior, Paper causality, real-money boundaries or shared-capital portfolio semantics.
+
+Implementation evidence: design baseline `4eb28d8`; implementation slices `07f4be1`, `24cdf67`, `ba2129f`, `d21c204`, `0f4cc98` and `4b44050`; final committed-head validation at `4b44050b46ab4dfa6d5b5729b7876231c50671bf` passed 198 focused M9.2 research/API tests and 897 complete Python tests with `git diff --check` clean.
 
 ## Decision workflow
 
