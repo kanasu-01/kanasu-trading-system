@@ -98,24 +98,24 @@ Universe quality and provenance constrain the research claims that may be made f
 
 ### RESEARCH-RULE-007 - Fingerprinted Backtest input is the executed input
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Automatic Backtest evidence fingerprints the exact canonical candle sequence that is passed to authoritative Backtest execution. Evidence creation must not perform a second historical retrieval whose content could diverge from the executed input.
 
 ### RESEARCH-RULE-008 - Retry identity does not inflate computation identity
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Equivalent retries may reference the same immutable ExperimentSpec but always receive distinct RunAttempt identities. Runtime/session identity remains separate from both.
 
 ### RESEARCH-RULE-009 - Incomplete evidence cannot be represented as accepted
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A failed or incomplete reproducibility record cannot be labelled `ResearchEvidenceStatus.ACCEPTED`. Computation success, evidence completeness and future research qualification remain separate concepts.
 
 ### RESEARCH-RULE-010 - Accepted automatic evidence requires exact software identity
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Automatic evidence may be `ACCEPTED` only when the executable software revision is exactly identifiable. If executable software identity is dirty or unknown, an exact ExperimentSpec cannot be established and no RunAttempt may be fabricated. The financial computation may still produce a result and may persist incomplete evidence when possible. A `SUCCEEDED` RunAttempt with incomplete evidence is valid only when the exact ExperimentSpec had already been established and another evidence requirement later became incomplete.
