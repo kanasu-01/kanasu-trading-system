@@ -15,8 +15,15 @@ from core.research.models.research_catalog import (
     RunAttempt,
     RunAttemptState,
 )
+from core.research.models.research_evidence import (
+    ResearchEvidence,
+    ResearchEvidenceStatus,
+)
 from core.research.reproducibility import experiment_spec_fingerprint
 from core.research.research_schema import initialize_research_schema
+from core.research.sqlite_research_evidence_store import (
+    _insert_research_evidence,
+)
 
 
 _M92C_TERMINAL_STATES = {
@@ -427,6 +434,326 @@ class SQLiteResearchCatalogStore:
             return None
 
         return self._attempt_from_row(row)
+
+    def terminalize_attempt_with_evidence(
+        self,
+        attempt_id: str,
+        *,
+        state: RunAttemptState,
+        terminal_at: datetime,
+        evidence: ResearchEvidence,
+        runtime_session_id: str | None = None,
+        result_artifact: ResearchArtifact | None = None,
+        failure_classification: str | None = None,
+        failure_message: str | None = None,
+    ) -> RunAttempt:
+        """Commit evidence, result metadata and terminal attempt atomically."""
+
+        if state not in {
+            RunAttemptState.SUCCEEDED,
+            RunAttemptState.FAILED,
+        }:
+            raise ValueError(
+                "atomic evidence terminalization requires "
+                "SUCCEEDED or FAILED"
+            )
+
+        if not isinstance(evidence, ResearchEvidence):
+            raise TypeError("evidence must be ResearchEvidence")
+
+        if (
+            result_artifact is not None
+            and not isinstance(result_artifact, ResearchArtifact)
+        ):
+            raise TypeError(
+                "result_artifact must be a ResearchArtifact or None"
+            )
+
+        if state is RunAttemptState.SUCCEEDED:
+            if result_artifact is None:
+                raise ValueError(
+                    "SUCCEEDED terminalization requires result artifact"
+                )
+            if evidence.status is not ResearchEvidenceStatus.ACCEPTED:
+                raise ValueError(
+                    "SUCCEEDED terminalization requires ACCEPTED evidence"
+                )
+
+        if (
+            state is RunAttemptState.FAILED
+            and evidence.status is ResearchEvidenceStatus.ACCEPTED
+        ):
+            raise ValueError(
+                "FAILED terminalization cannot use ACCEPTED evidence"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        attempt_id,
+                        experiment_spec_id,
+                        state,
+                        created_at,
+                        terminal_at,
+                        runtime_session_id,
+                        result_artifact_id,
+                        evidence_id,
+                        failure_classification,
+                        failure_message
+                    FROM run_attempts
+                    WHERE attempt_id = ?
+                    """,
+                    (attempt_id,),
+                ).fetchone()
+
+                if row is None:
+                    raise ValueError(
+                        f"RunAttempt does not exist: {attempt_id}"
+                    )
+
+                current = self._attempt_from_row(row)
+
+                if current.state is not RunAttemptState.RUNNING:
+                    raise ValueError(
+                        "terminal RunAttempt cannot be reopened "
+                        "or overwritten"
+                    )
+
+                if (
+                    current.runtime_session_id is not None
+                    and runtime_session_id is not None
+                    and current.runtime_session_id
+                    != runtime_session_id
+                ):
+                    raise ValueError(
+                        "runtime_session_id cannot be replaced "
+                        "after attempt creation"
+                    )
+
+                final_runtime_session_id = (
+                    current.runtime_session_id
+                    if runtime_session_id is None
+                    else runtime_session_id
+                )
+
+                if result_artifact is not None:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO research_artifacts (
+                            artifact_id,
+                            artifact_kind,
+                            schema_id,
+                            relative_path,
+                            byte_count,
+                            created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            result_artifact.artifact_id,
+                            result_artifact.artifact_kind.value,
+                            result_artifact.schema_id,
+                            result_artifact.relative_path,
+                            result_artifact.byte_count,
+                            result_artifact.created_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                        ),
+                    )
+
+                    artifact_row = connection.execute(
+                        """
+                        SELECT
+                            artifact_id,
+                            artifact_kind,
+                            schema_id,
+                            relative_path,
+                            byte_count,
+                            created_at
+                        FROM research_artifacts
+                        WHERE artifact_id = ?
+                        """,
+                        (result_artifact.artifact_id,),
+                    ).fetchone()
+
+                    if artifact_row is None:
+                        raise ValueError(
+                            "result artifact metadata could not be registered"
+                        )
+
+                    registered = self._artifact_from_row(artifact_row)
+
+                    if (
+                        self._artifact_semantics(registered)
+                        != self._artifact_semantics(result_artifact)
+                    ):
+                        raise ValueError(
+                            "research artifact identity already has "
+                            "different immutable metadata"
+                        )
+
+                terminal = RunAttempt(
+                    attempt_id=current.attempt_id,
+                    experiment_spec_id=current.experiment_spec_id,
+                    state=state,
+                    created_at=current.created_at,
+                    terminal_at=terminal_at,
+                    runtime_session_id=final_runtime_session_id,
+                    result_artifact_id=(
+                        result_artifact.artifact_id
+                        if result_artifact is not None
+                        else None
+                    ),
+                    evidence_id=evidence.evidence_id,
+                    failure_classification=failure_classification,
+                    failure_message=failure_message,
+                )
+
+                _insert_research_evidence(connection, evidence)
+
+                cursor = connection.execute(
+                    """
+                    UPDATE run_attempts
+                    SET
+                        state = ?,
+                        terminal_at = ?,
+                        runtime_session_id = ?,
+                        result_artifact_id = ?,
+                        evidence_id = ?,
+                        failure_classification = ?,
+                        failure_message = ?
+                    WHERE
+                        attempt_id = ?
+                        AND state = 'RUNNING'
+                    """,
+                    (
+                        terminal.state.value,
+                        terminal.terminal_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        terminal.runtime_session_id,
+                        terminal.result_artifact_id,
+                        terminal.evidence_id,
+                        terminal.failure_classification,
+                        terminal.failure_message,
+                        terminal.attempt_id,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "RunAttempt terminal transition lost "
+                        "its RUNNING precondition"
+                    )
+
+                connection.commit()
+
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+                raise ValueError(
+                    "terminal research transaction could not be committed"
+                ) from error
+            except Exception:
+                connection.rollback()
+                raise
+
+        return terminal
+
+    def recover_running_attempts(
+        self,
+        *,
+        terminal_at: datetime,
+    ) -> tuple[RunAttempt, ...]:
+        """Recover stale M9.2 RUNNING attempts as INTERRUPTED."""
+
+        recovered = []
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        attempt_id,
+                        experiment_spec_id,
+                        state,
+                        created_at,
+                        terminal_at,
+                        runtime_session_id,
+                        result_artifact_id,
+                        evidence_id,
+                        failure_classification,
+                        failure_message
+                    FROM run_attempts
+                    WHERE state = 'RUNNING'
+                    ORDER BY created_at, attempt_id
+                    """
+                ).fetchall()
+
+                for row in rows:
+                    current = self._attempt_from_row(row)
+                    effective_terminal_at = max(
+                        terminal_at,
+                        current.created_at,
+                    )
+
+                    terminal = RunAttempt(
+                        attempt_id=current.attempt_id,
+                        experiment_spec_id=current.experiment_spec_id,
+                        state=RunAttemptState.INTERRUPTED,
+                        created_at=current.created_at,
+                        terminal_at=effective_terminal_at,
+                        runtime_session_id=current.runtime_session_id,
+                        failure_classification="application_restart",
+                        failure_message=(
+                            "RUNNING attempt recovered as INTERRUPTED "
+                            "during application startup"
+                        ),
+                    )
+
+                    cursor = connection.execute(
+                        """
+                        UPDATE run_attempts
+                        SET
+                            state = ?,
+                            terminal_at = ?,
+                            result_artifact_id = NULL,
+                            evidence_id = NULL,
+                            failure_classification = ?,
+                            failure_message = ?
+                        WHERE
+                            attempt_id = ?
+                            AND state = 'RUNNING'
+                        """,
+                        (
+                            terminal.state.value,
+                            terminal.terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            terminal.failure_classification,
+                            terminal.failure_message,
+                            terminal.attempt_id,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "RUNNING recovery lost its state precondition"
+                        )
+
+                    recovered.append(terminal)
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return tuple(recovered)
 
     def terminalize_attempt(
         self,

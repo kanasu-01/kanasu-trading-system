@@ -34,49 +34,10 @@ class SQLiteResearchEvidenceStore:
         if not isinstance(record, ResearchEvidence):
             raise TypeError("record must be ResearchEvidence")
 
-        values = (
-            record.evidence_id,
-            record.created_at.isoformat(timespec="microseconds"),
-            record.status.value,
-            record.dataset_context.symbol,
-            record.dataset_context.timeframe,
-            record.dataset_context.timezone,
-            record.requested_range.start.isoformat(timespec="microseconds"),
-            record.requested_range.end.isoformat(timespec="microseconds"),
-            record.dataset_fingerprint,
-            record.configuration_fingerprint,
-            record.result_fingerprint,
-            self._encode_sequence(record.provenance),
-            record.repository_revision,
-            record.summary,
-            self._encode_sequence(record.artifact_references),
-        )
-
         try:
             with closing(self._connect()) as connection:
                 with connection:
-                    connection.execute(
-                        """
-                        INSERT INTO research_evidence (
-                            evidence_id,
-                            created_at,
-                            status,
-                            symbol,
-                            timeframe,
-                            timezone,
-                            request_start,
-                            request_end,
-                            dataset_fingerprint,
-                            configuration_fingerprint,
-                            result_fingerprint,
-                            provenance,
-                            repository_revision,
-                            summary,
-                            artifact_references
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        values,
-                    )
+                    _insert_research_evidence(connection, record)
         except sqlite3.IntegrityError as error:
             raise ValueError(
                 f"research evidence already exists: {record.evidence_id}"
@@ -150,3 +111,61 @@ class SQLiteResearchEvidenceStore:
     @staticmethod
     def _decode_sequence(value: str):
         return json.loads(value)
+
+
+
+def _research_evidence_values(record: ResearchEvidence) -> tuple:
+    """Serialize one evidence record for the canonical SQLite row."""
+
+    if not isinstance(record, ResearchEvidence):
+        raise TypeError("record must be ResearchEvidence")
+
+    return (
+        record.evidence_id,
+        record.created_at.isoformat(timespec="microseconds"),
+        record.status.value,
+        record.dataset_context.symbol,
+        record.dataset_context.timeframe,
+        record.dataset_context.timezone,
+        record.requested_range.start.isoformat(timespec="microseconds"),
+        record.requested_range.end.isoformat(timespec="microseconds"),
+        record.dataset_fingerprint,
+        record.configuration_fingerprint,
+        record.result_fingerprint,
+        SQLiteResearchEvidenceStore._encode_sequence(record.provenance),
+        record.repository_revision,
+        record.summary,
+        SQLiteResearchEvidenceStore._encode_sequence(
+            record.artifact_references
+        ),
+    )
+
+
+def _insert_research_evidence(
+    connection: sqlite3.Connection,
+    record: ResearchEvidence,
+) -> None:
+    """Insert immutable evidence using an existing caller transaction."""
+
+    connection.execute(
+        """
+        INSERT INTO research_evidence (
+            evidence_id,
+            created_at,
+            status,
+            symbol,
+            timeframe,
+            timezone,
+            request_start,
+            request_end,
+            dataset_fingerprint,
+            configuration_fingerprint,
+            result_fingerprint,
+            provenance,
+            repository_revision,
+            summary,
+            artifact_references
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        _research_evidence_values(record),
+    )

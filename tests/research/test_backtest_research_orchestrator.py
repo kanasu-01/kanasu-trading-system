@@ -359,3 +359,167 @@ def test_execution_failure_creates_failed_evidence_and_failed_attempt(
     )
     assert attempt.failure_message == "engine failed"
     assert attempt.result_artifact_id is None
+
+
+
+def test_exact_success_uses_atomic_terminal_transaction(
+    tmp_path,
+    monkeypatch,
+):
+    values = candles()
+    service, catalog, evidence_store, _ = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: values,
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-atomic",
+        ),
+        evidence_id="evidence-atomic",
+    )
+
+    calls = []
+    original = catalog.terminalize_attempt_with_evidence
+
+    def atomic_terminal(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        catalog,
+        "terminalize_attempt_with_evidence",
+        atomic_terminal,
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert len(calls) == 1
+    _, kwargs = calls[0]
+    assert kwargs["state"] is RunAttemptState.SUCCEEDED
+    assert kwargs["result_artifact"] is not None
+    assert kwargs["evidence"].evidence_id == "evidence-atomic"
+
+    persisted = catalog.load_run_attempt(execution.attempt_id)
+    assert persisted.state is RunAttemptState.SUCCEEDED
+    assert persisted.evidence_id == execution.evidence_id
+    assert evidence_store.load(
+        execution.evidence_id
+    ).status is ResearchEvidenceStatus.ACCEPTED
+
+
+def test_exact_failure_uses_atomic_terminal_transaction(
+    tmp_path,
+    monkeypatch,
+):
+    values = candles()
+
+    def fail_execution(**kwargs):
+        raise RuntimeError("atomic engine failure")
+
+    service, catalog, evidence_store, _ = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: values,
+        execute=fail_execution,
+        evidence_id="evidence-atomic-failure",
+    )
+
+    calls = []
+    original = catalog.terminalize_attempt_with_evidence
+
+    def atomic_terminal(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        catalog,
+        "terminalize_attempt_with_evidence",
+        atomic_terminal,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="atomic engine failure",
+    ):
+        service.execute(
+            historical_source=object(),
+            strategy=create_strategy(config()),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+        )
+
+    assert len(calls) == 1
+    _, kwargs = calls[0]
+    assert kwargs["state"] is RunAttemptState.FAILED
+    assert kwargs.get("result_artifact") is None
+    assert (
+        kwargs["evidence"].status
+        is ResearchEvidenceStatus.FAILED
+    )
+
+    attempt = catalog.load_run_attempt("attempt-001")
+    assert attempt.state is RunAttemptState.FAILED
+    assert evidence_store.load(
+        "evidence-atomic-failure"
+    ).status is ResearchEvidenceStatus.FAILED
+
+
+def test_terminal_persistence_failure_does_not_claim_durable_success(
+    tmp_path,
+    monkeypatch,
+):
+    values = candles()
+    service, catalog, evidence_store, _ = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: values,
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-not-durable",
+        ),
+        evidence_id="evidence-must-not-commit",
+    )
+
+    def fail_terminal(*args, **kwargs):
+        raise RuntimeError("terminal transaction unavailable")
+
+    monkeypatch.setattr(
+        catalog,
+        "terminalize_attempt_with_evidence",
+        fail_terminal,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="terminal transaction unavailable",
+    ):
+        service.execute(
+            historical_source=object(),
+            strategy=create_strategy(config()),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+        )
+
+    attempt = catalog.load_run_attempt("attempt-001")
+    assert attempt.state is RunAttemptState.RUNNING
+    assert attempt.evidence_id is None
+    assert attempt.result_artifact_id is None
+    assert evidence_store.load(
+        "evidence-must-not-commit"
+    ) is None

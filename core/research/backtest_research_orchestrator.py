@@ -129,6 +129,7 @@ class BacktestResearchOrchestrator:
         configuration_fingerprint: str | None = None,
         result_fingerprint: str | None = None,
         artifact_references: tuple[str, ...] = (),
+        persist: bool = True,
     ) -> ResearchEvidence:
         provenance = {
             "computation_kind": ComputationKind.BACKTEST.value,
@@ -164,7 +165,9 @@ class BacktestResearchOrchestrator:
             artifact_references=artifact_references,
         )
 
-        self.evidence_store.save(record)
+        if persist:
+            self.evidence_store.save(record)
+
         return record
 
     def _try_pre_spec_evidence(
@@ -333,14 +336,15 @@ class BacktestResearchOrchestrator:
                 dataset_fingerprint_value=dataset_fp,
                 configuration_fingerprint=configuration_fp,
                 artifact_references=(manifest_reference,),
+                persist=(attempt is None),
             )
 
             if attempt is not None:
-                self.catalog_store.terminalize_attempt(
+                self.catalog_store.terminalize_attempt_with_evidence(
                     attempt.attempt_id,
                     state=RunAttemptState.FAILED,
                     terminal_at=self._clock(),
-                    evidence_id=evidence.evidence_id,
+                    evidence=evidence,
                     failure_classification=(
                         "backtest_execution_failed"
                     ),
@@ -362,9 +366,10 @@ class BacktestResearchOrchestrator:
             )
         )
 
-        result_artifact = self.catalog_store.save_artifact(
-            result_artifact
-        )
+        if attempt is None:
+            result_artifact = self.catalog_store.save_artifact(
+                result_artifact
+            )
 
         result_reference = research_artifact_reference(
             result_artifact.artifact_id
@@ -396,16 +401,19 @@ class BacktestResearchOrchestrator:
                 manifest_reference,
                 result_reference,
             ),
+            persist=(attempt is None),
         )
 
         if attempt is not None:
-            attempt = self.catalog_store.terminalize_attempt(
-                attempt.attempt_id,
-                state=RunAttemptState.SUCCEEDED,
-                terminal_at=self._clock(),
-                runtime_session_id=result.session_id,
-                result_artifact_id=result_artifact.artifact_id,
-                evidence_id=evidence.evidence_id,
+            attempt = (
+                self.catalog_store.terminalize_attempt_with_evidence(
+                    attempt.attempt_id,
+                    state=RunAttemptState.SUCCEEDED,
+                    terminal_at=self._clock(),
+                    runtime_session_id=result.session_id,
+                    result_artifact=result_artifact,
+                    evidence=evidence,
+                )
             )
 
         return BacktestResearchExecution(
