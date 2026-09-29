@@ -1,5 +1,6 @@
 # core/market_data/historical_feed.py
 
+from collections.abc import Callable, Iterator
 from typing import List
 from datetime import datetime
 from datetime import timedelta
@@ -8,6 +9,9 @@ import time
 from core.market_data.base_feed import BaseFeed
 from core.broker.base_broker import BaseBroker
 from core.entities.candle import Candle
+from core.market_data.provider_instrument_binding import (
+    ProviderInstrumentBinding,
+)
 
 
 def _is_timezone_aware(timestamp: datetime) -> bool:
@@ -54,20 +58,99 @@ class HistoricalFeed(BaseFeed):
         timeframe: str,
         start: datetime,
         end: datetime,
-    ):
+    ) -> Iterator[Candle]:
         """
-        Stream historical candles in chunks via brokerusing broker limits.
+        Stream historical candles in broker-limited chunks.
 
-        Candles are yielded one by one in chronological order.
-
-        Broker must implement:
-        get_historical_candles(symbol, timeframe, start, end)
+        The public V1 signature and behavior remain unchanged.
         """
-        # Ask broker for historical limits
+
+        def load_chunk(
+            chunk_start: datetime,
+            chunk_end: datetime,
+        ) -> List[Candle]:
+            return self.broker.get_historical_candles(
+                symbol=symbol,
+                timeframe=timeframe,
+                start=chunk_start,
+                end=chunk_end,
+            )
+
+        yield from self._stream_chunks(
+            timeframe=timeframe,
+            start=start,
+            end=end,
+            load_chunk=load_chunk,
+        )
+
+    def stream_with_binding(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        *,
+        provider_binding: ProviderInstrumentBinding,
+    ) -> Iterator[Candle]:
+        """
+        Stream one explicitly provider-bound historical subrange.
+
+        Multi-binding request splitting belongs to the higher-level
+        successor retrieval service. This method deliberately handles
+        exactly one already-resolved binding.
+        """
+
+        if not isinstance(
+            provider_binding,
+            ProviderInstrumentBinding,
+        ):
+            raise TypeError(
+                "provider_binding must be a "
+                "ProviderInstrumentBinding"
+            )
+
+        def load_chunk(
+            chunk_start: datetime,
+            chunk_end: datetime,
+        ) -> List[Candle]:
+            return self.broker.get_historical_candles(
+                symbol=symbol,
+                timeframe=timeframe,
+                start=chunk_start,
+                end=chunk_end,
+                provider_binding=provider_binding,
+            )
+
+        yield from self._stream_chunks(
+            timeframe=timeframe,
+            start=start,
+            end=end,
+            load_chunk=load_chunk,
+        )
+
+    def _stream_chunks(
+        self,
+        *,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        load_chunk: Callable[
+            [datetime, datetime],
+            List[Candle],
+        ],
+    ) -> Iterator[Candle]:
+        """
+        Shared deterministic chunk/ordering validation.
+
+        Both legacy and binding-aware paths use this exact logic.
+        """
+
         limits = self.broker.get_historical_limits()
 
         if timeframe not in limits:
-            raise ValueError(f"Unsupported timeframe: {timeframe}")
+            raise ValueError(
+                f"Unsupported timeframe: {timeframe}"
+            )
 
         max_days = limits[timeframe]
 
@@ -76,16 +159,18 @@ class HistoricalFeed(BaseFeed):
         latest_emitted_timestamp: datetime | None = None
 
         while current_start < end:
-            safe_end = current_start + timedelta(days=max_days)
+            safe_end = current_start + timedelta(
+                days=max_days
+            )
+
             if safe_end > end:
                 safe_end = end
 
-            candles = self.broker.get_historical_candles(
-                symbol=symbol,
-                timeframe=timeframe,
-                start=current_start,
-                end=safe_end,
+            candles = load_chunk(
+                current_start,
+                safe_end,
             )
+
             time.sleep(self.request_delay_sec)
 
             current_chunk_timestamps: set[datetime] = set()
@@ -95,16 +180,21 @@ class HistoricalFeed(BaseFeed):
                 timestamp = candle.timestamp
 
                 if previous_chunk_timestamp is not None:
-                    if _is_timezone_aware(timestamp) != _is_timezone_aware(
-                        previous_chunk_timestamp
+                    if (
+                        _is_timezone_aware(timestamp)
+                        != _is_timezone_aware(
+                            previous_chunk_timestamp
+                        )
                     ):
                         raise ValueError(
-                            "historical candle timezone awareness must match"
+                            "historical candle timezone "
+                            "awareness must match"
                         )
 
                 if timestamp in current_chunk_timestamps:
                     raise ValueError(
-                        "duplicate timestamp within historical broker chunk"
+                        "duplicate timestamp within "
+                        "historical broker chunk"
                     )
 
                 if (
@@ -112,37 +202,48 @@ class HistoricalFeed(BaseFeed):
                     and timestamp < previous_chunk_timestamp
                 ):
                     raise ValueError(
-                        "historical broker chunk must be chronological; "
-                        "timestamp is older than the previous candle"
+                        "historical broker chunk must be "
+                        "chronological; timestamp is older "
+                        "than the previous candle"
                     )
 
                 current_chunk_timestamps.add(timestamp)
                 previous_chunk_timestamp = timestamp
 
                 if timestamp in seen_by_timestamp:
-                    if candle != seen_by_timestamp[timestamp]:
+                    if (
+                        candle
+                        != seen_by_timestamp[timestamp]
+                    ):
                         raise ValueError(
-                            "conflicting historical candle for previously "
-                            "emitted timestamp"
+                            "conflicting historical candle "
+                            "for previously emitted timestamp"
                         )
+
                     continue
 
                 if latest_emitted_timestamp is not None:
-                    if _is_timezone_aware(timestamp) != _is_timezone_aware(
-                        latest_emitted_timestamp
+                    if (
+                        _is_timezone_aware(timestamp)
+                        != _is_timezone_aware(
+                            latest_emitted_timestamp
+                        )
                     ):
                         raise ValueError(
-                            "historical candle timezone awareness must match"
+                            "historical candle timezone "
+                            "awareness must match"
                         )
 
                     if timestamp < latest_emitted_timestamp:
                         raise ValueError(
-                            "delayed out-of-order historical candle is older "
-                            "than the latest emitted candle"
+                            "delayed out-of-order historical "
+                            "candle is older than the latest "
+                            "emitted candle"
                         )
 
                 seen_by_timestamp[timestamp] = candle
                 latest_emitted_timestamp = timestamp
+
                 yield candle
 
             current_start = safe_end
