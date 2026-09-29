@@ -12,6 +12,11 @@ from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
 from core.logging.logger import get_logger
 from core.utils.retry import RetryPolicy
+from core.market_data.historical_coverage import TimeRange
+from core.market_data.provider_instrument_binding import (
+    ProviderInstrumentBinding,
+    resolve_provider_bindings,
+)
 
 
 class AngelOneBroker(BaseBroker):
@@ -211,6 +216,8 @@ class AngelOneBroker(BaseBroker):
         timeframe: str,
         start: datetime,
         end: datetime,
+        *,
+        provider_binding: ProviderInstrumentBinding | None = None,
     ) -> List[Candle]:
         """
         Fetch historical candles from AngelOne SmartAPI.
@@ -242,24 +249,76 @@ class AngelOneBroker(BaseBroker):
 
         interval = interval_map[timeframe]
 
-        # ---- Timezone normalization (IST) ----
+        # ---- AngelOne provider wall time (Asia/Kolkata) ----
         ist = pytz.timezone("Asia/Kolkata")
-        start_dt = ist.localize(start) if start.tzinfo is None else start
-        end_dt = ist.localize(end) if end.tzinfo is None else end
+        start_dt = (
+            ist.localize(start)
+            if start.utcoffset() is None
+            else start.astimezone(ist)
+        )
+        end_dt = (
+            ist.localize(end)
+            if end.utcoffset() is None
+            else end.astimezone(ist)
+        )
 
-        # ---- Fetch data from AngelOne ----
-        symbol_token_map = self.config.symbol_token_map
-        if symbol_token_map is None:
-            raise RuntimeError("Angelone symbol toke map is not configured")
-        if symbol not in symbol_token_map:
-            raise RuntimeError("error")
-        symbol_token = symbol_token_map[symbol]
+        # ---- Resolve AngelOne provider identity ----
+        if provider_binding is None:
+            # Legacy compatibility path. M9.3e will wire canonical
+            # instrument resolution into the application/research path.
+            symbol_token_map = self.config.symbol_token_map
+            if symbol_token_map is None:
+                raise RuntimeError(
+                    "Angelone symbol toke map is not configured"
+                )
+            if symbol not in symbol_token_map:
+                raise RuntimeError("error")
+            exchange = self.config.exchange
+            symbol_token = symbol_token_map[symbol]
+        else:
+            if not isinstance(
+                provider_binding,
+                ProviderInstrumentBinding,
+            ):
+                raise TypeError(
+                    "provider_binding must be a "
+                    "ProviderInstrumentBinding"
+                )
+
+            if provider_binding.provider != "angelone":
+                raise ValueError(
+                    "provider binding is not for AngelOne"
+                )
+
+            if provider_binding.provider_exchange is None:
+                raise ValueError(
+                    "AngelOne provider binding requires "
+                    "provider_exchange"
+                )
+
+            # A single adapter call must stay inside one resolved
+            # binding interval. M9.3e owns splitting a larger canonical
+            # request across multiple effective-dated bindings.
+            resolve_provider_bindings(
+                instrument_id=provider_binding.instrument_id,
+                provider="angelone",
+                request=TimeRange(
+                    start=start,
+                    end=end,
+                ),
+                bindings=(provider_binding,),
+            )
+
+            exchange = provider_binding.provider_exchange
+            symbol_token = (
+                provider_binding.provider_instrument_id
+            )
 
         try:
 
             response = self._api.getCandleData(
                 {
-                    "exchange": self.config.exchange,
+                    "exchange": exchange,
                     "symboltoken": symbol_token,
                     "interval": interval,
                     "fromdate": start_dt.strftime("%Y-%m-%d %H:%M"),

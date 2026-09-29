@@ -1,10 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from core.broker.angelone import AngelOneBroker
 from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
+from core.market_data.provider_instrument_binding import (
+    ProviderBindingResolutionError,
+    ProviderInstrumentBinding,
+)
 
 
 START = datetime(2026, 1, 2, 9, 15)
@@ -136,3 +140,143 @@ def test_non_empty_historical_response_preserves_candle_parsing():
             "todate": "2026-01-02 10:15",
         }
     ]
+
+
+def test_aware_non_ist_bounds_are_converted_to_india_wall_time():
+    broker, api = broker_with_api_outcome({"data": []})
+
+    start = datetime(
+        2026,
+        1,
+        2,
+        3,
+        45,
+        tzinfo=timezone.utc,
+    )
+    end = datetime(
+        2026,
+        1,
+        2,
+        4,
+        45,
+        tzinfo=timezone.utc,
+    )
+
+    broker.get_historical_candles(
+        symbol="RELIANCE",
+        timeframe="15m",
+        start=start,
+        end=end,
+    )
+
+    assert api.requests == [
+        {
+            "exchange": "NSE",
+            "symboltoken": "2885",
+            "interval": "FIFTEEN_MINUTE",
+            "fromdate": "2026-01-02 09:15",
+            "todate": "2026-01-02 10:15",
+        }
+    ]
+
+
+
+def provider_binding(
+    *,
+    provider: str = "angelone",
+    provider_instrument_id: str = "9999",
+    provider_exchange: str | None = "BSE",
+    effective_from: datetime | None = None,
+    effective_to: datetime | None = None,
+) -> ProviderInstrumentBinding:
+    return ProviderInstrumentBinding(
+        binding_id="angelone-reliance-explicit",
+        instrument_id="instrument:nse:eq:reliance",
+        provider=provider,
+        provider_instrument_id=provider_instrument_id,
+        provider_exchange=provider_exchange,
+        provider_segment="CASH",
+        provider_symbol="RELIANCE-EQ",
+        effective_from=effective_from,
+        effective_to=effective_to,
+    )
+
+
+def test_explicit_provider_binding_drives_token_and_exchange():
+    broker, api = broker_with_api_outcome({"data": []})
+
+    # Deliberately make the legacy configuration unusable.
+    broker.config.symbol_token_map = None
+    broker.config.exchange = "LEGACY"
+
+    broker.get_historical_candles(
+        symbol="RELIANCE",
+        timeframe="15m",
+        start=START,
+        end=END,
+        provider_binding=provider_binding(),
+    )
+
+    assert api.requests == [
+        {
+            "exchange": "BSE",
+            "symboltoken": "9999",
+            "interval": "FIFTEEN_MINUTE",
+            "fromdate": "2026-01-02 09:15",
+            "todate": "2026-01-02 10:15",
+        }
+    ]
+
+
+def test_explicit_provider_binding_rejects_non_angelone_provider():
+    broker, api = broker_with_api_outcome({"data": []})
+
+    with pytest.raises(ValueError, match="AngelOne"):
+        broker.get_historical_candles(
+            symbol="RELIANCE",
+            timeframe="15m",
+            start=START,
+            end=END,
+            provider_binding=provider_binding(
+                provider="other-provider",
+            ),
+        )
+
+    assert api.requests == []
+
+
+def test_explicit_provider_binding_requires_exchange():
+    broker, api = broker_with_api_outcome({"data": []})
+
+    with pytest.raises(ValueError, match="provider_exchange"):
+        broker.get_historical_candles(
+            symbol="RELIANCE",
+            timeframe="15m",
+            start=START,
+            end=END,
+            provider_binding=provider_binding(
+                provider_exchange=None,
+            ),
+        )
+
+    assert api.requests == []
+
+
+def test_explicit_provider_binding_must_cover_requested_range():
+    broker, api = broker_with_api_outcome({"data": []})
+
+    with pytest.raises(
+        ProviderBindingResolutionError,
+        match="gap",
+    ):
+        broker.get_historical_candles(
+            symbol="RELIANCE",
+            timeframe="15m",
+            start=START,
+            end=END,
+            provider_binding=provider_binding(
+                effective_from=START + timedelta(minutes=15),
+            ),
+        )
+
+    assert api.requests == []
