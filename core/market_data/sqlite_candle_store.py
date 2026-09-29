@@ -1,6 +1,7 @@
 from contextlib import closing
 from datetime import datetime
 import json
+import re
 import sqlite3
 
 from core.entities.candle import Candle
@@ -30,6 +31,14 @@ CREATE TABLE IF NOT EXISTS retrieval_coverage (
 )
 """
 
+_ACQUISITION_STREAM_SCHEMA_ID = (
+    "kanasu.dataset-acquisition-stream.v1"
+)
+
+_STREAM_ID_PATTERN = re.compile(
+    r"^sha256:[0-9a-f]{64}$"
+)
+
 
 def _is_timezone_aware(timestamp: datetime) -> bool:
     return timestamp.utcoffset() is not None
@@ -49,8 +58,30 @@ class SQLiteCandleStore:
         context: DatasetContext,
         candles: list[Candle],
     ) -> None:
-        dataset_key = self._dataset_key(context)
+        """Persist candles under the unchanged V1 dataset key."""
 
+        self._save_for_key(
+            self._dataset_key(context),
+            candles,
+        )
+
+    def save_acquisition_stream(
+        self,
+        stream_id: str,
+        candles: list[Candle],
+    ) -> None:
+        """Persist candles under an isolated M9.3 acquisition stream."""
+
+        self._save_for_key(
+            self._acquisition_stream_key(stream_id),
+            candles,
+        )
+
+    def _save_for_key(
+        self,
+        dataset_key: str,
+        candles: list[Candle],
+    ) -> None:
         with closing(sqlite3.connect(self.database_path)) as connection:
             with connection:
                 self._validate_write_awareness(
@@ -59,7 +90,11 @@ class SQLiteCandleStore:
                     candles,
                     [],
                 )
-                self._save_candles(connection, dataset_key, candles)
+                self._save_candles(
+                    connection,
+                    dataset_key,
+                    candles,
+                )
 
     def save_retrieval(
         self,
@@ -67,8 +102,34 @@ class SQLiteCandleStore:
         candles: list[Candle],
         coverage: list[TimeRange],
     ) -> None:
-        dataset_key = self._dataset_key(context)
+        """Persist V1 candles and explicit retrieval coverage."""
 
+        self._save_retrieval_for_key(
+            self._dataset_key(context),
+            candles,
+            coverage,
+        )
+
+    def save_acquisition_stream_retrieval(
+        self,
+        stream_id: str,
+        candles: list[Candle],
+        coverage: list[TimeRange],
+    ) -> None:
+        """Persist one isolated acquisition stream and its coverage."""
+
+        self._save_retrieval_for_key(
+            self._acquisition_stream_key(stream_id),
+            candles,
+            coverage,
+        )
+
+    def _save_retrieval_for_key(
+        self,
+        dataset_key: str,
+        candles: list[Candle],
+        coverage: list[TimeRange],
+    ) -> None:
         with closing(sqlite3.connect(self.database_path)) as connection:
             with connection:
                 self._validate_write_awareness(
@@ -77,7 +138,11 @@ class SQLiteCandleStore:
                     candles,
                     coverage,
                 )
-                self._save_candles(connection, dataset_key, candles)
+                self._save_candles(
+                    connection,
+                    dataset_key,
+                    candles,
+                )
 
                 for interval in coverage:
                     connection.execute(
@@ -101,8 +166,34 @@ class SQLiteCandleStore:
         start: datetime,
         end: datetime,
     ) -> list[Candle]:
-        dataset_key = self._dataset_key(context)
+        """Load candles from the unchanged V1 dataset key."""
 
+        return self._load_for_key(
+            self._dataset_key(context),
+            start,
+            end,
+        )
+
+    def load_acquisition_stream(
+        self,
+        stream_id: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[Candle]:
+        """Load candles from one isolated M9.3 acquisition stream."""
+
+        return self._load_for_key(
+            self._acquisition_stream_key(stream_id),
+            start,
+            end,
+        )
+
+    def _load_for_key(
+        self,
+        dataset_key: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[Candle]:
         if _is_timezone_aware(start) != _is_timezone_aware(end):
             raise ValueError(
                 "candle load range timezone awareness must match"
@@ -154,8 +245,26 @@ class SQLiteCandleStore:
         self,
         context: DatasetContext,
     ) -> list[TimeRange]:
-        dataset_key = self._dataset_key(context)
+        """Load coverage from the unchanged V1 dataset key."""
 
+        return self._load_coverage_for_key(
+            self._dataset_key(context)
+        )
+
+    def load_acquisition_stream_coverage(
+        self,
+        stream_id: str,
+    ) -> list[TimeRange]:
+        """Load coverage for one isolated M9.3 acquisition stream."""
+
+        return self._load_coverage_for_key(
+            self._acquisition_stream_key(stream_id)
+        )
+
+    def _load_coverage_for_key(
+        self,
+        dataset_key: str,
+    ) -> list[TimeRange]:
         with closing(sqlite3.connect(self.database_path)) as connection:
             rows = connection.execute(
                 """
@@ -333,6 +442,27 @@ class SQLiteCandleStore:
                 "symbol": context.symbol,
                 "timeframe": context.timeframe,
                 "timezone": context.timezone,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _acquisition_stream_key(stream_id: str) -> str:
+        if (
+            not isinstance(stream_id, str)
+            or not _STREAM_ID_PATTERN.fullmatch(stream_id)
+        ):
+            raise ValueError(
+                "stream_id must use "
+                "sha256:<64 lowercase hexadecimal>"
+            )
+
+        return json.dumps(
+            {
+                "schema": _ACQUISITION_STREAM_SCHEMA_ID,
+                "stream_id": stream_id,
             },
             sort_keys=True,
             separators=(",", ":"),

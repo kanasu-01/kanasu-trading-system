@@ -14,6 +14,9 @@ DATASET_CONTEXT = DatasetContext(
     timezone="Asia/Kolkata",
 )
 
+STREAM_A = "sha256:" + ("a" * 64)
+STREAM_B = "sha256:" + ("b" * 64)
+
 
 def candle_at(
     timestamp: datetime,
@@ -642,3 +645,225 @@ def test_sqlite_candle_store_write_awareness_accepts_different_aware_offsets(
         end=utc_coverage.end,
     ) == [candle]
     assert store.load_coverage(DATASET_CONTEXT) == [utc_coverage]
+
+def test_acquisition_stream_key_is_versioned_and_distinct_from_v1_key():
+    legacy_key = SQLiteCandleStore._dataset_key(
+        DATASET_CONTEXT
+    )
+    stream_key = SQLiteCandleStore._acquisition_stream_key(
+        STREAM_A
+    )
+
+    assert legacy_key == (
+        '{"symbol":"RELIANCE","timeframe":"15m",'
+        '"timezone":"Asia/Kolkata"}'
+    )
+    assert stream_key == (
+        '{"schema":"kanasu.dataset-acquisition-stream.v1",'
+        '"stream_id":"' + STREAM_A + '"}'
+    )
+    assert legacy_key != stream_key
+
+
+def test_acquisition_streams_isolate_conflicting_candles(tmp_path):
+    store = SQLiteCandleStore(tmp_path / "candles.sqlite")
+    timestamp = datetime(2026, 1, 2, 9, 15)
+
+    first = candle_at(
+        timestamp,
+        close=101.0,
+    )
+    second = candle_at(
+        timestamp,
+        close=109.0,
+    )
+
+    store.save_acquisition_stream(
+        STREAM_A,
+        [first],
+    )
+    store.save_acquisition_stream(
+        STREAM_B,
+        [second],
+    )
+
+    assert store.load_acquisition_stream(
+        STREAM_A,
+        timestamp,
+        timestamp,
+    ) == [first]
+
+    assert store.load_acquisition_stream(
+        STREAM_B,
+        timestamp,
+        timestamp,
+    ) == [second]
+
+
+def test_acquisition_stream_retrieval_round_trips_durably(tmp_path):
+    database_path = tmp_path / "candles.sqlite"
+    request = TimeRange(
+        datetime(2026, 1, 2, 9, 0),
+        datetime(2026, 1, 2, 10, 0),
+    )
+    values = [
+        candle_at(datetime(2026, 1, 2, 9, 15)),
+        candle_at(datetime(2026, 1, 2, 9, 30)),
+    ]
+
+    SQLiteCandleStore(
+        database_path
+    ).save_acquisition_stream_retrieval(
+        STREAM_A,
+        values,
+        [request],
+    )
+
+    fresh = SQLiteCandleStore(database_path)
+
+    assert fresh.load_acquisition_stream(
+        STREAM_A,
+        request.start,
+        request.end,
+    ) == values
+
+    assert fresh.load_acquisition_stream_coverage(
+        STREAM_A
+    ) == [request]
+
+
+def test_acquisition_stream_rows_are_invisible_to_legacy_lookup(
+    tmp_path,
+):
+    store = SQLiteCandleStore(tmp_path / "candles.sqlite")
+    request = TimeRange(
+        datetime(2026, 1, 2, 9, 0),
+        datetime(2026, 1, 2, 10, 0),
+    )
+    value = candle_at(
+        datetime(2026, 1, 2, 9, 15),
+        close=109.0,
+    )
+
+    store.save_acquisition_stream_retrieval(
+        STREAM_A,
+        [value],
+        [request],
+    )
+
+    assert store.load(
+        DATASET_CONTEXT,
+        request.start,
+        request.end,
+    ) == []
+
+    assert store.load_coverage(
+        DATASET_CONTEXT
+    ) == []
+
+
+def test_legacy_and_acquisition_stream_rows_can_coexist(
+    tmp_path,
+):
+    store = SQLiteCandleStore(tmp_path / "candles.sqlite")
+    timestamp = datetime(2026, 1, 2, 9, 15)
+
+    legacy = candle_at(
+        timestamp,
+        close=101.0,
+    )
+    successor = candle_at(
+        timestamp,
+        close=109.0,
+    )
+
+    store.save(
+        DATASET_CONTEXT,
+        [legacy],
+    )
+    store.save_acquisition_stream(
+        STREAM_A,
+        [successor],
+    )
+
+    assert store.load(
+        DATASET_CONTEXT,
+        timestamp,
+        timestamp,
+    ) == [legacy]
+
+    assert store.load_acquisition_stream(
+        STREAM_A,
+        timestamp,
+        timestamp,
+    ) == [successor]
+
+
+@pytest.mark.parametrize(
+    "stream_id",
+    [
+        "",
+        "stream-a",
+        "sha256:" + ("A" * 64),
+        "sha256:" + ("a" * 63),
+    ],
+)
+def test_acquisition_stream_rejects_invalid_stream_id(
+    tmp_path,
+    stream_id,
+):
+    store = SQLiteCandleStore(tmp_path / "candles.sqlite")
+
+    with pytest.raises(
+        ValueError,
+        match="stream_id.*sha256",
+    ):
+        store.save_acquisition_stream(
+            stream_id,
+            [],
+        )
+
+
+def test_acquisition_stream_conflict_keeps_coverage_atomic(
+    tmp_path,
+):
+    store = SQLiteCandleStore(tmp_path / "candles.sqlite")
+    timestamp = datetime(2026, 1, 2, 9, 15)
+    request = TimeRange(
+        datetime(2026, 1, 2, 9, 0),
+        datetime(2026, 1, 2, 10, 0),
+    )
+
+    original = candle_at(
+        timestamp,
+        close=100.5,
+    )
+    conflicting = candle_at(
+        timestamp,
+        close=109.0,
+    )
+
+    store.save_acquisition_stream(
+        STREAM_A,
+        [original],
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="conflict",
+    ):
+        store.save_acquisition_stream_retrieval(
+            STREAM_A,
+            [conflicting],
+            [request],
+        )
+
+    assert store.load_acquisition_stream(
+        STREAM_A,
+        request.start,
+        request.end,
+    ) == [original]
+
+    assert store.load_acquisition_stream_coverage(
+        STREAM_A
+    ) == []
