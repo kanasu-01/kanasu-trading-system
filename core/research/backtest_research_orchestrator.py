@@ -62,6 +62,59 @@ def _new_evidence_id() -> str:
 
 
 @dataclass(frozen=True)
+class PreparedResearchRetrieval:
+    """
+    One already-prepared candle sequence plus durable research references.
+
+    The candles list is deliberately preserved as the exact object used
+    by the existing V1 fingerprint and Backtest execution path.
+    """
+
+    candles: list[Candle]
+    artifact_references: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.candles, list):
+            raise TypeError(
+                "candles must be a list"
+            )
+
+        if any(
+            not isinstance(candle, Candle)
+            for candle in self.candles
+        ):
+            raise TypeError(
+                "candles must contain Candle values"
+            )
+
+        if not isinstance(
+            self.artifact_references,
+            tuple,
+        ):
+            raise TypeError(
+                "artifact_references must be a tuple"
+            )
+
+        if any(
+            not isinstance(value, str)
+            or not value
+            for value in self.artifact_references
+        ):
+            raise ValueError(
+                "artifact_references must contain "
+                "non-empty strings"
+            )
+
+        if (
+            len(set(self.artifact_references))
+            != len(self.artifact_references)
+        ):
+            raise ValueError(
+                "artifact_references contains duplicates"
+            )
+
+
+@dataclass(frozen=True)
 class BacktestResearchExecution:
     result: BacktestResult
     attempt_id: str | None
@@ -207,11 +260,15 @@ class BacktestResearchOrchestrator:
     def execute(
         self,
         *,
-        historical_source: HistoricalSource,
+        historical_source: HistoricalSource | None,
         strategy: BaseStrategy,
         config: BacktestConfig,
         runtime_context: RuntimeContext,
         dataset_context: DatasetContext,
+        prepared_retrieval: (
+            Callable[[], PreparedResearchRetrieval]
+            | None
+        ) = None,
     ) -> BacktestResearchExecution:
         identity = self._software_identity()
         requested_range = TimeRange(
@@ -219,12 +276,40 @@ class BacktestResearchOrchestrator:
             config.end,
         )
 
+        retrieval_artifact_references: tuple[
+            str,
+            ...,
+        ] = ()
+
         try:
-            candles = self._retrieve_candles(
-                historical_source=historical_source,
-                config=config,
-                dataset_context=dataset_context,
-            )
+            if prepared_retrieval is None:
+                if historical_source is None:
+                    raise ValueError(
+                        "historical_source is required "
+                        "without prepared_retrieval"
+                    )
+
+                candles = self._retrieve_candles(
+                    historical_source=historical_source,
+                    config=config,
+                    dataset_context=dataset_context,
+                )
+            else:
+                prepared = prepared_retrieval()
+
+                if not isinstance(
+                    prepared,
+                    PreparedResearchRetrieval,
+                ):
+                    raise TypeError(
+                        "prepared_retrieval must return "
+                        "PreparedResearchRetrieval"
+                    )
+
+                candles = prepared.candles
+                retrieval_artifact_references = (
+                    prepared.artifact_references
+                )
         except Exception as error:
             self._try_pre_spec_evidence(
                 dataset_context=dataset_context,
@@ -291,9 +376,12 @@ class BacktestResearchOrchestrator:
                 dataset_fingerprint_value=dataset_fp,
                 configuration_fingerprint=configuration_fp,
                 artifact_references=(
-                    (manifest_reference,)
-                    if manifest_reference is not None
-                    else ()
+                    retrieval_artifact_references
+                    + (
+                        (manifest_reference,)
+                        if manifest_reference is not None
+                        else ()
+                    )
                 ),
             )
             raise
@@ -335,7 +423,10 @@ class BacktestResearchOrchestrator:
                 ),
                 dataset_fingerprint_value=dataset_fp,
                 configuration_fingerprint=configuration_fp,
-                artifact_references=(manifest_reference,),
+                artifact_references=(
+                    retrieval_artifact_references
+                    + (manifest_reference,)
+                ),
                 persist=(attempt is None),
             )
 
@@ -398,8 +489,11 @@ class BacktestResearchOrchestrator:
             configuration_fingerprint=configuration_fp,
             result_fingerprint=result_fp,
             artifact_references=(
-                manifest_reference,
-                result_reference,
+                retrieval_artifact_references
+                + (
+                    manifest_reference,
+                    result_reference,
+                )
             ),
             persist=(attempt is None),
         )
