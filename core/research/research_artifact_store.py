@@ -10,6 +10,11 @@ import re
 import tempfile
 
 from core.research.models.backtest_run_manifest import BacktestRunManifest
+from core.research.models.dataset_reference import (
+    DATASET_REFERENCE_SCHEMA_ID,
+    DatasetReference,
+    dataset_reference_bytes,
+)
 from core.research.models.research_catalog import (
     ResearchArtifact,
     ResearchArtifactKind,
@@ -253,5 +258,23 @@ class ContentAddressedResearchArtifactStore:
             stable_backtest_result_bytes(result),
             artifact_kind=ResearchArtifactKind.BACKTEST_RESULT,
             schema_id=BACKTEST_RESULT_SCHEMA,
+            created_at=created_at,
+        )
+
+
+    def persist_dataset_reference(
+        self,
+        reference: DatasetReference,
+        *,
+        created_at: datetime,
+    ) -> ResearchArtifact:
+        """Persist one immutable successor dataset reference."""
+
+        return self.persist_bytes(
+            dataset_reference_bytes(reference),
+            artifact_kind=(
+                ResearchArtifactKind.DATASET_REFERENCE
+            ),
+            schema_id=DATASET_REFERENCE_SCHEMA_ID,
             created_at=created_at,
         )

@@ -15,6 +15,7 @@ EXPERIMENT_SPEC_SCHEMA_ID = "kanasu.experiment-spec.v1"
 class ResearchArtifactKind(str, Enum):
     BACKTEST_RUN_MANIFEST = "BACKTEST_RUN_MANIFEST"
     BACKTEST_RESULT = "BACKTEST_RESULT"
+    DATASET_REFERENCE = "DATASET_REFERENCE"
 
 
 class ComputationKind(str, Enum):
