@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE / NOT IMPLEMENTED**
+**ACCEPTED DESIGN BASELINE / IMPLEMENTATION IN PROGRESS**
 
 M9.3 defines the identity and truthfulness rules required before Kanasu
 can perform reliable multi-instrument research.
@@ -312,11 +312,23 @@ M9.3 adopts this provider-boundary rule:
 - deterministic tests prove the exact `fromdate` and `todate` sent to
   AngelOne.
 
-This resolves the design choice recorded in DW-019 without changing
+This design choice is implemented by M9.3d in
+`27baa264328432490246730d00a108dcd38916fe`
+(`Implement M9.3d AngelOne binding and wall time`) without changing
 canonical timestamp/fingerprint semantics.
 
-DW-019 remains open until this provider-boundary behavior and its
-deterministic regression evidence are implemented and validated.
+Deterministic AngelOne historical regression coverage proves that aware
+non-India bounds are converted to `Asia/Kolkata` before request
+formatting, while naive bounds retain India-wall-time interpretation.
+The provider-boundary representation does not rewrite the canonical
+requested range or candle timestamps. Explicit provider-binding tests
+also prove token/exchange selection and fail-closed binding validation.
+
+M9.3d completed its focused validation and the complete Python regression
+passed 1027 tests. DW-019 is therefore resolved at the accepted M9.3d
+scope. This closure is limited to the AngelOne historical request-timezone
+boundary; it does not claim completion of M9.3 application/research
+integration or M9.3 milestone closure.
 
 ## 11. Failure and claim semantics
 

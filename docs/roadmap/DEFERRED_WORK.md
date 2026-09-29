@@ -222,13 +222,17 @@ Daily certification requires explicit daily/session-close availability, calendar
 
 ## DW-019 ? AngelOne Historical Request Timezone Boundary
 
-**Status:** OPEN
+**Status:** RESOLVED AT ACCEPTED M9.3d SCOPE
 **Target:** M9.3 data/instrument truthfulness.
 
 Repository review identified a bounded adapter inconsistency: naive historical bounds are localized for AngelOne use, while already-aware non-IST bounds can pass through to request formatting without an explicit conversion/rejection contract. The effect on actual provider responses is not yet established.
 
 M9.3 must define the provider-wall-time contract explicitly: either convert accepted aware bounds to the provider-required timezone before formatting or reject unsupported timezone input at the adapter boundary. Deterministic tests must prove the request representation while preserving canonical dataset timestamp/fingerprint semantics.
-The accepted M9.3 design baseline selects conversion rather than rejection: aware bounds are converted to `Asia/Kolkata` before AngelOne formatting, while naive bounds retain explicit India-wall-time interpretation. This accepted design choice does not close DW-019. Adapter implementation and deterministic regression evidence remain required before the item can be resolved.
+The accepted M9.3 design baseline selected conversion rather than rejection: aware bounds are converted to `Asia/Kolkata` before AngelOne formatting, while naive bounds retain explicit India-wall-time interpretation.
+
+M9.3d implemented that boundary in `27baa264328432490246730d00a108dcd38916fe` (`Implement M9.3d AngelOne binding and wall time`). Deterministic AngelOne historical tests prove the request representation, preserve the canonical request/timestamp semantics, and verify explicit provider-binding behavior. M9.3d validation completed with the complete Python regression at 1027 passing tests.
+
+DW-019 is resolved at this bounded adapter scope. This resolution does not claim complete M9.3 instrument/data integration, acquisition-stream persistence, research wiring or milestone closure; those remain under M9.3e/M9.3f.
 
 ## Maintenance
 
