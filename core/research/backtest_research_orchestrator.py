@@ -114,6 +114,43 @@ class PreparedResearchRetrieval:
             )
 
 
+class PreparedResearchSpecificationError(RuntimeError):
+    """
+    Prepared retrieval succeeded, but its research specification
+    material could not be prepared.
+
+    The original operational exception is retained so callers continue
+    to observe its original type and message.
+    """
+
+    def __init__(
+        self,
+        original_error: Exception,
+    ):
+        if not isinstance(
+            original_error,
+            Exception,
+        ):
+            raise TypeError(
+                "original_error must be an Exception"
+            )
+
+        self.original_error = original_error
+
+        message = str(
+            original_error
+        )
+
+        if not message:
+            message = type(
+                original_error
+            ).__name__
+
+        super().__init__(
+            message
+        )
+
+
 @dataclass(frozen=True)
 class BacktestResearchExecution:
     result: BacktestResult
@@ -310,6 +347,23 @@ class BacktestResearchOrchestrator:
                 retrieval_artifact_references = (
                     prepared.artifact_references
                 )
+        except PreparedResearchSpecificationError as error:
+            original_error = error.original_error
+
+            self._try_pre_spec_evidence(
+                dataset_context=dataset_context,
+                requested_range=requested_range,
+                identity=identity,
+                summary=(
+                    "research_specification_preparation_failed: "
+                    + self._failure_message(
+                        original_error
+                    )
+                ),
+            )
+
+            raise original_error
+
         except Exception as error:
             self._try_pre_spec_evidence(
                 dataset_context=dataset_context,

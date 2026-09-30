@@ -520,6 +520,11 @@ def test_successor_retrieval_failure_keeps_existing_incomplete_evidence_semantic
         is ResearchEvidenceStatus.INCOMPLETE
     )
 
+    assert evidence.summary == (
+        "historical_data_retrieval_failed: "
+        "successor history unavailable"
+    )
+
     assert (
         evidence.artifact_references
         == ()
@@ -541,6 +546,258 @@ def test_successor_retrieval_failure_keeps_existing_incomplete_evidence_semantic
         == 0
     )
 
+
+
+
+def test_dataset_reference_persistence_failure_is_classified_as_specification_preparation(
+    tmp_path,
+    monkeypatch,
+):
+    (
+        orchestrator,
+        _,
+        evidence_store,
+        artifact_store,
+        database,
+    ) = make_orchestrator(
+        tmp_path,
+        execute=lambda **kwargs: pytest.fail(
+            "execution must not run"
+        ),
+        evidence_id=(
+            "evidence-reference-persist-failed"
+        ),
+    )
+
+    retrieval_service = StaticSuccessorRetrieval(
+        result=successor_result()
+    )
+
+    def fail_persist(
+        reference,
+        *,
+        created_at,
+    ):
+        raise OSError(
+            "dataset reference persistence failed"
+        )
+
+    monkeypatch.setattr(
+        artifact_store,
+        "persist_dataset_reference",
+        fail_persist,
+    )
+
+    coordinator = (
+        SuccessorBacktestResearchCoordinator(
+            retrieval_service=(
+                retrieval_service
+            ),
+            orchestrator=orchestrator,
+            clock=lambda: CREATED_AT,
+        )
+    )
+
+    with pytest.raises(
+        OSError,
+        match=(
+            "dataset reference persistence failed"
+        ),
+    ):
+        coordinator.execute(
+            strategy=create_strategy(
+                config()
+            ),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+            instrument_id=INSTRUMENT_ID,
+            provider="angelone",
+            price_adjustment_basis=(
+                PriceAdjustmentBasis.UNKNOWN
+            ),
+        )
+
+    assert len(
+        retrieval_service.calls
+    ) == 1
+
+    evidence = evidence_store.load(
+        "evidence-reference-persist-failed"
+    )
+
+    assert evidence is not None
+
+    assert (
+        evidence.status
+        is ResearchEvidenceStatus.INCOMPLETE
+    )
+
+    assert evidence.summary == (
+        "research_specification_preparation_failed: "
+        "dataset reference persistence failed"
+    )
+
+    assert (
+        evidence.artifact_references
+        == ()
+    )
+
+    assert (
+        row_count(
+            database,
+            "research_artifacts",
+        )
+        == 0
+    )
+
+    assert (
+        row_count(
+            database,
+            "experiment_specs",
+        )
+        == 0
+    )
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == 0
+    )
+
+
+def test_dataset_reference_catalog_failure_is_classified_as_specification_preparation(
+    tmp_path,
+    monkeypatch,
+):
+    (
+        orchestrator,
+        catalog,
+        evidence_store,
+        artifact_store,
+        database,
+    ) = make_orchestrator(
+        tmp_path,
+        execute=lambda **kwargs: pytest.fail(
+            "execution must not run"
+        ),
+        evidence_id=(
+            "evidence-reference-catalog-failed"
+        ),
+    )
+
+    retrieval_service = StaticSuccessorRetrieval(
+        result=successor_result()
+    )
+
+    captured = {}
+
+    def fail_catalog_registration(
+        artifact,
+    ):
+        assert (
+            artifact.artifact_kind
+            is ResearchArtifactKind.DATASET_REFERENCE
+        )
+
+        captured["artifact"] = artifact
+
+        raise ValueError(
+            "dataset reference catalog registration failed"
+        )
+
+    monkeypatch.setattr(
+        catalog,
+        "save_artifact",
+        fail_catalog_registration,
+    )
+
+    coordinator = (
+        SuccessorBacktestResearchCoordinator(
+            retrieval_service=(
+                retrieval_service
+            ),
+            orchestrator=orchestrator,
+            clock=lambda: CREATED_AT,
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "dataset reference catalog registration failed"
+        ),
+    ):
+        coordinator.execute(
+            strategy=create_strategy(
+                config()
+            ),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+            instrument_id=INSTRUMENT_ID,
+            provider="angelone",
+            price_adjustment_basis=(
+                PriceAdjustmentBasis.UNKNOWN
+            ),
+        )
+
+    assert len(
+        retrieval_service.calls
+    ) == 1
+
+    evidence = evidence_store.load(
+        "evidence-reference-catalog-failed"
+    )
+
+    assert evidence is not None
+
+    assert (
+        evidence.status
+        is ResearchEvidenceStatus.INCOMPLETE
+    )
+
+    assert evidence.summary == (
+        "research_specification_preparation_failed: "
+        "dataset reference catalog registration failed"
+    )
+
+    assert (
+        evidence.artifact_references
+        == ()
+    )
+
+    artifact = captured["artifact"]
+
+    assert artifact_store.load_bytes(
+        artifact.artifact_id
+    )
+
+    assert catalog.load_artifact(
+        artifact.artifact_id
+    ) is None
+
+    assert (
+        row_count(
+            database,
+            "experiment_specs",
+        )
+        == 0
+    )
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == 0
+    )
 
 def test_execution_failure_keeps_dataset_reference_in_failed_evidence(
     tmp_path,

@@ -7,6 +7,7 @@ from core.research.backtest_research_orchestrator import (
     BacktestResearchExecution,
     BacktestResearchOrchestrator,
     PreparedResearchRetrieval,
+    PreparedResearchSpecificationError,
 )
 from core.research.models.dataset import (
     DatasetIdentityV2,
@@ -80,82 +81,87 @@ class SuccessorBacktestResearchCoordinator:
                 ),
             )
 
-            candles = list(
-                retrieval.candles
-            )
-
-            identity = DatasetIdentityV2(
-                instrument_id=instrument_id,
-                requested_range=requested_range,
-                timeframe=config.timeframe,
-                timezone=config.timezone,
-                price_adjustment_basis=(
-                    price_adjustment_basis
-                ),
-                candles=candles,
-            )
-
-            created_at = self._clock()
-
-            limitations = (
-                (
-                    "price adjustment basis is unknown",
+            try:
+                candles = list(
+                    retrieval.candles
                 )
-                if (
-                    price_adjustment_basis
-                    is PriceAdjustmentBasis.UNKNOWN
-                )
-                else ()
-            )
 
-            provenance = DatasetProvenance(
-                dataset_id=identity.dataset_id,
-                instrument_id=instrument_id,
-                requested_range=requested_range,
-                timeframe=config.timeframe,
-                timezone=config.timezone,
-                price_adjustment_basis=(
-                    price_adjustment_basis
-                ),
-                source=retrieval.source,
-                binding_segments=(
-                    retrieval.binding_segments
-                ),
-                coverage=retrieval.coverage,
-                retrieved_at=created_at,
-                limitations=limitations,
-            )
-
-            reference = DatasetReference(
-                identity=identity,
-                provenance=provenance,
-            )
-
-            artifact = (
-                self.orchestrator
-                .artifact_store
-                .persist_dataset_reference(
-                    reference,
-                    created_at=created_at,
-                )
-            )
-
-            artifact = (
-                self.orchestrator
-                .catalog_store
-                .save_artifact(
-                    artifact
-                )
-            )
-
-            return PreparedResearchRetrieval(
-                candles=candles,
-                artifact_references=(
-                    research_artifact_reference(
-                        artifact.artifact_id
+                identity = DatasetIdentityV2(
+                    instrument_id=instrument_id,
+                    requested_range=requested_range,
+                    timeframe=config.timeframe,
+                    timezone=config.timezone,
+                    price_adjustment_basis=(
+                        price_adjustment_basis
                     ),
-                ),
-            )
+                    candles=candles,
+                )
+
+                created_at = self._clock()
+
+                limitations = (
+                    (
+                        "price adjustment basis is unknown",
+                    )
+                    if (
+                        price_adjustment_basis
+                        is PriceAdjustmentBasis.UNKNOWN
+                    )
+                    else ()
+                )
+
+                provenance = DatasetProvenance(
+                    dataset_id=identity.dataset_id,
+                    instrument_id=instrument_id,
+                    requested_range=requested_range,
+                    timeframe=config.timeframe,
+                    timezone=config.timezone,
+                    price_adjustment_basis=(
+                        price_adjustment_basis
+                    ),
+                    source=retrieval.source,
+                    binding_segments=(
+                        retrieval.binding_segments
+                    ),
+                    coverage=retrieval.coverage,
+                    retrieved_at=created_at,
+                    limitations=limitations,
+                )
+
+                reference = DatasetReference(
+                    identity=identity,
+                    provenance=provenance,
+                )
+
+                artifact = (
+                    self.orchestrator
+                    .artifact_store
+                    .persist_dataset_reference(
+                        reference,
+                        created_at=created_at,
+                    )
+                )
+
+                artifact = (
+                    self.orchestrator
+                    .catalog_store
+                    .save_artifact(
+                        artifact
+                    )
+                )
+
+                return PreparedResearchRetrieval(
+                    candles=candles,
+                    artifact_references=(
+                        research_artifact_reference(
+                            artifact.artifact_id
+                        ),
+                    ),
+                )
+            except Exception as error:
+                raise PreparedResearchSpecificationError(
+                    error
+                ) from error
 
         return self.orchestrator.execute(
             historical_source=None,
