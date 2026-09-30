@@ -71,7 +71,7 @@ AI may assist future research, but it cannot silently mutate registered protocol
 
 **Status: DONE/CLOSED at accepted implementation/validation scope**
 
-M9.2 is the implemented durable computation/evidence layer beneath the complete M9 research workflow. It adds durable computation/evidence lineage to the existing authoritative Backtest application before M9.4 introduces registered Study/Trial workflow.
+M9.2 remains the implemented durable computation/evidence layer beneath the complete M9 research workflow. The accepted M9.4 design now defines the registered Study/StudyRevision/Trial/ResearchJob workflow above it; M9.4 production implementation has not started.
 
 The implemented M9.2 Backtest lineage is:
 
@@ -113,7 +113,7 @@ The existing stable result fingerprint remains the result-artifact content ident
 
 Accepted automatic evidence requires exact executable software identity. Without exact executable software identity, an exact ExperimentSpec cannot be established and M9.2 does not create a RunAttempt. The financial computation may still succeed while its reproducibility evidence remains incomplete; execution success therefore remains distinct from evidence completeness and future research qualification. A successful RunAttempt with incomplete evidence is possible only when its exact ExperimentSpec already existed and another evidence requirement later became incomplete.
 
-Before M9.4, these durable application Backtests are not represented as pre-registered Trials. Later research workflow may explicitly reference compatible pre-existing evidence, but it may not rewrite registration history.
+Application Backtests created before registered M9.4 Trial execution remain historically pre-M9.4 executions. The accepted M9.4 design may reuse exact compatible prior evidence only after Trial registration and must never rewrite the historical timing of that earlier execution.
 
 ### Behavioral specification and traceability
 
@@ -421,7 +421,7 @@ M4.6 subsequently introduced the successor research-configuration identity and a
 
 M5 subsequently resolved the WFA termination, configuration/economic propagation, account-metric, stitching and verdict issues described by the earlier baseline. M4.6/M4.7 implemented and integrated the successor Backtest economic-policy/manifest identity.
 
-Automatic application-level Backtest research execution/evidence persistence is now wired through the M9.2 orchestration boundary and exposed through the authoritative Backtest application response. Registered Study/Trial job ownership remains M9.4 scope. PivotBoss remains unvalidated and must not be treated as the reference strategy.
+Automatic application-level Backtest research execution/evidence persistence remains wired through the M9.2 orchestration boundary and exposed through the authoritative Backtest application response. Registered Study/Trial/ResearchJob ownership is now defined by the accepted M9.4 design baseline, while its production implementation remains pending. PivotBoss remains unvalidated and must not be treated as the reference strategy.
 
 ## 8. Paper-runtime architecture
 
@@ -494,9 +494,9 @@ M8 authoritative frontend scope is Backtest and Paper. Legacy Replay/export beha
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
 
 - Backtest execution is authoritative but remains request-scoped rather than owned by a durable Study/job catalog;
-- automatic Backtest research-result/evidence persistence is implemented by M9.2, while registered Study/Trial job ownership remains later M9 scope;
-- M9.3 is closed at its accepted truthfulness scope: canonical instrument/provider-binding contracts, temporal universe snapshots, successor dataset/provenance and acquisition streams, AngelOne wall-time handling, binding-aware historical retrieval and DatasetReference-backed research integration are implemented; successor application use remains explicit opt-in until authoritative canonical registry data is supplied, while M9.4 owns registered Study/Trial batch execution;
-- no persistent Study/Trial research lifecycle currently exists; M9.2 now provides durable ExperimentSpec and RunAttempt computation/execution lineage;
+- automatic Backtest research-result/evidence persistence is implemented by M9.2, while registered Study/Trial/ResearchJob ownership is specified by the accepted M9.4 design and remains unimplemented;
+- M9.3 is closed at its accepted truthfulness scope: canonical instrument/provider-binding contracts, temporal universe snapshots, successor dataset/provenance and acquisition streams, AngelOne wall-time handling, binding-aware historical retrieval and DatasetReference-backed research integration are implemented; successor application use remains explicit opt-in until authoritative canonical registry data is supplied. The accepted M9.4 design owns registered Study/Trial batch execution, but that production workflow has not yet been implemented;
+- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle is specified by the accepted M9.4 design but is not yet implemented; M9.2 continues to provide the currently implemented durable ExperimentSpec/RunAttempt/evidence lineage;
 - the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
 - no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;
 - current Paper ownership is one process-local authoritative session rather than a durable multi-session `PaperCampaign`;

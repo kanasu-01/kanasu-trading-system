@@ -101,4 +101,4 @@ Before the complete registered Study workflow is introduced, M9.2 designs the lo
 
 A current application Backtest can therefore gain an immutable ExperimentSpec, a distinct RunAttempt, stable result/manifest artifacts and ResearchEvidence without being falsely represented as a Trial that was registered beforehand.
 
-M9.4 later owns explicit StudyRevision/Trial registration and bounded batch execution. It may reference compatible prior evidence as reused evidence where allowed, but it must not rewrite the historical timing of registration.
+The accepted M9.4 design now defines explicit StudyRevision/Trial registration, ResearchJob ownership and bounded local batch execution. Production implementation has not started. Compatible prior evidence may later be reused only after Trial registration, without rewriting the historical timing of the earlier execution.

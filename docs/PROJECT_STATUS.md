@@ -17,9 +17,9 @@
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.3 - Instrument, universe and dataset truthfulness - DONE/CLOSED |
-| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED at accepted implementation/validation scope through M9.3f |
-| Next planned review | M9.4 registered Studies and bounded local batch execution |
+| Step | M9.4 - Registered Studies and bounded local batch execution - DESIGN ACCEPTED/PUBLISHED; IMPLEMENTATION NOT STARTED |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4 design baseline ACCEPTED/PUBLISHED at `9b7ab42`; M9.4 production implementation not started |
+| Next planned review | M9.4a - Domain models and additive persistence, after authoritative documentation synchronization |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
 
@@ -317,7 +317,7 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. M9.2 is DONE/CLOSED at accepted implementation/validation scope on `4b44050b46ab4dfa6d5b5729b7876231c50671bf`. M9.3 is DONE/CLOSED at its accepted implementation/validation scope through published production head `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f contains validation, traceability and documentation closure only. M9.4 is the next research-platform milestone.
+M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. M9.2 is DONE/CLOSED at accepted implementation/validation scope on `4b44050b46ab4dfa6d5b5729b7876231c50671bf`. M9.3 is DONE/CLOSED through its accepted implementation/validation scope. The M9.4 registered-Studies and bounded-local-batch design baseline is accepted and published on `9b7ab42ca729f5c675cd84ebe3b9ec3b17a91a92`. M9.4 production implementation has not started; M9.4a is next after authoritative-document synchronization.
 
 M8.5 closed application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
 
