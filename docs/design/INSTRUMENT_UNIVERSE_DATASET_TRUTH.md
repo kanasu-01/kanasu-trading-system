@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE / IMPLEMENTATION IN PROGRESS**
+**DONE/CLOSED AT ACCEPTED M9.3 IMPLEMENTATION/VALIDATION SCOPE**
 
 M9.3 defines the identity and truthfulness rules required before Kanasu
 can perform reliable multi-instrument research.
@@ -326,9 +326,10 @@ also prove token/exchange selection and fail-closed binding validation.
 
 M9.3d completed its focused validation and the complete Python regression
 passed 1027 tests. DW-019 is therefore resolved at the accepted M9.3d
-scope. This closure is limited to the AngelOne historical request-timezone
-boundary; it does not claim completion of M9.3 application/research
-integration or M9.3 milestone closure.
+scope. At that checkpoint the closure applied only to the AngelOne
+historical request-timezone boundary. M9.3e subsequently completed the
+successor acquisition/research/application integration, and M9.3f closes
+the overall M9.3 validation and traceability scope.
 
 ## 11. Failure and claim semantics
 
@@ -376,8 +377,33 @@ A proposed implementation order is:
   and dataset references;
 - **M9.3f** - validation, traceability and closure synchronization.
 
-These slices are accepted design guidance only. Implementation still requires
-separate reviewed authorization for each implementation slice.
+All six slices are now completed at their accepted scopes. M9.3e intentionally
+keeps successor application activation explicit opt-in rather than manufacturing a
+default canonical registry from symbol/token data. M9.3f is closure-only and
+does not add production behavior.
+
+### M9.3 closure evidence
+
+BEHAVIOR IMPACT: NONE for M9.3f itself. M9.3f synchronizes already reviewed
+M9.3a-M9.3e behavior with validation and authoritative documentation.
+
+Published implementation evidence includes:
+
+- M9.3a canonical instrument/provider-binding contracts: `5543b30`;
+- M9.3b universe snapshot semantics: `61ec27c`;
+- M9.3c successor dataset/provenance contracts: `1505141`;
+- M9.3d AngelOne binding and wall-time boundary: `27baa26`;
+- M9.3e DatasetReference foundation and integration chain through
+  `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`;
+- final M9.3e focused correction validation: 25 passed;
+- final research regression at that correction: 300 passed;
+- M9.3f closure full Python regression: 1078 passed; and
+- `git diff --check`: passed.
+
+The closure does not claim default production successor activation, a
+hard-coded canonical identity for RELIANCE, complete Study/Trial batch
+execution, strategy qualification, Candidate/WFA progression, PaperCampaign
+persistence or real-money execution. Those boundaries remain later work.
 ## 14. Design acceptance conditions
 
 The M9.3 design baseline is acceptable only when:

@@ -232,7 +232,7 @@ The accepted M9.3 design baseline selected conversion rather than rejection: awa
 
 M9.3d implemented that boundary in `27baa264328432490246730d00a108dcd38916fe` (`Implement M9.3d AngelOne binding and wall time`). Deterministic AngelOne historical tests prove the request representation, preserve the canonical request/timestamp semantics, and verify explicit provider-binding behavior. M9.3d validation completed with the complete Python regression at 1027 passing tests.
 
-DW-019 is resolved at this bounded adapter scope. This resolution does not claim complete M9.3 instrument/data integration, acquisition-stream persistence, research wiring or milestone closure; those remain under M9.3e/M9.3f.
+DW-019 remains resolved at this bounded adapter scope. M9.3e has since completed acquisition-stream persistence and successor research/application wiring, and M9.3f closes the overall M9.3 validation/traceability record. The DW-019 resolution itself remains specifically the AngelOne historical wall-time/provider-binding boundary and is not broadened into a claim about provider data quality or corporate-action correctness.
 
 ## Maintenance
 

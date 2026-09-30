@@ -1098,9 +1098,9 @@ The detailed design and implementation gates are owned by `docs/design/RESEARCH_
 
 ### M9.3 - Instrument, universe and dataset truthfulness
 
-**Status:** DESIGN BASELINE ACCEPTED / NOT IMPLEMENTED
+**Status:** DONE/CLOSED AT ACCEPTED IMPLEMENTATION/VALIDATION SCOPE
 
-The M9.3 design baseline must establish and preserve all of the following before production implementation begins:
+M9.3 closure establishes and preserves the following validated instrument, universe and dataset-truthfulness boundaries:
 
 1. canonical instrument lineage uses a Kanasu-owned immutable `instrument_id` rather than ticker text or provider token;
 2. symbol and provider mappings may be effective-dated without silently rewriting instrument lineage;
@@ -1122,7 +1122,7 @@ The M9.3 design baseline must establish and preserve all of the following before
 18. real-money execution remains outside V1; and
 19. new M9.3 behavior IDs remain `DESIGNED` until implementation and checked test/evidence traces exist.
 
-The accepted detailed design is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. The proposed implementation slices are M9.3a through M9.3f and still require separate review and authorization before production implementation.
+The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:

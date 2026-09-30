@@ -82,7 +82,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
 - **M9 ? ACTIVE** ? V1 research platform completion and research-ready release.
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
-  - **M9.3 - DESIGN BASELINE ACCEPTED** - Instrument, universe and dataset truthfulness; implementation not started.
+  - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
   - **M9.4 ? PLANNED** ? Registered Studies and bounded local batch execution.
   - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 design baseline accepted and implementation has not started.
+**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED at accepted implementation/validation scope; M9.4 is next.
 
 M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
 

@@ -11,22 +11,22 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest full Python regression | M9.3e dataset-reference validation: `1033 passed`; `git diff --check` passed |
+| Latest full Python regression | M9.3f closure validation: `1078 passed`; `git diff --check` passed |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.3 - Instrument, universe and dataset truthfulness - IMPLEMENTATION IN PROGRESS |
-| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED; M9.3 design accepted; M9.3a-M9.3d published; M9.3e implementation in progress; M9.3 not closed |
-| Next planned review | Continue separately reviewed M9.3e application/research integration; M9.3f retains final validation, traceability and closure synchronization |
+| Step | M9.3 - Instrument, universe and dataset truthfulness - DONE/CLOSED |
+| Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED at accepted implementation/validation scope through M9.3f |
+| Next planned review | M9.4 registered Studies and bounded local batch execution |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
 
 M9.2 is DONE/CLOSED at its accepted implementation and validation scope. It implements the durable research catalog, immutable content-addressed Backtest artifacts, deterministic `ExperimentSpec` identity, distinct `RunAttempt` identity, automatic reproducibility evidence and restart-safe execution lineage while preserving the accepted M3/M4 fingerprint, manifest, ResearchEvidence and financial-result contracts.
 
 M9.2 began from the clean 111-focused / 792-full-test baseline. The accepted implementation chain is `07f4be1` M9.2a, `24cdf67` M9.2b, `ba2129f` M9.2c, `d21c204` M9.2d, `0f4cc98` M9.2e and `4b44050` M9.2f after design baseline `4eb28d8`. Final committed-head closure validation at `4b44050` passed 198 focused research/API tests and 897 complete Python tests with `git diff --check` clean.
-The M9.3 design baseline is accepted and implementation is in progress. Published slices now include M9.3a canonical instrument/provider-binding contracts (`5543b30`), M9.3b universe snapshots (`61ec27c`), M9.3c successor dataset truth (`1505141`), M9.3d AngelOne binding/wall-time behavior (`27baa26`), and the first M9.3e durable dataset-reference artifact foundation (`cb5001f`). DW-019 is resolved at the accepted M9.3d adapter scope. M9.3 remains open: application/research integration is incomplete and M9.3f still owns final validation, traceability and closure synchronization.
+M9.3 is DONE/CLOSED at its accepted instrument, universe and dataset-truthfulness scope. M9.3a established canonical instrument/provider-binding contracts (`5543b30`); M9.3b immutable/effective-dated universe snapshots (`61ec27c`); M9.3c successor dataset identity/provenance (`1505141`); M9.3d AngelOne binding/wall-time behavior (`27baa26`); and M9.3e completed acquisition-stream persistence, binding-aware historical retrieval, durable DatasetReference evidence and an explicit opt-in Backtest application path through published head `8d70d1e`. The legacy/default Backtest path remains unchanged because Kanasu does not manufacture canonical instrument or effective-dated provider truth from the temporary RELIANCE token map. M9.3f closes validation, behavioral traceability and authoritative-document synchronization. The complete Python regression is 1078 passing tests and `git diff --check` is clean. DW-019 remains resolved at its bounded M9.3d adapter scope.
 
 The V1 research target remains single-user NSE cash-equity research with long-only, unlevered simulated execution. The supported V1 execution timeframes remain 5m and 15m. Universe research means independent per-instrument simulated accounts plus research aggregation; it does not establish shared-capital multi-symbol portfolio economics.
 
@@ -317,7 +317,7 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. M9.2 is DONE/CLOSED at accepted implementation/validation scope on `4b44050b46ab4dfa6d5b5729b7876231c50671bf`. The M9.3 instrument, universe and dataset truthfulness design baseline is accepted. M9.3 production implementation has not started and requires separate reviewed implementation slices.
+M0 through M8 are complete at their accepted scopes. M9.1 is closed at accepted design scope on `c8cdcbe042a5f2af528859218927bcd8d4e971d5`. M9.2 is DONE/CLOSED at accepted implementation/validation scope on `4b44050b46ab4dfa6d5b5729b7876231c50671bf`. M9.3 is DONE/CLOSED at its accepted implementation/validation scope through published production head `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f contains validation, traceability and documentation closure only. M9.4 is the next research-platform milestone.
 
 M8.5 closed application integration validation on parent baseline `83ae719 Harden AngelOne login retry configuration` while preserving the accepted M8.1-M8.4 application architecture.
 
