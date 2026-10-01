@@ -9,6 +9,7 @@ from core.config.backtest_config import BacktestConfig
 from core.entities.candle import Candle
 from core.research.backtest_research_orchestrator import (
     BacktestResearchOrchestrator,
+    PreparedBacktestResearchSpecification,
 )
 from core.research.models.research_catalog import (
     RunAttemptState,
@@ -523,3 +524,144 @@ def test_terminal_persistence_failure_does_not_claim_durable_success(
     assert evidence_store.load(
         "evidence-must-not-commit"
     ) is None
+
+
+def test_prepare_specification_resolves_exact_spec_without_attempt_or_execution(
+    tmp_path,
+):
+    values = candles()
+
+    def must_not_execute(**kwargs):
+        pytest.fail(
+            "specification preparation must not execute Backtest"
+        )
+
+    service, catalog, evidence_store, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(
+            REVISION,
+            True,
+        ),
+        retrieve=lambda **kwargs: values,
+        execute=must_not_execute,
+        evidence_id="evidence-not-created",
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(
+            config()
+        ),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert isinstance(
+        prepared,
+        PreparedBacktestResearchSpecification,
+    )
+
+    assert prepared.candles is values
+    assert prepared.identity.is_exact
+    assert prepared.experiment_spec_id is not None
+    assert prepared.manifest_artifact_id is not None
+    assert prepared.manifest_reference.startswith(
+        "artifact:sha256:"
+    )
+
+    persisted_spec = (
+        catalog.load_experiment_spec(
+            prepared.experiment_spec_id
+        )
+    )
+
+    assert persisted_spec is not None
+    assert (
+        persisted_spec.repository_revision
+        == REVISION
+    )
+
+    assert row_count(
+        database,
+        "experiment_specs",
+    ) == 1
+
+    assert row_count(
+        database,
+        "run_attempts",
+    ) == 0
+
+    assert row_count(
+        database,
+        "research_evidence",
+    ) == 0
+
+    assert (
+        evidence_store.load(
+            "evidence-not-created"
+        )
+        is None
+    )
+
+
+def test_execute_delegates_through_preparation_seam(
+    tmp_path,
+    monkeypatch,
+):
+    values = candles()
+
+    service, _, _, _ = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(
+            REVISION,
+            True,
+        ),
+        retrieve=lambda **kwargs: values,
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-preparation-seam",
+        ),
+        evidence_id="evidence-preparation-seam",
+    )
+
+    original = (
+        service.prepare_specification
+    )
+
+    calls = []
+
+    def tracked_prepare(**kwargs):
+        calls.append(kwargs)
+
+        return original(
+            **kwargs
+        )
+
+    monkeypatch.setattr(
+        service,
+        "prepare_specification",
+        tracked_prepare,
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(
+            config()
+        ),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert len(calls) == 1
+    assert execution.attempt_id == "attempt-001"
+    assert (
+        execution.evidence_status
+        is ResearchEvidenceStatus.ACCEPTED
+    )

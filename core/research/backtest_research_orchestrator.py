@@ -1,4 +1,15 @@
-"""Reusable M9.2 Backtest execution and evidence orchestration."""
+"""Reusable Backtest execution and research evidence orchestration.
+
+M9.4d1 BEHAVIOR IMPACT: ADDED
+PRIMARY BEHAVIOR IDS: RESEARCH-RULE-014, RESEARCH-RULE-015
+PRESERVED BEHAVIOR IDS: RESEARCH-RULE-001, RESEARCH-RULE-009,
+RESEARCH-RULE-010
+
+M9.4d1 exposes exact research specification preparation as a reusable
+phase before any new RunAttempt is created. Existing execute() callers
+retain the same authoritative Backtest financial execution and evidence
+behavior.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -152,6 +163,128 @@ class PreparedResearchSpecificationError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class PreparedBacktestResearchSpecification:
+    """
+    Exact material prepared before a physical RunAttempt is created.
+
+    The same candle list object is deliberately retained so preparation
+    and financial execution continue to operate on one exact sequence.
+    """
+
+    candles: list[Candle]
+    requested_range: TimeRange
+    identity: SoftwareIdentity
+    dataset_fingerprint: str
+    configuration_fingerprint: str
+    manifest_artifact_id: str
+    manifest_reference: str
+    retrieval_artifact_references: tuple[str, ...] = ()
+    experiment_spec_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.candles,
+            list,
+        ):
+            raise TypeError(
+                "candles must be a list"
+            )
+
+        if any(
+            not isinstance(value, Candle)
+            for value in self.candles
+        ):
+            raise TypeError(
+                "candles must contain Candle values"
+            )
+
+        if not isinstance(
+            self.requested_range,
+            TimeRange,
+        ):
+            raise TypeError(
+                "requested_range must be a TimeRange"
+            )
+
+        if not isinstance(
+            self.identity,
+            SoftwareIdentity,
+        ):
+            raise TypeError(
+                "identity must be a SoftwareIdentity"
+            )
+
+        for field_name in (
+            "dataset_fingerprint",
+            "configuration_fingerprint",
+            "manifest_artifact_id",
+        ):
+            value = getattr(
+                self,
+                field_name,
+            )
+
+            if (
+                not isinstance(value, str)
+                or not value.startswith("sha256:")
+            ):
+                raise ValueError(
+                    f"{field_name} must be a SHA-256 identity"
+                )
+
+        if (
+            not isinstance(
+                self.manifest_reference,
+                str,
+            )
+            or not self.manifest_reference
+        ):
+            raise ValueError(
+                "manifest_reference must be a non-empty string"
+            )
+
+        if not isinstance(
+            self.retrieval_artifact_references,
+            tuple,
+        ):
+            raise TypeError(
+                "retrieval_artifact_references must be a tuple"
+            )
+
+        if any(
+            not isinstance(value, str)
+            or not value
+            for value
+            in self.retrieval_artifact_references
+        ):
+            raise ValueError(
+                "retrieval artifact references must be "
+                "non-empty strings"
+            )
+
+        if self.identity.is_exact:
+            if (
+                not isinstance(
+                    self.experiment_spec_id,
+                    str,
+                )
+                or not self.experiment_spec_id.startswith(
+                    "sha256:"
+                )
+            ):
+                raise ValueError(
+                    "exact software identity requires "
+                    "experiment_spec_id"
+                )
+
+        elif self.experiment_spec_id is not None:
+            raise ValueError(
+                "non-exact software identity cannot carry "
+                "experiment_spec_id"
+            )
+
+
+@dataclass(frozen=True)
 class BacktestResearchExecution:
     result: BacktestResult
     attempt_id: str | None
@@ -294,7 +427,7 @@ class BacktestResearchOrchestrator:
             message = type(error).__name__
         return message[:1000]
 
-    def execute(
+    def prepare_specification(
         self,
         *,
         historical_source: HistoricalSource | None,
@@ -306,8 +439,14 @@ class BacktestResearchOrchestrator:
             Callable[[], PreparedResearchRetrieval]
             | None
         ) = None,
-    ) -> BacktestResearchExecution:
+    ) -> PreparedBacktestResearchSpecification:
+        """
+        Prepare deterministic Backtest research identity without
+        creating a physical RunAttempt or executing financial logic.
+        """
+
         identity = self._software_identity()
+
         requested_range = TimeRange(
             config.start,
             config.end,
@@ -331,6 +470,7 @@ class BacktestResearchOrchestrator:
                     config=config,
                     dataset_context=dataset_context,
                 )
+
             else:
                 prepared = prepared_retrieval()
 
@@ -344,9 +484,11 @@ class BacktestResearchOrchestrator:
                     )
 
                 candles = prepared.candles
+
                 retrieval_artifact_references = (
                     prepared.artifact_references
                 )
+
         except PreparedResearchSpecificationError as error:
             original_error = error.original_error
 
@@ -371,9 +513,12 @@ class BacktestResearchOrchestrator:
                 identity=identity,
                 summary=(
                     "historical_data_retrieval_failed: "
-                    + self._failure_message(error)
+                    + self._failure_message(
+                        error
+                    )
                 ),
             )
+
             raise
 
         dataset_fp = None
@@ -397,7 +542,8 @@ class BacktestResearchOrchestrator:
             )
 
             manifest_artifact = (
-                self.artifact_store.persist_backtest_manifest(
+                self.artifact_store
+                .persist_backtest_manifest(
                     manifest,
                     created_at=self._clock(),
                 )
@@ -409,8 +555,10 @@ class BacktestResearchOrchestrator:
                 )
             )
 
-            manifest_reference = research_artifact_reference(
-                manifest_artifact.artifact_id
+            manifest_reference = (
+                research_artifact_reference(
+                    manifest_artifact.artifact_id
+                )
             )
 
             configuration_fp = (
@@ -418,6 +566,7 @@ class BacktestResearchOrchestrator:
                     manifest
                 )
             )
+
         except Exception as error:
             self._try_pre_spec_evidence(
                 dataset_context=dataset_context,
@@ -425,61 +574,155 @@ class BacktestResearchOrchestrator:
                 identity=identity,
                 summary=(
                     "research_specification_preparation_failed: "
-                    + self._failure_message(error)
+                    + self._failure_message(
+                        error
+                    )
                 ),
-                dataset_fingerprint_value=dataset_fp,
-                configuration_fingerprint=configuration_fp,
+                dataset_fingerprint_value=(
+                    dataset_fp
+                ),
+                configuration_fingerprint=(
+                    configuration_fp
+                ),
                 artifact_references=(
                     retrieval_artifact_references
                     + (
                         (manifest_reference,)
-                        if manifest_reference is not None
+                        if manifest_reference
+                        is not None
                         else ()
                     )
                 ),
             )
+
             raise
+
+        experiment_spec_id = None
+
+        if identity.is_exact:
+            spec = (
+                self.catalog_store
+                .resolve_experiment_spec(
+                    computation_kind=(
+                        ComputationKind.BACKTEST
+                    ),
+                    manifest_artifact_id=(
+                        manifest_artifact.artifact_id
+                    ),
+                    dataset_fingerprint=(
+                        dataset_fp
+                    ),
+                    configuration_fingerprint=(
+                        configuration_fp
+                    ),
+                    repository_revision=(
+                        identity.repository_revision
+                    ),
+                    created_at=self._clock(),
+                )
+            )
+
+            experiment_spec_id = (
+                spec.experiment_spec_id
+            )
+
+        return PreparedBacktestResearchSpecification(
+            candles=candles,
+            requested_range=requested_range,
+            identity=identity,
+            dataset_fingerprint=dataset_fp,
+            configuration_fingerprint=(
+                configuration_fp
+            ),
+            manifest_artifact_id=(
+                manifest_artifact.artifact_id
+            ),
+            manifest_reference=(
+                manifest_reference
+            ),
+            retrieval_artifact_references=(
+                retrieval_artifact_references
+            ),
+            experiment_spec_id=(
+                experiment_spec_id
+            ),
+        )
+
+    def execute(
+        self,
+        *,
+        historical_source: HistoricalSource | None,
+        strategy: BaseStrategy,
+        config: BacktestConfig,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
+        prepared_retrieval: (
+            Callable[[], PreparedResearchRetrieval]
+            | None
+        ) = None,
+    ) -> BacktestResearchExecution:
+        prepared = self.prepare_specification(
+            historical_source=historical_source,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+            prepared_retrieval=prepared_retrieval,
+        )
 
         attempt = None
 
-        if identity.is_exact:
-            spec = self.catalog_store.resolve_experiment_spec(
-                computation_kind=ComputationKind.BACKTEST,
-                manifest_artifact_id=manifest_artifact.artifact_id,
-                dataset_fingerprint=dataset_fp,
-                configuration_fingerprint=configuration_fp,
-                repository_revision=identity.repository_revision,
-                created_at=self._clock(),
-            )
-
-            attempt = self.catalog_store.create_running_attempt(
-                experiment_spec_id=spec.experiment_spec_id,
-                created_at=self._clock(),
+        if (
+            prepared.experiment_spec_id
+            is not None
+        ):
+            attempt = (
+                self.catalog_store
+                .create_running_attempt(
+                    experiment_spec_id=(
+                        prepared.experiment_spec_id
+                    ),
+                    created_at=self._clock(),
+                )
             )
 
         try:
             result = self._execute_candles(
-                candles=candles,
+                candles=prepared.candles,
                 strategy=strategy,
                 config=config,
                 runtime_context=runtime_context,
                 dataset_context=dataset_context,
             )
+
         except Exception as error:
             evidence = self._evidence(
-                status=ResearchEvidenceStatus.FAILED,
+                status=(
+                    ResearchEvidenceStatus.FAILED
+                ),
                 dataset_context=dataset_context,
-                requested_range=requested_range,
-                identity=identity,
+                requested_range=(
+                    prepared.requested_range
+                ),
+                identity=prepared.identity,
                 summary=(
                     "backtest_execution_failed: "
-                    + self._failure_message(error)
+                    + self._failure_message(
+                        error
+                    )
                 ),
-                dataset_fingerprint_value=dataset_fp,
-                configuration_fingerprint=configuration_fp,
+                dataset_fingerprint_value=(
+                    prepared.dataset_fingerprint
+                ),
+                configuration_fingerprint=(
+                    prepared.configuration_fingerprint
+                ),
                 artifact_references=(
-                    retrieval_artifact_references
-                    + (manifest_reference,)
+                    prepared
+                    .retrieval_artifact_references
+                    + (
+                        prepared.manifest_reference,
+                    )
                 ),
                 persist=(attempt is None),
             )
@@ -493,59 +736,76 @@ class BacktestResearchOrchestrator:
                     failure_classification=(
                         "backtest_execution_failed"
                     ),
-                    failure_message=self._failure_message(
-                        error
+                    failure_message=(
+                        self._failure_message(
+                            error
+                        )
                     ),
                 )
 
             raise
 
-        result_fp = stable_backtest_result_fingerprint(
-            result
+        result_fp = (
+            stable_backtest_result_fingerprint(
+                result
+            )
         )
 
         result_artifact = (
-            self.artifact_store.persist_backtest_result(
+            self.artifact_store
+            .persist_backtest_result(
                 result,
                 created_at=self._clock(),
             )
         )
 
         if attempt is None:
-            result_artifact = self.catalog_store.save_artifact(
-                result_artifact
+            result_artifact = (
+                self.catalog_store
+                .save_artifact(
+                    result_artifact
+                )
             )
 
-        result_reference = research_artifact_reference(
-            result_artifact.artifact_id
+        result_reference = (
+            research_artifact_reference(
+                result_artifact.artifact_id
+            )
         )
 
         evidence_status = (
             ResearchEvidenceStatus.ACCEPTED
-            if identity.is_exact
+            if prepared.identity.is_exact
             else ResearchEvidenceStatus.INCOMPLETE
         )
 
         evidence = self._evidence(
             status=evidence_status,
             dataset_context=dataset_context,
-            requested_range=requested_range,
-            identity=identity,
+            requested_range=(
+                prepared.requested_range
+            ),
+            identity=prepared.identity,
             summary=(
                 "Automatic Backtest reproducibility evidence accepted."
-                if identity.is_exact
+                if prepared.identity.is_exact
                 else (
                     "Financial Backtest completed, but exact "
                     "software identity was unavailable."
                 )
             ),
-            dataset_fingerprint_value=dataset_fp,
-            configuration_fingerprint=configuration_fp,
+            dataset_fingerprint_value=(
+                prepared.dataset_fingerprint
+            ),
+            configuration_fingerprint=(
+                prepared.configuration_fingerprint
+            ),
             result_fingerprint=result_fp,
             artifact_references=(
-                retrieval_artifact_references
+                prepared
+                .retrieval_artifact_references
                 + (
-                    manifest_reference,
+                    prepared.manifest_reference,
                     result_reference,
                 )
             ),
@@ -554,12 +814,17 @@ class BacktestResearchOrchestrator:
 
         if attempt is not None:
             attempt = (
-                self.catalog_store.terminalize_attempt_with_evidence(
+                self.catalog_store
+                .terminalize_attempt_with_evidence(
                     attempt.attempt_id,
                     state=RunAttemptState.SUCCEEDED,
                     terminal_at=self._clock(),
-                    runtime_session_id=result.session_id,
-                    result_artifact=result_artifact,
+                    runtime_session_id=(
+                        result.session_id
+                    ),
+                    result_artifact=(
+                        result_artifact
+                    ),
                     evidence=evidence,
                 )
             )
@@ -571,6 +836,10 @@ class BacktestResearchOrchestrator:
                 if attempt is not None
                 else None
             ),
-            evidence_id=evidence.evidence_id,
-            evidence_status=evidence.status,
+            evidence_id=(
+                evidence.evidence_id
+            ),
+            evidence_status=(
+                evidence.status
+            ),
         )
