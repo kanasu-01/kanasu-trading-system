@@ -15,6 +15,17 @@ from core.research.models.research_catalog import (
     RunAttempt,
     RunAttemptState,
 )
+from core.research.models.registered_study import (
+    EvidenceReusePolicy,
+    ResearchJob,
+    ResearchJobCompletionKind,
+    ResearchJobState,
+    Study,
+    StudyRevision,
+    Trial,
+    TrialDisposition,
+    TrialDispositionEvent,
+)
 from core.research.models.research_evidence import (
     ResearchEvidence,
     ResearchEvidenceStatus,
@@ -892,3 +903,912 @@ class SQLiteResearchCatalogStore:
                 raise
 
         return terminal
+
+    # --------------------------------------------------------------
+    # M9.4a registered Study / Trial / ResearchJob persistence.
+    #
+    # These methods intentionally do not implement whole-revision
+    # registration, Start, claim, execution, retry, cancellation,
+    # recovery or scheduling. Later M9.4 slices own those atomic
+    # lifecycle operations.
+    # --------------------------------------------------------------
+
+    @staticmethod
+    def _study_from_row(row) -> Study:
+        return Study(
+            study_id=row[0],
+            created_at=datetime.fromisoformat(row[1]),
+            display_title=row[2],
+            archived=bool(row[3]),
+        )
+
+    @staticmethod
+    def _study_revision_from_row(row) -> StudyRevision:
+        return StudyRevision(
+            study_revision_id=row[0],
+            identity_schema=row[1],
+            study_id=row[2],
+            revision_number=row[3],
+            plan_artifact_id=row[4],
+            repository_revision=row[5],
+            evidence_reuse_policy=EvidenceReusePolicy(row[6]),
+            registered_at=datetime.fromisoformat(row[7]),
+            initial_batch_started_at=(
+                datetime.fromisoformat(row[8])
+                if row[8] is not None
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _trial_from_row(row) -> Trial:
+        return Trial(
+            trial_id=row[0],
+            identity_schema=row[1],
+            study_revision_id=row[2],
+            instrument_id=row[3],
+            membership_episode_start=datetime.fromisoformat(
+                row[4]
+            ),
+            membership_episode_end=datetime.fromisoformat(
+                row[5]
+            ),
+            membership_evidence_fingerprint=row[6],
+            membership_evidence_artifact_id=row[7],
+            parameter_configuration_fingerprint=row[8],
+            registered_at=datetime.fromisoformat(row[9]),
+            experiment_spec_id=row[10],
+            disposition=TrialDisposition(row[11]),
+            disposition_at=datetime.fromisoformat(row[12]),
+            reused_attempt_id=row[13],
+            failure_classification=row[14],
+            failure_message=row[15],
+        )
+
+    @staticmethod
+    def _trial_event_from_row(row) -> TrialDispositionEvent:
+        return TrialDispositionEvent(
+            event_id=row[0],
+            trial_id=row[1],
+            sequence_number=row[2],
+            previous_disposition=(
+                TrialDisposition(row[3])
+                if row[3] is not None
+                else None
+            ),
+            new_disposition=TrialDisposition(row[4]),
+            occurred_at=datetime.fromisoformat(row[5]),
+            causing_job_id=row[6],
+            reason_classification=row[7],
+            reason_message=row[8],
+        )
+
+    @staticmethod
+    def _research_job_from_row(row) -> ResearchJob:
+        return ResearchJob(
+            job_id=row[0],
+            trial_id=row[1],
+            state=ResearchJobState(row[2]),
+            created_at=datetime.fromisoformat(row[3]),
+            claimed_at=(
+                datetime.fromisoformat(row[4])
+                if row[4] is not None
+                else None
+            ),
+            terminal_at=(
+                datetime.fromisoformat(row[5])
+                if row[5] is not None
+                else None
+            ),
+            worker_id=row[6],
+            cancel_requested_at=(
+                datetime.fromisoformat(row[7])
+                if row[7] is not None
+                else None
+            ),
+            attempt_id=row[8],
+            completion_kind=(
+                ResearchJobCompletionKind(row[9])
+                if row[9] is not None
+                else None
+            ),
+            reused_attempt_id=row[10],
+            reused_evidence_id=row[11],
+            reused_result_artifact_id=row[12],
+            failure_classification=row[13],
+            failure_message=row[14],
+        )
+
+    @staticmethod
+    def _study_semantics(study: Study) -> tuple:
+        return (
+            study.study_id,
+            study.created_at,
+            study.display_title,
+            study.archived,
+        )
+
+    @staticmethod
+    def _study_revision_semantics(
+        revision: StudyRevision,
+    ) -> tuple:
+        return (
+            revision.study_revision_id,
+            revision.identity_schema,
+            revision.study_id,
+            revision.revision_number,
+            revision.plan_artifact_id,
+            revision.repository_revision,
+            revision.evidence_reuse_policy,
+        )
+
+    @staticmethod
+    def _trial_registration_semantics(
+        trial: Trial,
+    ) -> tuple:
+        return (
+            trial.trial_id,
+            trial.identity_schema,
+            trial.study_revision_id,
+            trial.instrument_id,
+            trial.membership_episode_start,
+            trial.membership_episode_end,
+            trial.membership_evidence_fingerprint,
+            trial.membership_evidence_artifact_id,
+            trial.parameter_configuration_fingerprint,
+            trial.disposition,
+            trial.experiment_spec_id,
+            trial.reused_attempt_id,
+            trial.failure_classification,
+            trial.failure_message,
+        )
+
+    @staticmethod
+    def _trial_event_semantics(
+        event: TrialDispositionEvent,
+    ) -> tuple:
+        return (
+            event.event_id,
+            event.trial_id,
+            event.sequence_number,
+            event.previous_disposition,
+            event.new_disposition,
+            event.occurred_at,
+            event.causing_job_id,
+            event.reason_classification,
+            event.reason_message,
+        )
+
+    @staticmethod
+    def _research_job_semantics(
+        job: ResearchJob,
+    ) -> tuple:
+        return (
+            job.job_id,
+            job.trial_id,
+            job.state,
+            job.created_at,
+            job.claimed_at,
+            job.terminal_at,
+            job.worker_id,
+            job.cancel_requested_at,
+            job.attempt_id,
+            job.completion_kind,
+            job.reused_attempt_id,
+            job.reused_evidence_id,
+            job.reused_result_artifact_id,
+            job.failure_classification,
+            job.failure_message,
+        )
+
+    def save_study(
+        self,
+        study: Study,
+    ) -> Study:
+        """Create one Study; exact duplicate creation is idempotent."""
+
+        if not isinstance(study, Study):
+            raise TypeError("study must be a Study")
+
+        try:
+            with closing(self._connect()) as connection:
+                with connection:
+                    connection.execute(
+                        """
+                        INSERT INTO studies (
+                            study_id,
+                            created_at,
+                            display_title,
+                            archived
+                        ) VALUES (?, ?, ?, ?)
+                        """,
+                        (
+                            study.study_id,
+                            study.created_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            study.display_title,
+                            int(study.archived),
+                        ),
+                    )
+        except sqlite3.IntegrityError as error:
+            existing = self.load_study(study.study_id)
+
+            if (
+                existing is not None
+                and self._study_semantics(existing)
+                == self._study_semantics(study)
+            ):
+                return existing
+
+            raise ValueError(
+                "Study identity already exists with different "
+                "catalog metadata"
+            ) from error
+
+        return study
+
+    def load_study(
+        self,
+        study_id: str,
+    ) -> Study | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    study_id,
+                    created_at,
+                    display_title,
+                    archived
+                FROM studies
+                WHERE study_id = ?
+                """,
+                (study_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._study_from_row(row)
+
+    def update_study_metadata(
+        self,
+        study_id: str,
+        *,
+        display_title: str,
+        archived: bool,
+    ) -> Study:
+        """Update display-only Study metadata without changing identity."""
+
+        current = self.load_study(study_id)
+
+        if current is None:
+            raise ValueError(
+                f"Study does not exist: {study_id}"
+            )
+
+        updated = Study(
+            study_id=current.study_id,
+            created_at=current.created_at,
+            display_title=display_title,
+            archived=archived,
+        )
+
+        with closing(self._connect()) as connection:
+            with connection:
+                cursor = connection.execute(
+                    """
+                    UPDATE studies
+                    SET
+                        display_title = ?,
+                        archived = ?
+                    WHERE study_id = ?
+                    """,
+                    (
+                        updated.display_title,
+                        int(updated.archived),
+                        updated.study_id,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "Study metadata update lost its identity"
+                    )
+
+        return updated
+
+    def save_study_revision(
+        self,
+        revision: StudyRevision,
+    ) -> StudyRevision:
+        """Persist one immutable registered plan record."""
+
+        if not isinstance(revision, StudyRevision):
+            raise TypeError(
+                "revision must be a StudyRevision"
+            )
+
+        if revision.initial_batch_started_at is not None:
+            raise ValueError(
+                "new StudyRevision persistence cannot set "
+                "initial_batch_started_at; Start owns that metadata"
+            )
+
+        plan_artifact = self.load_artifact(
+            revision.plan_artifact_id
+        )
+
+        if (
+            plan_artifact is None
+            or plan_artifact.artifact_kind
+            is not ResearchArtifactKind.STUDY_REVISION_PLAN
+        ):
+            raise ValueError(
+                "StudyRevision requires a registered "
+                "STUDY_REVISION_PLAN artifact"
+            )
+
+        try:
+            with closing(self._connect()) as connection:
+                with connection:
+                    connection.execute(
+                        """
+                        INSERT INTO study_revisions (
+                            study_revision_id,
+                            identity_schema,
+                            study_id,
+                            revision_number,
+                            plan_artifact_id,
+                            repository_revision,
+                            evidence_reuse_policy,
+                            registered_at,
+                            initial_batch_started_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                        """,
+                        (
+                            revision.study_revision_id,
+                            revision.identity_schema,
+                            revision.study_id,
+                            revision.revision_number,
+                            revision.plan_artifact_id,
+                            revision.repository_revision,
+                            revision.evidence_reuse_policy.value,
+                            revision.registered_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                        ),
+                    )
+        except sqlite3.IntegrityError as error:
+            existing = self.load_study_revision(
+                revision.study_revision_id
+            )
+
+            if (
+                existing is not None
+                and self._study_revision_semantics(existing)
+                == self._study_revision_semantics(revision)
+            ):
+                return existing
+
+            raise ValueError(
+                "StudyRevision requires an existing Study, "
+                "registered plan artifact, unique revision number "
+                "and non-conflicting immutable identity"
+            ) from error
+
+        return revision
+
+    def load_study_revision(
+        self,
+        study_revision_id: str,
+    ) -> StudyRevision | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    study_revision_id,
+                    identity_schema,
+                    study_id,
+                    revision_number,
+                    plan_artifact_id,
+                    repository_revision,
+                    evidence_reuse_policy,
+                    registered_at,
+                    initial_batch_started_at
+                FROM study_revisions
+                WHERE study_revision_id = ?
+                """,
+                (study_revision_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._study_revision_from_row(row)
+
+    def list_study_revisions(
+        self,
+        study_id: str,
+    ) -> tuple[StudyRevision, ...]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    study_revision_id,
+                    identity_schema,
+                    study_id,
+                    revision_number,
+                    plan_artifact_id,
+                    repository_revision,
+                    evidence_reuse_policy,
+                    registered_at,
+                    initial_batch_started_at
+                FROM study_revisions
+                WHERE study_id = ?
+                ORDER BY revision_number, study_revision_id
+                """,
+                (study_id,),
+            ).fetchall()
+
+        return tuple(
+            self._study_revision_from_row(row)
+            for row in rows
+        )
+
+    def save_registered_trial(
+        self,
+        trial: Trial,
+        initial_event: TrialDispositionEvent,
+    ) -> Trial:
+        """Persist one PENDING Trial and its initial event atomically."""
+
+        if not isinstance(trial, Trial):
+            raise TypeError("trial must be a Trial")
+
+        if not isinstance(
+            initial_event,
+            TrialDispositionEvent,
+        ):
+            raise TypeError(
+                "initial_event must be a TrialDispositionEvent"
+            )
+
+        if (
+            trial.disposition is not TrialDisposition.PENDING
+            or trial.experiment_spec_id is not None
+            or trial.reused_attempt_id is not None
+            or trial.failure_classification is not None
+            or trial.failure_message is not None
+        ):
+            raise ValueError(
+                "new registered Trial must begin as unbound PENDING"
+            )
+
+        if (
+            initial_event.trial_id != trial.trial_id
+            or initial_event.sequence_number != 1
+            or initial_event.previous_disposition is not None
+            or initial_event.new_disposition
+            is not TrialDisposition.PENDING
+            or initial_event.causing_job_id is not None
+            or initial_event.occurred_at != trial.disposition_at
+        ):
+            raise ValueError(
+                "initial Trial event must be sequence 1, "
+                "None -> PENDING, job-independent and match "
+                "the Trial disposition timestamp"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+
+                artifact_row = connection.execute(
+                    """
+                    SELECT
+                        artifact_id,
+                        artifact_kind,
+                        schema_id,
+                        relative_path,
+                        byte_count,
+                        created_at
+                    FROM research_artifacts
+                    WHERE artifact_id = ?
+                    """,
+                    (
+                        trial.membership_evidence_artifact_id,
+                    ),
+                ).fetchone()
+
+                if artifact_row is None:
+                    raise ValueError(
+                        "registered Trial requires a registered "
+                        "TRIAL_MEMBERSHIP_EVIDENCE artifact"
+                    )
+
+                membership_artifact = (
+                    self._artifact_from_row(artifact_row)
+                )
+
+                if (
+                    membership_artifact.artifact_kind
+                    is not
+                    ResearchArtifactKind.TRIAL_MEMBERSHIP_EVIDENCE
+                ):
+                    raise ValueError(
+                        "registered Trial requires a registered "
+                        "TRIAL_MEMBERSHIP_EVIDENCE artifact"
+                    )
+
+                if (
+                    membership_artifact.artifact_id
+                    != trial.membership_evidence_fingerprint
+                ):
+                    raise ValueError(
+                        "Trial membership evidence artifact identity "
+                        "must match membership_evidence_fingerprint"
+                    )
+
+                connection.execute(
+                    """
+                    INSERT INTO trials (
+                        trial_id,
+                        identity_schema,
+                        study_revision_id,
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        membership_evidence_fingerprint,
+                        membership_evidence_artifact_id,
+                        parameter_configuration_fingerprint,
+                        registered_at,
+                        experiment_spec_id,
+                        disposition,
+                        disposition_at,
+                        reused_attempt_id,
+                        failure_classification,
+                        failure_message
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        NULL, ?, ?, NULL, NULL, NULL
+                    )
+                    """,
+                    (
+                        trial.trial_id,
+                        trial.identity_schema,
+                        trial.study_revision_id,
+                        trial.instrument_id,
+                        trial.membership_episode_start.isoformat(
+                            timespec="microseconds"
+                        ),
+                        trial.membership_episode_end.isoformat(
+                            timespec="microseconds"
+                        ),
+                        trial.membership_evidence_fingerprint,
+                        trial.membership_evidence_artifact_id,
+                        trial.parameter_configuration_fingerprint,
+                        trial.registered_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        trial.disposition.value,
+                        trial.disposition_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                    ),
+                )
+
+                connection.execute(
+                    """
+                    INSERT INTO trial_disposition_events (
+                        event_id,
+                        trial_id,
+                        sequence_number,
+                        previous_disposition,
+                        new_disposition,
+                        occurred_at,
+                        causing_job_id,
+                        reason_classification,
+                        reason_message
+                    ) VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, ?)
+                    """,
+                    (
+                        initial_event.event_id,
+                        initial_event.trial_id,
+                        initial_event.sequence_number,
+                        initial_event.new_disposition.value,
+                        initial_event.occurred_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        initial_event.reason_classification,
+                        initial_event.reason_message,
+                    ),
+                )
+
+                connection.commit()
+
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+
+                existing = self.load_trial(
+                    trial.trial_id
+                )
+                events = self.load_trial_disposition_events(
+                    trial.trial_id
+                )
+
+                if (
+                    existing is not None
+                    and len(events) == 1
+                    and self._trial_registration_semantics(
+                        existing
+                    )
+                    == self._trial_registration_semantics(
+                        trial
+                    )
+                    and self._trial_event_semantics(events[0])
+                    == self._trial_event_semantics(
+                        initial_event
+                    )
+                ):
+                    return existing
+
+                raise ValueError(
+                    "registered Trial persistence requires "
+                    "an existing StudyRevision and unique, "
+                    "non-conflicting Trial/event identity"
+                ) from error
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return trial
+
+    def load_trial(
+        self,
+        trial_id: str,
+    ) -> Trial | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    trial_id,
+                    identity_schema,
+                    study_revision_id,
+                    instrument_id,
+                    membership_episode_start,
+                    membership_episode_end,
+                    membership_evidence_fingerprint,
+                    membership_evidence_artifact_id,
+                    parameter_configuration_fingerprint,
+                    registered_at,
+                    experiment_spec_id,
+                    disposition,
+                    disposition_at,
+                    reused_attempt_id,
+                    failure_classification,
+                    failure_message
+                FROM trials
+                WHERE trial_id = ?
+                """,
+                (trial_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._trial_from_row(row)
+
+    def list_trials_for_revision(
+        self,
+        study_revision_id: str,
+    ) -> tuple[Trial, ...]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    trial_id,
+                    identity_schema,
+                    study_revision_id,
+                    instrument_id,
+                    membership_episode_start,
+                    membership_episode_end,
+                    membership_evidence_fingerprint,
+                    membership_evidence_artifact_id,
+                    parameter_configuration_fingerprint,
+                    registered_at,
+                    experiment_spec_id,
+                    disposition,
+                    disposition_at,
+                    reused_attempt_id,
+                    failure_classification,
+                    failure_message
+                FROM trials
+                WHERE study_revision_id = ?
+                ORDER BY
+                    instrument_id,
+                    membership_episode_start,
+                    membership_episode_end,
+                    trial_id
+                """,
+                (study_revision_id,),
+            ).fetchall()
+
+        return tuple(
+            self._trial_from_row(row)
+            for row in rows
+        )
+
+    def load_trial_disposition_events(
+        self,
+        trial_id: str,
+    ) -> tuple[TrialDispositionEvent, ...]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    event_id,
+                    trial_id,
+                    sequence_number,
+                    previous_disposition,
+                    new_disposition,
+                    occurred_at,
+                    causing_job_id,
+                    reason_classification,
+                    reason_message
+                FROM trial_disposition_events
+                WHERE trial_id = ?
+                ORDER BY sequence_number, event_id
+                """,
+                (trial_id,),
+            ).fetchall()
+
+        return tuple(
+            self._trial_event_from_row(row)
+            for row in rows
+        )
+
+    def save_queued_research_job(
+        self,
+        job: ResearchJob,
+    ) -> ResearchJob:
+        """Persist one initial QUEUED ResearchJob."""
+
+        if not isinstance(job, ResearchJob):
+            raise TypeError(
+                "job must be a ResearchJob"
+            )
+
+        if (
+            job.state is not ResearchJobState.QUEUED
+            or job.cancel_requested_at is not None
+        ):
+            raise ValueError(
+                "new ResearchJob persistence requires "
+                "an uncancelled QUEUED job"
+            )
+
+        try:
+            with closing(self._connect()) as connection:
+                with connection:
+                    connection.execute(
+                        """
+                        INSERT INTO research_jobs (
+                            job_id,
+                            trial_id,
+                            state,
+                            created_at,
+                            claimed_at,
+                            terminal_at,
+                            worker_id,
+                            cancel_requested_at,
+                            attempt_id,
+                            completion_kind,
+                            reused_attempt_id,
+                            reused_evidence_id,
+                            reused_result_artifact_id,
+                            failure_classification,
+                            failure_message
+                        ) VALUES (
+                            ?, ?, ?, ?,
+                            NULL, NULL, NULL, NULL, NULL,
+                            NULL, NULL, NULL, NULL, NULL, NULL
+                        )
+                        """,
+                        (
+                            job.job_id,
+                            job.trial_id,
+                            job.state.value,
+                            job.created_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                        ),
+                    )
+        except sqlite3.IntegrityError as error:
+            existing = self.load_research_job(
+                job.job_id
+            )
+
+            if (
+                existing is not None
+                and self._research_job_semantics(existing)
+                == self._research_job_semantics(job)
+            ):
+                return existing
+
+            raise ValueError(
+                "QUEUED ResearchJob requires an existing "
+                "Trial and unique non-conflicting job identity"
+            ) from error
+
+        return job
+
+    def load_research_job(
+        self,
+        job_id: str,
+    ) -> ResearchJob | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    job_id,
+                    trial_id,
+                    state,
+                    created_at,
+                    claimed_at,
+                    terminal_at,
+                    worker_id,
+                    cancel_requested_at,
+                    attempt_id,
+                    completion_kind,
+                    reused_attempt_id,
+                    reused_evidence_id,
+                    reused_result_artifact_id,
+                    failure_classification,
+                    failure_message
+                FROM research_jobs
+                WHERE job_id = ?
+                """,
+                (job_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._research_job_from_row(row)
+
+    def list_research_jobs_for_trial(
+        self,
+        trial_id: str,
+    ) -> tuple[ResearchJob, ...]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    job_id,
+                    trial_id,
+                    state,
+                    created_at,
+                    claimed_at,
+                    terminal_at,
+                    worker_id,
+                    cancel_requested_at,
+                    attempt_id,
+                    completion_kind,
+                    reused_attempt_id,
+                    reused_evidence_id,
+                    reused_result_artifact_id,
+                    failure_classification,
+                    failure_message
+                FROM research_jobs
+                WHERE trial_id = ?
+                ORDER BY created_at, job_id
+                """,
+                (trial_id,),
+            ).fetchall()
+
+        return tuple(
+            self._research_job_from_row(row)
+            for row in rows
+        )
