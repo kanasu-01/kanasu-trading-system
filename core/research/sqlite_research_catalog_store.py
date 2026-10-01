@@ -17,11 +17,14 @@ from core.research.models.research_catalog import (
 )
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
+    INITIAL_RESEARCH_JOB_SCHEMA_ID,
+    RESEARCH_MAX_WORKERS_SAFETY_CEILING,
     STUDY_REVISION_SCHEMA_ID,
     TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID,
     ResearchJob,
     ResearchJobCompletionKind,
     ResearchJobState,
+    ResearchQueueSnapshot,
     Study,
     StudyRevision,
     Trial,
@@ -32,7 +35,10 @@ from core.research.models.research_evidence import (
     ResearchEvidence,
     ResearchEvidenceStatus,
 )
-from core.research.reproducibility import experiment_spec_fingerprint
+from core.research.reproducibility import (
+    canonical_fingerprint,
+    experiment_spec_fingerprint,
+)
 from core.research.research_schema import initialize_research_schema
 from core.research.sqlite_research_evidence_store import (
     _insert_research_evidence,
@@ -48,6 +54,18 @@ _M92C_TERMINAL_STATES = {
 
 def _default_attempt_id() -> str:
     return f"attempt-{uuid4().hex}"
+
+
+def _initial_research_job_id(
+    trial_id: str,
+) -> str:
+    return canonical_fingerprint(
+        {
+            "trial_id": trial_id,
+            "purpose": "INITIAL",
+        },
+        schema=INITIAL_RESEARCH_JOB_SCHEMA_ID,
+    )
 
 
 class SQLiteResearchCatalogStore:
@@ -2210,6 +2228,623 @@ class SQLiteResearchCatalogStore:
             self._trial_event_from_row(row)
             for row in rows
         )
+
+    def start_study_revision_batch(
+        self,
+        study_revision_id: str,
+        started_at: datetime,
+    ) -> StudyRevision:
+        """Atomically create one deterministic initial job per Trial."""
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(started_at, datetime)
+            or started_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "started_at must be a timezone-aware datetime"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                revision_row = connection.execute(
+                    """
+                    SELECT
+                        study_revision_id,
+                        identity_schema,
+                        study_id,
+                        revision_number,
+                        plan_artifact_id,
+                        repository_revision,
+                        evidence_reuse_policy,
+                        registered_at,
+                        initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if revision_row is None:
+                    raise ValueError(
+                        "StudyRevision does not exist"
+                    )
+
+                revision = (
+                    self._study_revision_from_row(
+                        revision_row
+                    )
+                )
+
+                if started_at < revision.registered_at:
+                    raise ValueError(
+                        "started_at cannot precede registered_at"
+                    )
+
+                trial_rows = connection.execute(
+                    """
+                    SELECT
+                        trial_id,
+                        disposition
+                    FROM trials
+                    WHERE study_revision_id = ?
+                    ORDER BY trial_id
+                    """,
+                    (study_revision_id,),
+                ).fetchall()
+
+                expected_initial_jobs = tuple(
+                    (
+                        _initial_research_job_id(
+                            trial_id
+                        ),
+                        trial_id,
+                    )
+                    for trial_id, _
+                    in trial_rows
+                )
+
+                existing_job_rows = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.created_at
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE t.study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchall()
+
+                if (
+                    revision.initial_batch_started_at
+                    is not None
+                ):
+                    existing_by_id = {
+                        row[0]: row
+                        for row in existing_job_rows
+                    }
+
+                    for (
+                        job_id,
+                        trial_id,
+                    ) in expected_initial_jobs:
+                        row = existing_by_id.get(
+                            job_id
+                        )
+
+                        if row is None:
+                            raise ValueError(
+                                "started StudyRevision is missing "
+                                "deterministic initial-job lineage"
+                            )
+
+                        if row[1] != trial_id:
+                            raise ValueError(
+                                "deterministic initial ResearchJob "
+                                "points to the wrong Trial"
+                            )
+
+                        if (
+                            datetime.fromisoformat(
+                                row[2]
+                            )
+                            != revision.initial_batch_started_at
+                        ):
+                            raise ValueError(
+                                "deterministic initial ResearchJob "
+                                "creation time does not match "
+                                "initial_batch_started_at"
+                            )
+
+                    connection.rollback()
+                    return revision
+
+                if existing_job_rows:
+                    raise ValueError(
+                        "unstarted StudyRevision already has "
+                        "ResearchJob history"
+                    )
+
+                for (
+                    _trial_id,
+                    disposition,
+                ) in trial_rows:
+                    if (
+                        disposition
+                        != TrialDisposition.PENDING.value
+                    ):
+                        raise ValueError(
+                            "first Start requires every "
+                            "registered Trial to remain PENDING"
+                        )
+
+                created_at = started_at.isoformat(
+                    timespec="microseconds"
+                )
+
+                for (
+                    job_id,
+                    trial_id,
+                ) in expected_initial_jobs:
+                    connection.execute(
+                        """
+                        INSERT INTO research_jobs (
+                            job_id,
+                            trial_id,
+                            state,
+                            created_at,
+                            claimed_at,
+                            terminal_at,
+                            worker_id,
+                            cancel_requested_at,
+                            attempt_id,
+                            completion_kind,
+                            reused_attempt_id,
+                            reused_evidence_id,
+                            reused_result_artifact_id,
+                            failure_classification,
+                            failure_message
+                        ) VALUES (
+                            ?, ?, 'QUEUED', ?,
+                            NULL, NULL, NULL, NULL, NULL,
+                            NULL, NULL, NULL, NULL, NULL, NULL
+                        )
+                        """,
+                        (
+                            job_id,
+                            trial_id,
+                            created_at,
+                        ),
+                    )
+
+                cursor = connection.execute(
+                    """
+                    UPDATE study_revisions
+                    SET initial_batch_started_at = ?
+                    WHERE
+                        study_revision_id = ?
+                        AND initial_batch_started_at IS NULL
+                    """,
+                    (
+                        created_at,
+                        study_revision_id,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "StudyRevision Start lost its "
+                        "unstarted precondition"
+                    )
+
+                updated_row = connection.execute(
+                    """
+                    SELECT
+                        study_revision_id,
+                        identity_schema,
+                        study_id,
+                        revision_number,
+                        plan_artifact_id,
+                        repository_revision,
+                        evidence_reuse_policy,
+                        registered_at,
+                        initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if updated_row is None:
+                    raise RuntimeError(
+                        "started StudyRevision disappeared"
+                    )
+
+                started_revision = (
+                    self._study_revision_from_row(
+                        updated_row
+                    )
+                )
+
+                connection.commit()
+
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+
+                raise ValueError(
+                    "initial ResearchJob queue could not be "
+                    "persisted atomically"
+                ) from error
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return started_revision
+
+    def load_research_queue_snapshot(
+        self,
+        study_revision_id: str,
+    ) -> ResearchQueueSnapshot:
+        """Read durable Trial and ResearchJob state counts."""
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+
+                revision_row = connection.execute(
+                    """
+                    SELECT initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if revision_row is None:
+                    raise ValueError(
+                        "StudyRevision does not exist"
+                    )
+
+                trial_counts = dict(
+                    connection.execute(
+                        """
+                        SELECT
+                            disposition,
+                            COUNT(*)
+                        FROM trials
+                        WHERE study_revision_id = ?
+                        GROUP BY disposition
+                        """,
+                        (study_revision_id,),
+                    ).fetchall()
+                )
+
+                job_counts = dict(
+                    connection.execute(
+                        """
+                        SELECT
+                            j.state,
+                            COUNT(*)
+                        FROM research_jobs j
+                        JOIN trials t
+                            ON t.trial_id = j.trial_id
+                        WHERE t.study_revision_id = ?
+                        GROUP BY j.state
+                        """,
+                        (study_revision_id,),
+                    ).fetchall()
+                )
+
+                snapshot = ResearchQueueSnapshot(
+                    study_revision_id=(
+                        study_revision_id
+                    ),
+                    initial_batch_started_at=(
+                        datetime.fromisoformat(
+                            revision_row[0]
+                        )
+                        if revision_row[0] is not None
+                        else None
+                    ),
+                    total_registered_trials=sum(
+                        trial_counts.values()
+                    ),
+                    pending_trials=trial_counts.get(
+                        TrialDisposition.PENDING.value,
+                        0,
+                    ),
+                    executed_trials=trial_counts.get(
+                        TrialDisposition.EXECUTED.value,
+                        0,
+                    ),
+                    reused_trials=trial_counts.get(
+                        TrialDisposition.REUSED.value,
+                        0,
+                    ),
+                    invalid_trials=trial_counts.get(
+                        TrialDisposition.INVALID.value,
+                        0,
+                    ),
+                    insufficient_trials=trial_counts.get(
+                        TrialDisposition.INSUFFICIENT.value,
+                        0,
+                    ),
+                    failed_trials=trial_counts.get(
+                        TrialDisposition.FAILED.value,
+                        0,
+                    ),
+                    cancelled_trials=trial_counts.get(
+                        TrialDisposition.CANCELLED.value,
+                        0,
+                    ),
+                    interrupted_trials=trial_counts.get(
+                        TrialDisposition.INTERRUPTED.value,
+                        0,
+                    ),
+                    queued_jobs=job_counts.get(
+                        ResearchJobState.QUEUED.value,
+                        0,
+                    ),
+                    running_jobs=job_counts.get(
+                        ResearchJobState.RUNNING.value,
+                        0,
+                    ),
+                    succeeded_jobs=job_counts.get(
+                        ResearchJobState.SUCCEEDED.value,
+                        0,
+                    ),
+                    failed_jobs=job_counts.get(
+                        ResearchJobState.FAILED.value,
+                        0,
+                    ),
+                    cancelled_jobs=job_counts.get(
+                        ResearchJobState.CANCELLED.value,
+                        0,
+                    ),
+                    interrupted_jobs=job_counts.get(
+                        ResearchJobState.INTERRUPTED.value,
+                        0,
+                    ),
+                )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return snapshot
+
+    def claim_next_research_job(
+        self,
+        study_revision_id: str,
+        worker_id: str,
+        claimed_at: datetime,
+        *,
+        max_running_jobs: int,
+    ) -> ResearchJob | None:
+        """Atomically claim the next FIFO job under the global bound."""
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(worker_id, str)
+            or not worker_id
+        ):
+            raise ValueError(
+                "worker_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(claimed_at, datetime)
+            or claimed_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "claimed_at must be a timezone-aware datetime"
+            )
+
+        if (
+            type(max_running_jobs) is not int
+            or max_running_jobs <= 0
+            or max_running_jobs
+            > RESEARCH_MAX_WORKERS_SAFETY_CEILING
+        ):
+            raise ValueError(
+                "max_running_jobs must be between 1 and "
+                f"{RESEARCH_MAX_WORKERS_SAFETY_CEILING}"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                revision_row = connection.execute(
+                    """
+                    SELECT initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if revision_row is None:
+                    raise ValueError(
+                        "StudyRevision does not exist"
+                    )
+
+                if revision_row[0] is None:
+                    raise ValueError(
+                        "StudyRevision must be started before "
+                        "ResearchJobs can be claimed"
+                    )
+
+                running_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM research_jobs
+                    WHERE state = ?
+                    """,
+                    (
+                        ResearchJobState.RUNNING.value,
+                    ),
+                ).fetchone()[0]
+
+                if running_count >= max_running_jobs:
+                    connection.rollback()
+                    return None
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.state,
+                        j.created_at,
+                        j.claimed_at,
+                        j.terminal_at,
+                        j.worker_id,
+                        j.cancel_requested_at,
+                        j.attempt_id,
+                        j.completion_kind,
+                        j.reused_attempt_id,
+                        j.reused_evidence_id,
+                        j.reused_result_artifact_id,
+                        j.failure_classification,
+                        j.failure_message
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE
+                        t.study_revision_id = ?
+                        AND j.state = ?
+                    ORDER BY
+                        j.created_at ASC,
+                        j.job_id ASC
+                    LIMIT 1
+                    """,
+                    (
+                        study_revision_id,
+                        ResearchJobState.QUEUED.value,
+                    ),
+                ).fetchone()
+
+                if row is None:
+                    connection.rollback()
+                    return None
+
+                created_at = datetime.fromisoformat(
+                    row[3]
+                )
+
+                if claimed_at < created_at:
+                    raise ValueError(
+                        "claimed_at cannot precede "
+                        "ResearchJob created_at"
+                    )
+
+                job_id = row[0]
+
+                cursor = connection.execute(
+                    """
+                    UPDATE research_jobs
+                    SET
+                        state = ?,
+                        claimed_at = ?,
+                        worker_id = ?
+                    WHERE
+                        job_id = ?
+                        AND state = ?
+                    """,
+                    (
+                        ResearchJobState.RUNNING.value,
+                        claimed_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        worker_id,
+                        job_id,
+                        ResearchJobState.QUEUED.value,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "ResearchJob claim lost its "
+                        "QUEUED precondition"
+                    )
+
+                claimed_row = connection.execute(
+                    """
+                    SELECT
+                        job_id,
+                        trial_id,
+                        state,
+                        created_at,
+                        claimed_at,
+                        terminal_at,
+                        worker_id,
+                        cancel_requested_at,
+                        attempt_id,
+                        completion_kind,
+                        reused_attempt_id,
+                        reused_evidence_id,
+                        reused_result_artifact_id,
+                        failure_classification,
+                        failure_message
+                    FROM research_jobs
+                    WHERE job_id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+
+                if claimed_row is None:
+                    raise RuntimeError(
+                        "claimed ResearchJob disappeared"
+                    )
+
+                claimed_job = (
+                    self._research_job_from_row(
+                        claimed_row
+                    )
+                )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return claimed_job
 
     def save_queued_research_job(
         self,

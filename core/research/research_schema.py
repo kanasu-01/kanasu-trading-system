@@ -227,6 +227,48 @@ CREATE TABLE IF NOT EXISTS research_jobs (
 """
 
 
+_CREATE_RESEARCH_JOBS_STATE_CREATED_JOB_INDEX = """
+CREATE INDEX IF NOT EXISTS
+ix_research_jobs_state_created_job
+ON research_jobs (
+    state,
+    created_at,
+    job_id
+)
+"""
+
+
+_CREATE_RESEARCH_JOBS_TRIAL_CREATED_JOB_INDEX = """
+CREATE INDEX IF NOT EXISTS
+ix_research_jobs_trial_created_job
+ON research_jobs (
+    trial_id,
+    created_at,
+    job_id
+)
+"""
+
+
+_CREATE_V2_INDEXES = (
+    _CREATE_RESEARCH_JOBS_STATE_CREATED_JOB_INDEX,
+    _CREATE_RESEARCH_JOBS_TRIAL_CREATED_JOB_INDEX,
+)
+
+
+_EXPECTED_V2_INDEX_COLUMNS = {
+    "ix_research_jobs_state_created_job": (
+        "state",
+        "created_at",
+        "job_id",
+    ),
+    "ix_research_jobs_trial_created_job": (
+        "trial_id",
+        "created_at",
+        "job_id",
+    ),
+}
+
+
 _CREATE_TRIAL_DISPOSITION_EVENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS trial_disposition_events (
     event_id TEXT PRIMARY KEY,
@@ -500,6 +542,50 @@ def _validate_current_schema(
     )
 
 
+def _index_columns(
+    connection: sqlite3.Connection,
+    index_name: str,
+) -> tuple[str, ...]:
+    rows = connection.execute(
+        f"PRAGMA index_info({index_name})"
+    ).fetchall()
+
+    return tuple(
+        row[2]
+        for row in rows
+    )
+
+
+def _validate_current_indexes(
+    connection: sqlite3.Connection,
+) -> None:
+    for (
+        index_name,
+        expected_columns,
+    ) in _EXPECTED_V2_INDEX_COLUMNS.items():
+        actual = _index_columns(
+            connection,
+            index_name,
+        )
+
+        if actual != expected_columns:
+            raise RuntimeError(
+                f"incompatible or missing {index_name} "
+                "for supported research schema"
+            )
+
+
+def _create_and_validate_v2_indexes(
+    connection: sqlite3.Connection,
+) -> None:
+    for statement in _CREATE_V2_INDEXES:
+        connection.execute(statement)
+
+    _validate_current_indexes(
+        connection
+    )
+
+
 def _migrate_v1_to_v2(
     connection: sqlite3.Connection,
 ) -> None:
@@ -514,6 +600,10 @@ def _migrate_v1_to_v2(
 
         for statement in _CREATE_V2_TABLES:
             connection.execute(statement)
+
+        _create_and_validate_v2_indexes(
+            connection
+        )
 
         _validate_current_schema(connection)
 
@@ -552,6 +642,21 @@ def initialize_research_schema(
 
     if current_version == RESEARCH_SCHEMA_VERSION:
         _validate_current_schema(connection)
+
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+
+            _create_and_validate_v2_indexes(
+                connection
+            )
+
+        except Exception:
+            connection.rollback()
+            raise
+
+        else:
+            connection.commit()
+
         return
 
     if current_version == 1:
@@ -596,6 +701,10 @@ def initialize_research_schema(
 
         for statement in _CREATE_V2_TABLES:
             connection.execute(statement)
+
+        _create_and_validate_v2_indexes(
+            connection
+        )
 
         _validate_current_schema(connection)
 

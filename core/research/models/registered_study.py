@@ -15,6 +15,10 @@ TRIAL_IDENTITY_SCHEMA_ID = "kanasu.trial.v1"
 TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID = (
     "kanasu.trial-membership-evidence.v1"
 )
+INITIAL_RESEARCH_JOB_SCHEMA_ID = (
+    "kanasu.initial-research-job.v1"
+)
+RESEARCH_MAX_WORKERS_SAFETY_CEILING = 16
 
 
 class EvidenceReusePolicy(str, Enum):
@@ -605,3 +609,103 @@ class ResearchJob:
                 "only SUCCEEDED ResearchJob may have "
                 "completion_kind"
             )
+
+
+@dataclass(frozen=True)
+class ResearchQueueSnapshot:
+    """Truthful Trial and ResearchJob counts for one StudyRevision."""
+
+    study_revision_id: str
+    initial_batch_started_at: datetime | None
+    total_registered_trials: int
+
+    pending_trials: int = 0
+    executed_trials: int = 0
+    reused_trials: int = 0
+    invalid_trials: int = 0
+    insufficient_trials: int = 0
+    failed_trials: int = 0
+    cancelled_trials: int = 0
+    interrupted_trials: int = 0
+
+    queued_jobs: int = 0
+    running_jobs: int = 0
+    succeeded_jobs: int = 0
+    failed_jobs: int = 0
+    cancelled_jobs: int = 0
+    interrupted_jobs: int = 0
+
+    def __post_init__(self) -> None:
+        _require_fingerprint(
+            self.study_revision_id,
+            "study_revision_id",
+        )
+
+        _require_optional_aware_datetime(
+            self.initial_batch_started_at,
+            "initial_batch_started_at",
+        )
+
+        count_fields = (
+            "total_registered_trials",
+            "pending_trials",
+            "executed_trials",
+            "reused_trials",
+            "invalid_trials",
+            "insufficient_trials",
+            "failed_trials",
+            "cancelled_trials",
+            "interrupted_trials",
+            "queued_jobs",
+            "running_jobs",
+            "succeeded_jobs",
+            "failed_jobs",
+            "cancelled_jobs",
+            "interrupted_jobs",
+        )
+
+        for field_name in count_fields:
+            value = getattr(
+                self,
+                field_name,
+            )
+
+            if (
+                type(value) is not int
+                or value < 0
+            ):
+                raise ValueError(
+                    f"{field_name} must be a non-negative integer"
+                )
+
+        trial_count = sum(
+            (
+                self.pending_trials,
+                self.executed_trials,
+                self.reused_trials,
+                self.invalid_trials,
+                self.insufficient_trials,
+                self.failed_trials,
+                self.cancelled_trials,
+                self.interrupted_trials,
+            )
+        )
+
+        if trial_count != self.total_registered_trials:
+            raise ValueError(
+                "Trial disposition counts must equal "
+                "total_registered_trials"
+            )
+
+    @property
+    def total_jobs(self) -> int:
+        return sum(
+            (
+                self.queued_jobs,
+                self.running_jobs,
+                self.succeeded_jobs,
+                self.failed_jobs,
+                self.cancelled_jobs,
+                self.interrupted_jobs,
+            )
+        )

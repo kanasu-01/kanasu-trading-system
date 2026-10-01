@@ -53,4 +53,7 @@ class AppConfig:
     # M9.4 registered research workload safety.
     research_max_trials_per_revision: int = 5_000
 
+    # M9.4 bounded local research worker concurrency.
+    research_max_workers: int = 4
+
     historical_request_delay_sec: float = 0.5
