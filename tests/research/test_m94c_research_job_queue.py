@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timezone
 import sqlite3
+from threading import Event, Lock, get_ident
 
 import pytest
 
@@ -183,6 +184,85 @@ def _jobs_for_population(
             ),
         )
     )
+
+
+def _claim_direct(
+    catalog,
+    queue,
+    study_revision_id,
+    *,
+    worker_id,
+    claimed_at,
+):
+    """Exercise the durable store primitive without scheduler policy."""
+
+    return catalog.claim_next_research_job(
+        study_revision_id,
+        worker_id,
+        claimed_at,
+        max_running_jobs=(
+            queue.research_max_workers
+        ),
+    )
+
+
+def _terminalize_running_job(
+    catalog,
+    job,
+    *,
+    terminal_at=JUN,
+):
+    """
+    Test-only terminalization fixture.
+
+    M9.4d supplies the production coordinated terminalizer. These queue
+    tests only need a durable terminal state to prove worker-slot
+    lifetime and scheduler behavior.
+    """
+
+    with closing(
+        sqlite3.connect(
+            catalog.database_path
+        )
+    ) as connection:
+        cursor = connection.execute(
+            """
+            UPDATE research_jobs
+            SET
+                state = ?,
+                terminal_at = ?,
+                failure_classification = ?,
+                failure_message = ?
+            WHERE
+                job_id = ?
+                AND state = ?
+            """,
+            (
+                ResearchJobState.FAILED.value,
+                terminal_at.isoformat(
+                    timespec="microseconds"
+                ),
+                "worker_pool_test_terminal",
+                "test-only durable terminalization",
+                job.job_id,
+                ResearchJobState.RUNNING.value,
+            ),
+        )
+
+        assert cursor.rowcount == 1
+        connection.commit()
+
+    persisted = catalog.load_research_job(
+        job.job_id
+    )
+
+    assert persisted is not None
+    assert (
+        persisted.state
+        is ResearchJobState.FAILED
+    )
+
+    return persisted
 
 
 def test_backend_worker_configuration_is_bounded():
@@ -469,19 +549,19 @@ def test_claim_is_fifo_bounded_and_creates_no_attempt(
         )
     ]
 
-    first = queue.claim_next(
+    first = _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-1",
         claimed_at=MAY,
     )
 
-    second = queue.claim_next(
+    second = _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-2",
         claimed_at=MAY,
     )
 
-    third = queue.claim_next(
+    third = _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-3",
         claimed_at=MAY,
@@ -533,7 +613,7 @@ def test_start_replay_after_claim_does_not_duplicate_jobs(
         started_at=APR,
     )
 
-    claimed = queue.claim_next(
+    claimed = _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-1",
         claimed_at=MAY,
@@ -635,7 +715,9 @@ def test_cross_revision_claims_respect_global_worker_bound(
     ) as executor:
         futures = [
             executor.submit(
-                queue.claim_next,
+                _claim_direct,
+                catalog,
+                queue,
                 revision_id,
                 worker_id=f"worker-{index:02d}",
                 claimed_at=JUN,
@@ -706,7 +788,7 @@ def test_queue_snapshot_separates_trial_and_job_counts(
     tmp_path,
 ):
     (
-        _,
+        catalog,
         registration,
         queue,
         definition,
@@ -737,13 +819,13 @@ def test_queue_snapshot_separates_trial_and_job_counts(
         started_at=APR,
     )
 
-    queue.claim_next(
+    _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-1",
         claimed_at=MAY,
     )
 
-    queue.claim_next(
+    _claim_direct(catalog, queue,
         population.revision.study_revision_id,
         worker_id="worker-2",
         claimed_at=MAY,
@@ -834,3 +916,634 @@ def test_existing_schema_v2_restores_queue_indexes_without_version_bump(
         "created_at",
         "job_id",
     )
+
+
+def test_service_direct_claim_api_is_demoted(
+    tmp_path,
+):
+    (
+        _catalog,
+        _registration,
+        queue,
+        _definition,
+        _snapshot,
+    ) = _environment(tmp_path)
+
+    assert not hasattr(
+        queue,
+        "claim_next",
+    )
+
+
+def test_worker_pool_claim_occurs_inside_executor_thread(
+    tmp_path,
+    monkeypatch,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="worker thread authority",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    caller_thread = get_ident()
+    claim_threads = []
+    handler_threads = []
+
+    original_claim = (
+        queue._claim_next_in_worker_slot
+    )
+
+    def observed_claim(
+        *args,
+        **kwargs,
+    ):
+        claim_threads.append(
+            get_ident()
+        )
+
+        return original_claim(
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        queue,
+        "_claim_next_in_worker_slot",
+        observed_claim,
+    )
+
+    def handle(job):
+        handler_threads.append(
+            get_ident()
+        )
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+    result = queue.run_worker_pool(
+        population.revision.study_revision_id,
+        worker_id_factory=(
+            lambda slot: f"worker-{slot}"
+        ),
+        claimed_at_factory=lambda: MAY,
+        execute_claimed_job=handle,
+    )
+
+    assert claim_threads
+    assert handler_threads
+
+    assert all(
+        thread_id != caller_thread
+        for thread_id in claim_threads
+    )
+
+    assert set(
+        handler_threads
+    ).issubset(
+        set(
+            claim_threads
+        )
+    )
+
+    assert result.queued_jobs == 0
+    assert result.running_jobs == 0
+    assert result.failed_jobs == 3
+
+
+def test_worker_slot_is_held_until_handler_returns(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="slot lifetime",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    expected = [
+        job.job_id
+        for job in _jobs_for_population(
+            catalog,
+            population,
+        )
+    ]
+
+    entered = Event()
+    release = Event()
+
+    def handle(job):
+        if job.job_id == expected[0]:
+            entered.set()
+
+            assert release.wait(
+                timeout=5
+            )
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+    with ThreadPoolExecutor(
+        max_workers=1
+    ) as caller:
+        future = caller.submit(
+            queue.run_worker_pool,
+            population.revision.study_revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-{slot}"
+            ),
+            claimed_at_factory=lambda: MAY,
+            execute_claimed_job=handle,
+        )
+
+        assert entered.wait(
+            timeout=5
+        )
+
+        during = queue.snapshot(
+            population.revision.study_revision_id
+        )
+
+        assert during.running_jobs == 1
+        assert during.queued_jobs == 2
+        assert not future.done()
+
+        release.set()
+
+        after = future.result(
+            timeout=5
+        )
+
+    assert after.running_jobs == 0
+    assert after.queued_jobs == 0
+    assert after.failed_jobs == 3
+
+
+def test_worker_pool_never_exceeds_configured_worker_count(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=2,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="bounded handler concurrency",
+        registered_at=MAR,
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    active_lock = Lock()
+    release = Event()
+    two_active = Event()
+
+    active = 0
+    maximum_active = 0
+
+    def handle(job):
+        nonlocal active
+        nonlocal maximum_active
+
+        with active_lock:
+            active += 1
+            maximum_active = max(
+                maximum_active,
+                active,
+            )
+
+            if active == 2:
+                two_active.set()
+
+        try:
+            assert release.wait(
+                timeout=5
+            )
+
+            _terminalize_running_job(
+                catalog,
+                job,
+            )
+
+        finally:
+            with active_lock:
+                active -= 1
+
+    with ThreadPoolExecutor(
+        max_workers=1
+    ) as caller:
+        future = caller.submit(
+            queue.run_worker_pool,
+            population.revision.study_revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-{slot}"
+            ),
+            claimed_at_factory=lambda: MAY,
+            execute_claimed_job=handle,
+        )
+
+        assert two_active.wait(
+            timeout=5
+        )
+
+        during = queue.snapshot(
+            population.revision.study_revision_id
+        )
+
+        assert during.running_jobs == 2
+        assert maximum_active == 2
+
+        release.set()
+
+        after = future.result(
+            timeout=5
+        )
+
+    assert maximum_active <= 2
+    assert after.running_jobs == 0
+    assert after.queued_jobs == 0
+    assert after.failed_jobs == 6
+
+
+def test_worker_pool_stops_new_claims_when_handler_fails(
+    tmp_path,
+):
+    (
+        _catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="handler failure stop",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    seen = []
+
+    def fail(job):
+        seen.append(
+            job.job_id
+        )
+
+        raise RuntimeError(
+            "worker handler failed"
+        )
+
+    with pytest.raises(
+        RuntimeError,
+        match="worker handler failed",
+    ):
+        queue.run_worker_pool(
+            population.revision.study_revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-{slot}"
+            ),
+            claimed_at_factory=lambda: MAY,
+            execute_claimed_job=fail,
+        )
+
+    after = queue.snapshot(
+        population.revision.study_revision_id
+    )
+
+    assert len(seen) == 1
+    assert after.running_jobs == 1
+    assert after.queued_jobs == 2
+
+
+def test_worker_pool_rejects_handler_return_with_running_job(
+    tmp_path,
+):
+    (
+        _catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="terminal verification",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="must durably terminalize",
+    ):
+        queue.run_worker_pool(
+            population.revision.study_revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-{slot}"
+            ),
+            claimed_at_factory=lambda: MAY,
+            execute_claimed_job=(
+                lambda _job: None
+            ),
+        )
+
+    after = queue.snapshot(
+        population.revision.study_revision_id
+    )
+
+    assert after.running_jobs == 1
+    assert after.queued_jobs == 2
+
+
+def test_worker_pool_empty_queue_returns_clean_snapshot(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="empty queue",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    queue.start_revision(
+        revision_id,
+        started_at=APR,
+    )
+
+    seeded = 0
+
+    while True:
+        job = _claim_direct(
+            catalog,
+            queue,
+            revision_id,
+            worker_id=f"seed-{seeded}",
+            claimed_at=MAY,
+        )
+
+        if job is None:
+            break
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+        seeded += 1
+
+    assert seeded == 3
+
+    result = queue.run_worker_pool(
+        revision_id,
+        worker_id_factory=(
+            lambda slot: f"worker-{slot}"
+        ),
+        claimed_at_factory=lambda: JUN,
+        execute_claimed_job=(
+            lambda _job: pytest.fail(
+                "empty queue must not invoke handler"
+            )
+        ),
+    )
+
+    assert result.queued_jobs == 0
+    assert result.running_jobs == 0
+    assert result.failed_jobs == 3
+
+
+def test_worker_pool_claiming_creates_no_runattempt(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="claim creates no attempt",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    observed_attempt_counts = []
+
+    def handle(job):
+        with closing(
+            sqlite3.connect(
+                catalog.database_path
+            )
+        ) as connection:
+            observed_attempt_counts.append(
+                connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM run_attempts
+                    """
+                ).fetchone()[0]
+            )
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+    queue.run_worker_pool(
+        population.revision.study_revision_id,
+        worker_id_factory=(
+            lambda slot: f"worker-{slot}"
+        ),
+        claimed_at_factory=lambda: MAY,
+        execute_claimed_job=handle,
+    )
+
+    assert observed_attempt_counts == [
+        0,
+        0,
+        0,
+    ]
+
+
+def test_worker_pool_preserves_fifo_atomic_claiming(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="pool FIFO",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    queue.start_revision(
+        revision_id,
+        started_at=APR,
+    )
+
+    expected = [
+        job.job_id
+        for job in _jobs_for_population(
+            catalog,
+            population,
+        )
+    ]
+
+    seen = []
+
+    def handle(job):
+        seen.append(
+            job.job_id
+        )
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+    result = queue.run_worker_pool(
+        revision_id,
+        worker_id_factory=(
+            lambda slot: f"worker-{slot}"
+        ),
+        claimed_at_factory=lambda: MAY,
+        execute_claimed_job=handle,
+    )
+
+    assert seen == expected
+    assert result.queued_jobs == 0
+    assert result.running_jobs == 0
+    assert result.failed_jobs == 3
