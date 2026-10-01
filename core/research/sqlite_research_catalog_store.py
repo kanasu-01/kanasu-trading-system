@@ -2846,6 +2846,456 @@ class SQLiteResearchCatalogStore:
 
         return claimed_job
 
+    # M9.4d2 BEHAVIOR IMPACT: ADDED
+    # PRIMARY BEHAVIOR IDS:
+    # - RESEARCH-RULE-014
+    # - RESEARCH-RULE-015
+    #
+    # This fresh-execution primitive binds an already-registered Trial
+    # to its exact ExperimentSpec, creates one new RUNNING RunAttempt,
+    # and links the already-RUNNING ResearchJob to that attempt in one
+    # SQLite transaction. It performs no financial execution or
+    # terminalization.
+    def bind_trial_spec_create_attempt_for_running_job(
+        self,
+        *,
+        job_id: str,
+        experiment_spec_id: str,
+        attempt_created_at: datetime,
+    ) -> tuple[Trial, ResearchJob, RunAttempt]:
+        """
+        Atomically establish fresh-execution identities for one job.
+
+        A Trial may acquire its ExperimentSpec binding once. A later
+        job for the same Trial must preserve that exact binding. One
+        ResearchJob may link to at most one newly created RunAttempt.
+        """
+
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+        ):
+            raise ValueError(
+                "job_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(experiment_spec_id, str)
+            or not experiment_spec_id
+        ):
+            raise ValueError(
+                "experiment_spec_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(attempt_created_at, datetime)
+            or attempt_created_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "attempt_created_at must be a timezone-aware datetime"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                job_row = connection.execute(
+                    """
+                    SELECT
+                        job_id,
+                        trial_id,
+                        state,
+                        created_at,
+                        claimed_at,
+                        terminal_at,
+                        worker_id,
+                        cancel_requested_at,
+                        attempt_id,
+                        completion_kind,
+                        reused_attempt_id,
+                        reused_evidence_id,
+                        reused_result_artifact_id,
+                        failure_classification,
+                        failure_message
+                    FROM research_jobs
+                    WHERE job_id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+
+                if job_row is None:
+                    raise ValueError(
+                        f"ResearchJob does not exist: {job_id}"
+                    )
+
+                current_job = (
+                    self._research_job_from_row(
+                        job_row
+                    )
+                )
+
+                if (
+                    current_job.state
+                    is not ResearchJobState.RUNNING
+                ):
+                    raise ValueError(
+                        "ResearchJob must be RUNNING before "
+                        "fresh execution can create a RunAttempt"
+                    )
+
+                if (
+                    current_job.claimed_at is not None
+                    and attempt_created_at
+                    < current_job.claimed_at
+                ):
+                    raise ValueError(
+                        "attempt_created_at cannot precede "
+                        "ResearchJob claimed_at"
+                    )
+
+                if current_job.attempt_id is not None:
+                    raise ValueError(
+                        "one ResearchJob may create at most "
+                        "one new RunAttempt"
+                    )
+
+                if any(
+                    value is not None
+                    for value in (
+                        current_job.terminal_at,
+                        current_job.completion_kind,
+                        current_job.reused_attempt_id,
+                        current_job.reused_evidence_id,
+                        current_job.reused_result_artifact_id,
+                        current_job.failure_classification,
+                        current_job.failure_message,
+                    )
+                ):
+                    raise ValueError(
+                        "RUNNING ResearchJob must not carry "
+                        "terminal or completion fields before "
+                        "fresh execution"
+                    )
+
+                trial_row = connection.execute(
+                    """
+                    SELECT
+                        trial_id,
+                        identity_schema,
+                        study_revision_id,
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        membership_evidence_fingerprint,
+                        membership_evidence_artifact_id,
+                        parameter_configuration_fingerprint,
+                        registered_at,
+                        experiment_spec_id,
+                        disposition,
+                        disposition_at,
+                        reused_attempt_id,
+                        failure_classification,
+                        failure_message
+                    FROM trials
+                    WHERE trial_id = ?
+                    """,
+                    (
+                        current_job.trial_id,
+                    ),
+                ).fetchone()
+
+                if trial_row is None:
+                    raise ValueError(
+                        "ResearchJob Trial does not exist"
+                    )
+
+                current_trial = (
+                    self._trial_from_row(
+                        trial_row
+                    )
+                )
+
+                if (
+                    current_trial.disposition
+                    is not TrialDisposition.PENDING
+                ):
+                    raise ValueError(
+                        "Trial must be PENDING before "
+                        "fresh execution can create a RunAttempt"
+                    )
+
+                spec_row = connection.execute(
+                    """
+                    SELECT
+                        experiment_spec_id,
+                        identity_schema,
+                        computation_kind,
+                        manifest_artifact_id,
+                        dataset_fingerprint,
+                        configuration_fingerprint,
+                        repository_revision,
+                        created_at
+                    FROM experiment_specs
+                    WHERE experiment_spec_id = ?
+                    """,
+                    (
+                        experiment_spec_id,
+                    ),
+                ).fetchone()
+
+                if spec_row is None:
+                    raise ValueError(
+                        "ExperimentSpec does not exist: "
+                        f"{experiment_spec_id}"
+                    )
+
+                spec = self._spec_from_row(
+                    spec_row
+                )
+
+                if (
+                    current_trial.experiment_spec_id
+                    is not None
+                    and current_trial.experiment_spec_id
+                    != spec.experiment_spec_id
+                ):
+                    raise ValueError(
+                        "Trial is already bound to a different "
+                        "ExperimentSpec"
+                    )
+
+                if (
+                    current_trial.experiment_spec_id
+                    is None
+                ):
+                    cursor = connection.execute(
+                        """
+                        UPDATE trials
+                        SET experiment_spec_id = ?
+                        WHERE
+                            trial_id = ?
+                            AND disposition = ?
+                            AND experiment_spec_id IS NULL
+                        """,
+                        (
+                            spec.experiment_spec_id,
+                            current_trial.trial_id,
+                            TrialDisposition.PENDING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "Trial binding lost its PENDING/unbound "
+                            "precondition"
+                        )
+
+                attempt = RunAttempt(
+                    attempt_id=(
+                        self._attempt_id_factory()
+                    ),
+                    experiment_spec_id=(
+                        spec.experiment_spec_id
+                    ),
+                    state=RunAttemptState.RUNNING,
+                    created_at=attempt_created_at,
+                )
+
+                connection.execute(
+                    """
+                    INSERT INTO run_attempts (
+                        attempt_id,
+                        experiment_spec_id,
+                        state,
+                        created_at,
+                        terminal_at,
+                        runtime_session_id,
+                        result_artifact_id,
+                        evidence_id,
+                        failure_classification,
+                        failure_message
+                    ) VALUES (
+                        ?, ?, ?, ?,
+                        NULL, NULL, NULL, NULL, NULL, NULL
+                    )
+                    """,
+                    (
+                        attempt.attempt_id,
+                        attempt.experiment_spec_id,
+                        attempt.state.value,
+                        attempt.created_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                    ),
+                )
+
+                cursor = connection.execute(
+                    """
+                    UPDATE research_jobs
+                    SET attempt_id = ?
+                    WHERE
+                        job_id = ?
+                        AND state = ?
+                        AND attempt_id IS NULL
+                        AND terminal_at IS NULL
+                        AND completion_kind IS NULL
+                        AND reused_attempt_id IS NULL
+                        AND reused_evidence_id IS NULL
+                        AND reused_result_artifact_id IS NULL
+                        AND failure_classification IS NULL
+                        AND failure_message IS NULL
+                    """,
+                    (
+                        attempt.attempt_id,
+                        current_job.job_id,
+                        ResearchJobState.RUNNING.value,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "ResearchJob attempt link lost its "
+                        "RUNNING/unlinked precondition"
+                    )
+
+                updated_trial_row = connection.execute(
+                    """
+                    SELECT
+                        trial_id,
+                        identity_schema,
+                        study_revision_id,
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        membership_evidence_fingerprint,
+                        membership_evidence_artifact_id,
+                        parameter_configuration_fingerprint,
+                        registered_at,
+                        experiment_spec_id,
+                        disposition,
+                        disposition_at,
+                        reused_attempt_id,
+                        failure_classification,
+                        failure_message
+                    FROM trials
+                    WHERE trial_id = ?
+                    """,
+                    (
+                        current_trial.trial_id,
+                    ),
+                ).fetchone()
+
+                updated_job_row = connection.execute(
+                    """
+                    SELECT
+                        job_id,
+                        trial_id,
+                        state,
+                        created_at,
+                        claimed_at,
+                        terminal_at,
+                        worker_id,
+                        cancel_requested_at,
+                        attempt_id,
+                        completion_kind,
+                        reused_attempt_id,
+                        reused_evidence_id,
+                        reused_result_artifact_id,
+                        failure_classification,
+                        failure_message
+                    FROM research_jobs
+                    WHERE job_id = ?
+                    """,
+                    (
+                        current_job.job_id,
+                    ),
+                ).fetchone()
+
+                attempt_row = connection.execute(
+                    """
+                    SELECT
+                        attempt_id,
+                        experiment_spec_id,
+                        state,
+                        created_at,
+                        terminal_at,
+                        runtime_session_id,
+                        result_artifact_id,
+                        evidence_id,
+                        failure_classification,
+                        failure_message
+                    FROM run_attempts
+                    WHERE attempt_id = ?
+                    """,
+                    (
+                        attempt.attempt_id,
+                    ),
+                ).fetchone()
+
+                if (
+                    updated_trial_row is None
+                    or updated_job_row is None
+                    or attempt_row is None
+                ):
+                    raise RuntimeError(
+                        "atomic execution identities disappeared "
+                        "before commit"
+                    )
+
+                updated_trial = (
+                    self._trial_from_row(
+                        updated_trial_row
+                    )
+                )
+
+                updated_job = (
+                    self._research_job_from_row(
+                        updated_job_row
+                    )
+                )
+
+                persisted_attempt = (
+                    self._attempt_from_row(
+                        attempt_row
+                    )
+                )
+
+                if (
+                    updated_trial.experiment_spec_id
+                    != spec.experiment_spec_id
+                    or updated_job.attempt_id
+                    != persisted_attempt.attempt_id
+                    or persisted_attempt.experiment_spec_id
+                    != spec.experiment_spec_id
+                    or persisted_attempt.state
+                    is not RunAttemptState.RUNNING
+                ):
+                    raise RuntimeError(
+                        "atomic execution identity linkage "
+                        "is internally inconsistent"
+                    )
+
+                connection.commit()
+
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+                raise ValueError(
+                    "atomic Trial/ResearchJob/RunAttempt link "
+                    "could not be persisted"
+                ) from error
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return (
+            updated_trial,
+            updated_job,
+            persisted_attempt,
+        )
+
     def save_queued_research_job(
         self,
         job: ResearchJob,
