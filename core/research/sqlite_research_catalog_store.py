@@ -17,6 +17,8 @@ from core.research.models.research_catalog import (
 )
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
+    STUDY_REVISION_SCHEMA_ID,
+    TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID,
     ResearchJob,
     ResearchJobCompletionKind,
     ResearchJobState,
@@ -1355,6 +1357,546 @@ class SQLiteResearchCatalogStore:
             self._study_revision_from_row(row)
             for row in rows
         )
+
+    @staticmethod
+    def _trial_identity_semantics(
+        trial: Trial,
+    ) -> tuple:
+        """Return immutable registered Trial identity only."""
+
+        return (
+            trial.trial_id,
+            trial.identity_schema,
+            trial.study_revision_id,
+            trial.instrument_id,
+            trial.membership_episode_start,
+            trial.membership_episode_end,
+            trial.membership_evidence_fingerprint,
+            trial.membership_evidence_artifact_id,
+            trial.parameter_configuration_fingerprint,
+        )
+
+    def save_registered_revision_population(
+        self,
+        *,
+        study_id: str,
+        study_revision_id: str,
+        plan_artifact_id: str,
+        repository_revision: str,
+        evidence_reuse_policy: EvidenceReusePolicy,
+        registered_at: datetime,
+        trials: tuple[Trial, ...],
+        initial_events: tuple[TrialDispositionEvent, ...],
+    ) -> tuple[StudyRevision, tuple[Trial, ...]]:
+        """
+        Atomically register one immutable StudyRevision population.
+
+        M9.4b registration owns one BEGIN IMMEDIATE transaction covering
+        the revision, every Trial and every initial disposition event.
+        Artifact bytes/metadata may already exist content-addressably,
+        but no partial Trial denominator becomes authoritative.
+        """
+
+        if (
+            not isinstance(study_id, str)
+            or not study_id
+        ):
+            raise ValueError(
+                "study_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(study_revision_id, str)
+            or study_revision_id != plan_artifact_id
+        ):
+            raise ValueError(
+                "study_revision_id must equal "
+                "plan_artifact_id content identity"
+            )
+
+        if (
+            not isinstance(repository_revision, str)
+            or not repository_revision
+        ):
+            raise ValueError(
+                "repository_revision must be a non-empty string"
+            )
+
+        if not isinstance(
+            evidence_reuse_policy,
+            EvidenceReusePolicy,
+        ):
+            raise TypeError(
+                "evidence_reuse_policy must be an "
+                "EvidenceReusePolicy"
+            )
+
+        if (
+            not isinstance(registered_at, datetime)
+            or registered_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "registered_at must be a timezone-aware datetime"
+            )
+
+        if not isinstance(trials, tuple):
+            raise TypeError(
+                "trials must be a complete tuple"
+            )
+
+        if not isinstance(initial_events, tuple):
+            raise TypeError(
+                "initial_events must be a complete tuple"
+            )
+
+        if len(trials) != len(initial_events):
+            raise ValueError(
+                "each registered Trial requires exactly one "
+                "initial disposition event"
+            )
+
+        if len({trial.trial_id for trial in trials}) != len(trials):
+            raise ValueError(
+                "registered Trial population contains duplicate "
+                "trial_id values"
+            )
+
+        events_by_trial = {}
+
+        for event in initial_events:
+            if not isinstance(
+                event,
+                TrialDispositionEvent,
+            ):
+                raise TypeError(
+                    "initial_events must contain "
+                    "TrialDispositionEvent values"
+                )
+
+            if event.trial_id in events_by_trial:
+                raise ValueError(
+                    "registered Trial population contains duplicate "
+                    "initial events for one Trial"
+                )
+
+            events_by_trial[event.trial_id] = event
+
+        for trial in trials:
+            if not isinstance(trial, Trial):
+                raise TypeError(
+                    "trials must contain Trial values"
+                )
+
+            if trial.study_revision_id != study_revision_id:
+                raise ValueError(
+                    "every Trial must belong to the registered "
+                    "StudyRevision"
+                )
+
+            if (
+                trial.registered_at != registered_at
+                or trial.disposition_at != registered_at
+            ):
+                raise ValueError(
+                    "new Trial population must share the "
+                    "StudyRevision registration timestamp"
+                )
+
+            if (
+                trial.disposition
+                is not TrialDisposition.PENDING
+                or trial.experiment_spec_id is not None
+                or trial.reused_attempt_id is not None
+                or trial.failure_classification is not None
+                or trial.failure_message is not None
+            ):
+                raise ValueError(
+                    "new registered Trial population must begin "
+                    "as unbound PENDING"
+                )
+
+            event = events_by_trial.get(
+                trial.trial_id
+            )
+
+            if event is None:
+                raise ValueError(
+                    "every Trial requires its matching "
+                    "initial disposition event"
+                )
+
+            if (
+                event.sequence_number != 1
+                or event.previous_disposition is not None
+                or event.new_disposition
+                is not TrialDisposition.PENDING
+                or event.causing_job_id is not None
+                or event.occurred_at != registered_at
+            ):
+                raise ValueError(
+                    "initial Trial event must be sequence 1, "
+                    "None -> PENDING, job-independent and share "
+                    "the registration timestamp"
+                )
+
+        ordered_trials = tuple(
+            sorted(
+                trials,
+                key=lambda trial: (
+                    trial.membership_episode_start,
+                    trial.membership_episode_end,
+                    trial.instrument_id,
+                    trial.membership_evidence_fingerprint,
+                    trial.parameter_configuration_fingerprint,
+                    trial.trial_id,
+                ),
+            )
+        )
+
+        proposed_identity = tuple(
+            self._trial_identity_semantics(trial)
+            for trial in ordered_trials
+        )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                study_row = connection.execute(
+                    """
+                    SELECT study_id
+                    FROM studies
+                    WHERE study_id = ?
+                    """,
+                    (study_id,),
+                ).fetchone()
+
+                if study_row is None:
+                    raise ValueError(
+                        "registered StudyRevision requires "
+                        "an existing Study"
+                    )
+
+                plan_row = connection.execute(
+                    """
+                    SELECT
+                        artifact_id,
+                        artifact_kind,
+                        schema_id,
+                        relative_path,
+                        byte_count,
+                        created_at
+                    FROM research_artifacts
+                    WHERE artifact_id = ?
+                    """,
+                    (plan_artifact_id,),
+                ).fetchone()
+
+                if plan_row is None:
+                    raise ValueError(
+                        "registered StudyRevision requires "
+                        "its plan artifact"
+                    )
+
+                plan_artifact = self._artifact_from_row(
+                    plan_row
+                )
+
+                if (
+                    plan_artifact.artifact_kind
+                    is not ResearchArtifactKind.STUDY_REVISION_PLAN
+                    or plan_artifact.schema_id
+                    != STUDY_REVISION_SCHEMA_ID
+                ):
+                    raise ValueError(
+                        "StudyRevision plan artifact kind/schema "
+                        "does not match the registered contract"
+                    )
+
+                existing_row = connection.execute(
+                    """
+                    SELECT
+                        study_revision_id,
+                        identity_schema,
+                        study_id,
+                        revision_number,
+                        plan_artifact_id,
+                        repository_revision,
+                        evidence_reuse_policy,
+                        registered_at,
+                        initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if existing_row is not None:
+                    existing_revision = (
+                        self._study_revision_from_row(
+                            existing_row
+                        )
+                    )
+
+                    if (
+                        existing_revision.study_id != study_id
+                        or existing_revision.plan_artifact_id
+                        != plan_artifact_id
+                        or existing_revision.repository_revision
+                        != repository_revision
+                        or existing_revision.evidence_reuse_policy
+                        is not evidence_reuse_policy
+                    ):
+                        raise ValueError(
+                            "StudyRevision content identity already "
+                            "exists with conflicting immutable semantics"
+                        )
+
+                    existing_trial_rows = connection.execute(
+                        """
+                        SELECT
+                            trial_id,
+                            identity_schema,
+                            study_revision_id,
+                            instrument_id,
+                            membership_episode_start,
+                            membership_episode_end,
+                            membership_evidence_fingerprint,
+                            membership_evidence_artifact_id,
+                            parameter_configuration_fingerprint,
+                            registered_at,
+                            experiment_spec_id,
+                            disposition,
+                            disposition_at,
+                            reused_attempt_id,
+                            failure_classification,
+                            failure_message
+                        FROM trials
+                        WHERE study_revision_id = ?
+                        ORDER BY
+                            membership_episode_start,
+                            membership_episode_end,
+                            instrument_id,
+                            membership_evidence_fingerprint,
+                            parameter_configuration_fingerprint,
+                            trial_id
+                        """,
+                        (study_revision_id,),
+                    ).fetchall()
+
+                    existing_trials = tuple(
+                        self._trial_from_row(row)
+                        for row in existing_trial_rows
+                    )
+
+                    existing_identity = tuple(
+                        self._trial_identity_semantics(
+                            trial
+                        )
+                        for trial in existing_trials
+                    )
+
+                    if existing_identity != proposed_identity:
+                        raise ValueError(
+                            "identical StudyRevision registration "
+                            "must preserve the exact Trial population"
+                        )
+
+                    connection.rollback()
+
+                    return (
+                        existing_revision,
+                        existing_trials,
+                    )
+
+                for trial in ordered_trials:
+                    artifact_row = connection.execute(
+                        """
+                        SELECT
+                            artifact_id,
+                            artifact_kind,
+                            schema_id,
+                            relative_path,
+                            byte_count,
+                            created_at
+                        FROM research_artifacts
+                        WHERE artifact_id = ?
+                        """,
+                        (
+                            trial.membership_evidence_artifact_id,
+                        ),
+                    ).fetchone()
+
+                    if artifact_row is None:
+                        raise ValueError(
+                            "registered Trial population requires "
+                            "all membership evidence artifacts"
+                        )
+
+                    artifact = self._artifact_from_row(
+                        artifact_row
+                    )
+
+                    if (
+                        artifact.artifact_kind
+                        is not
+                        ResearchArtifactKind.TRIAL_MEMBERSHIP_EVIDENCE
+                        or artifact.schema_id
+                        != TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID
+                        or artifact.artifact_id
+                        != trial.membership_evidence_fingerprint
+                    ):
+                        raise ValueError(
+                            "Trial membership evidence artifact "
+                            "kind/schema/identity mismatch"
+                        )
+
+                next_revision_number = (
+                    connection.execute(
+                        """
+                        SELECT COALESCE(MAX(revision_number), 0) + 1
+                        FROM study_revisions
+                        WHERE study_id = ?
+                        """,
+                        (study_id,),
+                    ).fetchone()[0]
+                )
+
+                revision = StudyRevision(
+                    study_revision_id=study_revision_id,
+                    study_id=study_id,
+                    revision_number=next_revision_number,
+                    plan_artifact_id=plan_artifact_id,
+                    repository_revision=repository_revision,
+                    evidence_reuse_policy=evidence_reuse_policy,
+                    registered_at=registered_at,
+                )
+
+                connection.execute(
+                    """
+                    INSERT INTO study_revisions (
+                        study_revision_id,
+                        identity_schema,
+                        study_id,
+                        revision_number,
+                        plan_artifact_id,
+                        repository_revision,
+                        evidence_reuse_policy,
+                        registered_at,
+                        initial_batch_started_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                    """,
+                    (
+                        revision.study_revision_id,
+                        revision.identity_schema,
+                        revision.study_id,
+                        revision.revision_number,
+                        revision.plan_artifact_id,
+                        revision.repository_revision,
+                        revision.evidence_reuse_policy.value,
+                        revision.registered_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                    ),
+                )
+
+                for trial in ordered_trials:
+                    event = events_by_trial[
+                        trial.trial_id
+                    ]
+
+                    connection.execute(
+                        """
+                        INSERT INTO trials (
+                            trial_id,
+                            identity_schema,
+                            study_revision_id,
+                            instrument_id,
+                            membership_episode_start,
+                            membership_episode_end,
+                            membership_evidence_fingerprint,
+                            membership_evidence_artifact_id,
+                            parameter_configuration_fingerprint,
+                            registered_at,
+                            experiment_spec_id,
+                            disposition,
+                            disposition_at,
+                            reused_attempt_id,
+                            failure_classification,
+                            failure_message
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            NULL, ?, ?, NULL, NULL, NULL
+                        )
+                        """,
+                        (
+                            trial.trial_id,
+                            trial.identity_schema,
+                            trial.study_revision_id,
+                            trial.instrument_id,
+                            trial.membership_episode_start.isoformat(
+                                timespec="microseconds"
+                            ),
+                            trial.membership_episode_end.isoformat(
+                                timespec="microseconds"
+                            ),
+                            trial.membership_evidence_fingerprint,
+                            trial.membership_evidence_artifact_id,
+                            trial.parameter_configuration_fingerprint,
+                            trial.registered_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            trial.disposition.value,
+                            trial.disposition_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                        ),
+                    )
+
+                    connection.execute(
+                        """
+                        INSERT INTO trial_disposition_events (
+                            event_id,
+                            trial_id,
+                            sequence_number,
+                            previous_disposition,
+                            new_disposition,
+                            occurred_at,
+                            causing_job_id,
+                            reason_classification,
+                            reason_message
+                        ) VALUES (
+                            ?, ?, ?, NULL, ?, ?, NULL, ?, ?
+                        )
+                        """,
+                        (
+                            event.event_id,
+                            event.trial_id,
+                            event.sequence_number,
+                            event.new_disposition.value,
+                            event.occurred_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            event.reason_classification,
+                            event.reason_message,
+                        ),
+                    )
+
+                connection.commit()
+
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+                raise ValueError(
+                    "whole StudyRevision registration failed; "
+                    "no partial Trial population was committed"
+                ) from error
+            except Exception:
+                connection.rollback()
+                raise
+
+        return revision, ordered_trials
 
     def save_registered_trial(
         self,

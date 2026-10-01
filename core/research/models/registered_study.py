@@ -12,6 +12,9 @@ _FINGERPRINT_PATTERN = re.compile(
 
 STUDY_REVISION_SCHEMA_ID = "kanasu.study-revision.v1"
 TRIAL_IDENTITY_SCHEMA_ID = "kanasu.trial.v1"
+TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID = (
+    "kanasu.trial-membership-evidence.v1"
+)
 
 
 class EvidenceReusePolicy(str, Enum):

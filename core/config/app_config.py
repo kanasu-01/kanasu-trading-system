@@ -50,4 +50,7 @@ class AppConfig:
     research_database_path: str = "data/research.sqlite3"
     research_artifact_root: str = "data/research_artifacts"
 
+    # M9.4 registered research workload safety.
+    research_max_trials_per_revision: int = 5_000
+
     historical_request_delay_sec: float = 0.5
