@@ -2,11 +2,11 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; IMPLEMENTED / VALIDATED CLOSURE CANDIDATE**
+**ACCEPTED DESIGN BASELINE; IMPLEMENTED / VALIDATED / DONE/CLOSED**
 
 `M94_DESIGN_ACCEPTED=True`
 
-The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The current M9.4f worktree is a validated closure candidate pending final human diff/staging/commit review.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was published at `b93ae6a` after final human diff review, controlled staging, commit and push. M9.4 is DONE/CLOSED.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
@@ -1656,7 +1656,7 @@ Published implementation chain:
 - atomic Trial/RunAttempt binding: `28f60e8`;
 - M9.4d execution, exact reuse and retry lineage: `6116863`;
 - M9.4e cancellation and restart recovery: `878e929`;
-- M9.4f current closure candidate: truthful progress/read models, independent-account Study aggregation, backend workflow/API integration and closure synchronization.
+- M9.4f published at `b93ae6a`: truthful progress/read models, independent-account Study aggregation, backend workflow/API integration and closure synchronization.
 
 Current closure validation:
 
@@ -1672,4 +1672,4 @@ Independent-account aggregation reports result-bearing/excluded denominators and
 
 M9.4 remains an execution, lineage and descriptive-evidence layer. It does not qualify strategies, promote Candidates, launch qualified Paper campaigns or place real broker orders.
 
-Closure status: IMPLEMENTED/VALIDATED CANDIDATE. Final `DONE/CLOSED` status requires human review of the complete candidate diff followed by controlled staging and commit.
+Closure status: DONE/CLOSED. Human review of the complete candidate diff, controlled staging, commit and push completed successfully for M9.4f at `b93ae6a`.

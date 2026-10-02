@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED; IMPLEMENTED / VALIDATED THROUGH M9.4f CLOSURE CANDIDATE
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED / DONE/CLOSED THROUGH M9.4f
 
 **Target:** M9.4
 
@@ -596,7 +596,7 @@ Study aggregation is descriptive cross-sectional aggregation over independent Tr
 
 The M9.4 backend application boundary supports Study creation/reopen, StudyRevision registration, Trial/progress/aggregation/lineage inspection, bounded Start composition and cancellation. Complete research-workspace frontend integration remains M9.8. Strategy qualification/Candidate progression remains M9.5+, and real-money execution remains outside V1.
 
-Implementation evidence: accepted design baseline `9b7ab42`; documentation synchronization `199ec34`; M9.4a `6a68d0a`; M9.4b `d3abbfc`; M9.4c `8d2e572`; M9.4d chain `610916a`, `0de1ab8`, `28f60e8`, `6116863`; M9.4e `878e929`; M9.4f current closure candidate. Validation: 154 M9.4 tests, 682 cross-milestone preservation tests and 1250 complete Python tests passed with `git diff --check` clean. Final M9.4 DONE/CLOSED status remains pending human diff/staging/commit review.
+Implementation evidence: accepted design baseline `9b7ab42`; documentation synchronization `199ec34`; M9.4a `6a68d0a`; M9.4b `d3abbfc`; M9.4c `8d2e572`; M9.4d chain `610916a`, `0de1ab8`, `28f60e8`, `6116863`; M9.4e `878e929`; M9.4f `b93ae6a`. Validation: 154 M9.4 tests, 682 cross-milestone preservation tests and 1250 complete Python tests passed with `git diff --check` clean. Final human diff review, controlled staging, commit and push completed; M9.4 is DONE/CLOSED.
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.
