@@ -3014,6 +3014,15 @@ class SQLiteResearchCatalogStore:
                     )
 
                 if (
+                    current_job.cancel_requested_at
+                    is not None
+                ):
+                    raise ValueError(
+                        "ResearchJob cancellation request "
+                        "blocks fresh RunAttempt creation"
+                    )
+
+                if (
                     current_job.claimed_at is not None
                     and attempt_created_at
                     < current_job.claimed_at
@@ -3206,6 +3215,7 @@ class SQLiteResearchCatalogStore:
                     WHERE
                         job_id = ?
                         AND state = ?
+                        AND cancel_requested_at IS NULL
                         AND attempt_id IS NULL
                         AND terminal_at IS NULL
                         AND completion_kind IS NULL
@@ -4305,7 +4315,8 @@ class SQLiteResearchCatalogStore:
                 row = connection.execute(
                     """
                     SELECT
-                        j.trial_id, j.state, j.claimed_at, j.attempt_id,
+                        j.trial_id, j.state, j.claimed_at,
+                        j.cancel_requested_at, j.attempt_id,
                         j.terminal_at, j.completion_kind,
                         j.reused_attempt_id, j.reused_evidence_id,
                         j.reused_result_artifact_id,
@@ -4352,7 +4363,8 @@ class SQLiteResearchCatalogStore:
                     )
 
                 (
-                    trial_id, job_state, claimed_at, attempt_id,
+                    trial_id, job_state, claimed_at,
+                    cancel_requested_at, attempt_id,
                     job_terminal_at, completion_kind,
                     job_reused_attempt, job_reused_evidence,
                     job_reused_result,
@@ -4373,6 +4385,11 @@ class SQLiteResearchCatalogStore:
 
                 if job_state != ResearchJobState.RUNNING.value:
                     raise ValueError("ResearchJob must be RUNNING for reuse")
+                if cancel_requested_at is not None:
+                    raise ValueError(
+                        "ResearchJob cancellation request "
+                        "blocks exact reuse completion"
+                    )
                 if claimed_at is not None and terminal_at < datetime.fromisoformat(claimed_at):
                     raise ValueError("terminal_at cannot precede job claim")
                 if any(v is not None for v in (
@@ -4513,6 +4530,7 @@ class SQLiteResearchCatalogStore:
                         reused_attempt_id = ?, reused_evidence_id = ?,
                         reused_result_artifact_id = ?
                     WHERE job_id = ? AND state = ?
+                      AND cancel_requested_at IS NULL
                       AND attempt_id IS NULL
                       AND terminal_at IS NULL
                       AND completion_kind IS NULL
@@ -4878,6 +4896,1459 @@ class SQLiteResearchCatalogStore:
             job,
             events[-1],
         )
+
+    def cancel_study_revision_batch(
+        self,
+        *,
+        study_revision_id: str,
+        requested_at: datetime,
+    ) -> tuple[ResearchJob, ...]:
+        """
+        Atomically cancel active work for one StudyRevision batch.
+
+        QUEUED jobs become CANCELLED immediately without creating a
+        RunAttempt. RUNNING jobs remain RUNNING and receive a durable
+        cancellation request for cooperative acknowledgement. No retry
+        job is created automatically.
+        """
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(requested_at, datetime)
+            or requested_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "requested_at must be a timezone-aware datetime"
+            )
+
+        affected_job_ids: list[str] = []
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                revision_row = connection.execute(
+                    """
+                    SELECT initial_batch_started_at
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (
+                        study_revision_id,
+                    ),
+                ).fetchone()
+
+                if revision_row is None:
+                    raise ValueError(
+                        "StudyRevision does not exist"
+                    )
+
+                if revision_row[0] is None:
+                    raise ValueError(
+                        "StudyRevision batch must be started "
+                        "before cancellation"
+                    )
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.state,
+                        j.created_at,
+                        j.claimed_at,
+                        j.terminal_at,
+                        j.worker_id,
+                        j.cancel_requested_at,
+                        j.attempt_id,
+                        j.completion_kind,
+                        j.reused_attempt_id,
+                        j.reused_evidence_id,
+                        j.reused_result_artifact_id,
+                        j.failure_classification,
+                        j.failure_message,
+                        t.disposition
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE
+                        t.study_revision_id = ?
+                        AND j.state IN (?, ?)
+                    ORDER BY
+                        j.created_at ASC,
+                        j.job_id ASC
+                    """,
+                    (
+                        study_revision_id,
+                        ResearchJobState.QUEUED.value,
+                        ResearchJobState.RUNNING.value,
+                    ),
+                ).fetchall()
+
+                active = tuple(
+                    (
+                        self._research_job_from_row(
+                            row[:15]
+                        ),
+                        row[15],
+                    )
+                    for row in rows
+                )
+
+                for current_job, trial_disposition in active:
+                    if (
+                        trial_disposition
+                        != TrialDisposition.PENDING.value
+                    ):
+                        raise RuntimeError(
+                            "active ResearchJob batch cancellation "
+                            "requires a PENDING Trial"
+                        )
+
+                    if requested_at < current_job.created_at:
+                        raise ValueError(
+                            "requested_at cannot precede "
+                            "ResearchJob creation"
+                        )
+
+                    if (
+                        current_job.state
+                        is ResearchJobState.RUNNING
+                        and current_job.claimed_at is not None
+                        and requested_at
+                        < current_job.claimed_at
+                    ):
+                        raise ValueError(
+                            "requested_at cannot precede "
+                            "ResearchJob claim"
+                        )
+
+                queued = tuple(
+                    job
+                    for job, _
+                    in active
+                    if job.state
+                    is ResearchJobState.QUEUED
+                )
+
+                running = tuple(
+                    job
+                    for job, _
+                    in active
+                    if job.state
+                    is ResearchJobState.RUNNING
+                )
+
+                terminal_text = requested_at.isoformat(
+                    timespec="microseconds"
+                )
+
+                for job in queued:
+                    cursor = connection.execute(
+                        """
+                        UPDATE research_jobs
+                        SET
+                            state = ?,
+                            terminal_at = ?
+                        WHERE
+                            job_id = ?
+                            AND state = ?
+                            AND claimed_at IS NULL
+                            AND worker_id IS NULL
+                            AND cancel_requested_at IS NULL
+                            AND attempt_id IS NULL
+                            AND terminal_at IS NULL
+                            AND completion_kind IS NULL
+                            AND reused_attempt_id IS NULL
+                            AND reused_evidence_id IS NULL
+                            AND reused_result_artifact_id IS NULL
+                        """,
+                        (
+                            ResearchJobState.CANCELLED.value,
+                            terminal_text,
+                            job.job_id,
+                            ResearchJobState.QUEUED.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "batch queued cancellation lost its "
+                            "QUEUED/unclaimed precondition"
+                        )
+
+                    affected_job_ids.append(
+                        job.job_id
+                    )
+
+                for job in running:
+                    if job.cancel_requested_at is None:
+                        cursor = connection.execute(
+                            """
+                            UPDATE research_jobs
+                            SET cancel_requested_at = ?
+                            WHERE
+                                job_id = ?
+                                AND state = ?
+                                AND cancel_requested_at IS NULL
+                                AND terminal_at IS NULL
+                            """,
+                            (
+                                terminal_text,
+                                job.job_id,
+                                ResearchJobState.RUNNING.value,
+                            ),
+                        )
+
+                        if cursor.rowcount != 1:
+                            raise RuntimeError(
+                                "batch running cancellation request "
+                                "lost its RUNNING precondition"
+                            )
+
+                    affected_job_ids.append(
+                        job.job_id
+                    )
+
+                for job in queued:
+                    other_active_count = (
+                        connection.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM research_jobs
+                            WHERE
+                                trial_id = ?
+                                AND job_id <> ?
+                                AND state IN ('QUEUED', 'RUNNING')
+                            """,
+                            (
+                                job.trial_id,
+                                job.job_id,
+                            ),
+                        ).fetchone()[0]
+                    )
+
+                    if other_active_count != 0:
+                        continue
+
+                    cursor = connection.execute(
+                        """
+                        UPDATE trials
+                        SET
+                            disposition = ?,
+                            disposition_at = ?,
+                            reused_attempt_id = NULL,
+                            failure_classification = NULL,
+                            failure_message = NULL
+                        WHERE
+                            trial_id = ?
+                            AND disposition = ?
+                        """,
+                        (
+                            TrialDisposition.CANCELLED.value,
+                            terminal_text,
+                            job.trial_id,
+                            TrialDisposition.PENDING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "batch queued cancellation lost its "
+                            "PENDING Trial precondition"
+                        )
+
+                    sequence_number = (
+                        connection.execute(
+                            """
+                            SELECT
+                                COALESCE(
+                                    MAX(sequence_number),
+                                    0
+                                ) + 1
+                            FROM trial_disposition_events
+                            WHERE trial_id = ?
+                            """,
+                            (
+                                job.trial_id,
+                            ),
+                        ).fetchone()[0]
+                    )
+
+                    event_id = canonical_fingerprint(
+                        {
+                            "trial_id": job.trial_id,
+                            "sequence_number": (
+                                sequence_number
+                            ),
+                            "new_disposition": (
+                                TrialDisposition.CANCELLED.value
+                            ),
+                        },
+                        schema=(
+                            _TRIAL_DISPOSITION_EVENT_SCHEMA_ID
+                        ),
+                    )
+
+                    connection.execute(
+                        """
+                        INSERT INTO trial_disposition_events (
+                            event_id,
+                            trial_id,
+                            sequence_number,
+                            previous_disposition,
+                            new_disposition,
+                            occurred_at,
+                            causing_job_id,
+                            reason_classification,
+                            reason_message
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            event_id,
+                            job.trial_id,
+                            sequence_number,
+                            TrialDisposition.PENDING.value,
+                            TrialDisposition.CANCELLED.value,
+                            terminal_text,
+                            job.job_id,
+                            "batch_cancellation",
+                            (
+                                "ResearchJob cancelled by "
+                                "StudyRevision batch cancellation"
+                            ),
+                        ),
+                    )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        affected: list[ResearchJob] = []
+
+        for job_id in affected_job_ids:
+            job = self.load_research_job(
+                job_id
+            )
+
+            if job is None:
+                raise RuntimeError(
+                    "committed batch cancellation "
+                    "could not reload ResearchJob"
+                )
+
+            affected.append(job)
+
+        return tuple(affected)
+
+    def cancel_queued_research_job(
+        self,
+        *,
+        job_id: str,
+        terminal_at: datetime,
+    ) -> tuple[
+        Trial,
+        ResearchJob,
+        TrialDispositionEvent | None,
+    ]:
+        """
+        Atomically cancel one still-QUEUED ResearchJob.
+
+        M9.4e queued cancellation creates no RunAttempt. The Trial becomes
+        CANCELLED only when no other QUEUED or RUNNING job can still
+        complete that same Trial.
+        """
+
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+        ):
+            raise ValueError(
+                "job_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(terminal_at, datetime)
+            or terminal_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "terminal_at must be a timezone-aware datetime"
+            )
+
+        event_created = False
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.state,
+                        j.created_at,
+                        j.claimed_at,
+                        j.terminal_at,
+                        j.worker_id,
+                        j.cancel_requested_at,
+                        j.attempt_id,
+                        j.completion_kind,
+                        j.reused_attempt_id,
+                        j.reused_evidence_id,
+                        j.reused_result_artifact_id,
+                        j.failure_classification,
+                        j.failure_message,
+                        t.disposition
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE j.job_id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+
+                if row is None:
+                    raise ValueError(
+                        f"ResearchJob does not exist: {job_id}"
+                    )
+
+                current_job = (
+                    self._research_job_from_row(
+                        row[:15]
+                    )
+                )
+                trial_disposition = row[15]
+
+                if (
+                    current_job.state
+                    is not ResearchJobState.QUEUED
+                ):
+                    raise ValueError(
+                        "queued cancellation requires "
+                        "a QUEUED ResearchJob"
+                    )
+
+                if terminal_at < current_job.created_at:
+                    raise ValueError(
+                        "terminal_at cannot precede "
+                        "ResearchJob created_at"
+                    )
+
+                if (
+                    trial_disposition
+                    != TrialDisposition.PENDING.value
+                ):
+                    raise ValueError(
+                        "queued cancellation requires "
+                        "a PENDING Trial"
+                    )
+
+                if current_job.cancel_requested_at is not None:
+                    raise ValueError(
+                        "QUEUED ResearchJob cannot already "
+                        "carry a cancellation request"
+                    )
+
+                cursor = connection.execute(
+                    """
+                    UPDATE research_jobs
+                    SET
+                        state = ?,
+                        terminal_at = ?
+                    WHERE
+                        job_id = ?
+                        AND state = ?
+                        AND claimed_at IS NULL
+                        AND worker_id IS NULL
+                        AND cancel_requested_at IS NULL
+                        AND attempt_id IS NULL
+                        AND terminal_at IS NULL
+                        AND completion_kind IS NULL
+                        AND reused_attempt_id IS NULL
+                        AND reused_evidence_id IS NULL
+                        AND reused_result_artifact_id IS NULL
+                    """,
+                    (
+                        ResearchJobState.CANCELLED.value,
+                        terminal_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        job_id,
+                        ResearchJobState.QUEUED.value,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "queued cancellation lost its "
+                        "QUEUED/unclaimed precondition"
+                    )
+
+                other_active_count = (
+                    connection.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM research_jobs
+                        WHERE
+                            trial_id = ?
+                            AND job_id <> ?
+                            AND state IN ('QUEUED', 'RUNNING')
+                        """,
+                        (
+                            current_job.trial_id,
+                            job_id,
+                        ),
+                    ).fetchone()[0]
+                )
+
+                if other_active_count == 0:
+                    cursor = connection.execute(
+                        """
+                        UPDATE trials
+                        SET
+                            disposition = ?,
+                            disposition_at = ?,
+                            reused_attempt_id = NULL,
+                            failure_classification = NULL,
+                            failure_message = NULL
+                        WHERE
+                            trial_id = ?
+                            AND disposition = ?
+                        """,
+                        (
+                            TrialDisposition.CANCELLED.value,
+                            terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            current_job.trial_id,
+                            TrialDisposition.PENDING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "queued cancellation lost its "
+                            "PENDING Trial precondition"
+                        )
+
+                    sequence_number = (
+                        connection.execute(
+                            """
+                            SELECT
+                                COALESCE(
+                                    MAX(sequence_number),
+                                    0
+                                ) + 1
+                            FROM trial_disposition_events
+                            WHERE trial_id = ?
+                            """,
+                            (
+                                current_job.trial_id,
+                            ),
+                        ).fetchone()[0]
+                    )
+
+                    event_id = canonical_fingerprint(
+                        {
+                            "trial_id": (
+                                current_job.trial_id
+                            ),
+                            "sequence_number": (
+                                sequence_number
+                            ),
+                            "new_disposition": (
+                                TrialDisposition.CANCELLED.value
+                            ),
+                        },
+                        schema=(
+                            _TRIAL_DISPOSITION_EVENT_SCHEMA_ID
+                        ),
+                    )
+
+                    connection.execute(
+                        """
+                        INSERT INTO trial_disposition_events (
+                            event_id,
+                            trial_id,
+                            sequence_number,
+                            previous_disposition,
+                            new_disposition,
+                            occurred_at,
+                            causing_job_id,
+                            reason_classification,
+                            reason_message
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            event_id,
+                            current_job.trial_id,
+                            sequence_number,
+                            TrialDisposition.PENDING.value,
+                            TrialDisposition.CANCELLED.value,
+                            terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            job_id,
+                            "queued_cancellation",
+                            (
+                                "ResearchJob cancelled before claim"
+                            ),
+                        ),
+                    )
+
+                    event_created = True
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        trial = self.load_trial(
+            current_job.trial_id
+        )
+        job = self.load_research_job(
+            job_id
+        )
+
+        if trial is None or job is None:
+            raise RuntimeError(
+                "committed queued cancellation "
+                "could not be reloaded"
+            )
+
+        event = None
+
+        if event_created:
+            events = (
+                self.load_trial_disposition_events(
+                    current_job.trial_id
+                )
+            )
+
+            if not events:
+                raise RuntimeError(
+                    "queued cancellation event "
+                    "could not be reloaded"
+                )
+
+            event = events[-1]
+
+        return trial, job, event
+
+    def request_running_research_job_cancellation(
+        self,
+        *,
+        job_id: str,
+        requested_at: datetime,
+    ) -> ResearchJob:
+        """
+        Durably request cancellation of one RUNNING ResearchJob.
+
+        The ResearchJob intentionally remains RUNNING until its worker
+        acknowledges a safe cooperative cancellation checkpoint or the
+        authoritative computation truthfully terminates.
+        """
+
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+        ):
+            raise ValueError(
+                "job_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(requested_at, datetime)
+            or requested_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "requested_at must be a timezone-aware datetime"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        job_id,
+                        trial_id,
+                        state,
+                        created_at,
+                        claimed_at,
+                        terminal_at,
+                        worker_id,
+                        cancel_requested_at,
+                        attempt_id,
+                        completion_kind,
+                        reused_attempt_id,
+                        reused_evidence_id,
+                        reused_result_artifact_id,
+                        failure_classification,
+                        failure_message
+                    FROM research_jobs
+                    WHERE job_id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+
+                if row is None:
+                    raise ValueError(
+                        f"ResearchJob does not exist: {job_id}"
+                    )
+
+                current = (
+                    self._research_job_from_row(
+                        row
+                    )
+                )
+
+                if (
+                    current.state
+                    is not ResearchJobState.RUNNING
+                ):
+                    raise ValueError(
+                        "running cancellation request requires "
+                        "a RUNNING ResearchJob"
+                    )
+
+                if (
+                    current.claimed_at is not None
+                    and requested_at < current.claimed_at
+                ):
+                    raise ValueError(
+                        "requested_at cannot precede "
+                        "ResearchJob claim"
+                    )
+
+                if current.cancel_requested_at is None:
+                    cursor = connection.execute(
+                        """
+                        UPDATE research_jobs
+                        SET cancel_requested_at = ?
+                        WHERE
+                            job_id = ?
+                            AND state = ?
+                            AND cancel_requested_at IS NULL
+                            AND terminal_at IS NULL
+                        """,
+                        (
+                            requested_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            job_id,
+                            ResearchJobState.RUNNING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "running cancellation request "
+                            "lost its RUNNING precondition"
+                        )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        persisted = self.load_research_job(
+            job_id
+        )
+
+        if persisted is None:
+            raise RuntimeError(
+                "committed running cancellation request "
+                "could not be reloaded"
+            )
+
+        return persisted
+
+
+    def acknowledge_running_research_job_cancellation(
+        self,
+        *,
+        job_id: str,
+        terminal_at: datetime,
+    ) -> tuple[
+        Trial,
+        ResearchJob,
+        TrialDispositionEvent,
+    ]:
+        """
+        Atomically acknowledge one cooperative RUNNING cancellation.
+
+        This primitive is valid only before financial execution has
+        started: the job must still have no RunAttempt or reuse lineage.
+        The durable cancellation request is preserved for audit.
+        """
+
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+        ):
+            raise ValueError(
+                "job_id must be a non-empty string"
+            )
+
+        if (
+            not isinstance(terminal_at, datetime)
+            or terminal_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "terminal_at must be a timezone-aware datetime"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.state,
+                        j.created_at,
+                        j.claimed_at,
+                        j.terminal_at,
+                        j.worker_id,
+                        j.cancel_requested_at,
+                        j.attempt_id,
+                        j.completion_kind,
+                        j.reused_attempt_id,
+                        j.reused_evidence_id,
+                        j.reused_result_artifact_id,
+                        j.failure_classification,
+                        j.failure_message,
+                        t.disposition
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE j.job_id = ?
+                    """,
+                    (job_id,),
+                ).fetchone()
+
+                if row is None:
+                    raise ValueError(
+                        f"ResearchJob does not exist: {job_id}"
+                    )
+
+                current = self._research_job_from_row(
+                    row[:15]
+                )
+                trial_disposition = row[15]
+
+                if (
+                    current.state
+                    is not ResearchJobState.RUNNING
+                ):
+                    raise ValueError(
+                        "cancellation acknowledgement requires "
+                        "a RUNNING ResearchJob"
+                    )
+
+                if current.cancel_requested_at is None:
+                    raise ValueError(
+                        "cancellation acknowledgement requires "
+                        "a durable cancellation request"
+                    )
+
+                if (
+                    terminal_at
+                    < current.cancel_requested_at
+                ):
+                    raise ValueError(
+                        "terminal_at cannot precede "
+                        "the cancellation request"
+                    )
+
+                if (
+                    trial_disposition
+                    != TrialDisposition.PENDING.value
+                ):
+                    raise ValueError(
+                        "cancellation acknowledgement requires "
+                        "a PENDING Trial"
+                    )
+
+                if any(
+                    value is not None
+                    for value in (
+                        current.terminal_at,
+                        current.attempt_id,
+                        current.completion_kind,
+                        current.reused_attempt_id,
+                        current.reused_evidence_id,
+                        current.reused_result_artifact_id,
+                        current.failure_classification,
+                        current.failure_message,
+                    )
+                ):
+                    raise ValueError(
+                        "cancellation acknowledgement requires "
+                        "an uncompleted pre-attempt ResearchJob"
+                    )
+
+                cursor = connection.execute(
+                    """
+                    UPDATE research_jobs
+                    SET
+                        state = ?,
+                        terminal_at = ?
+                    WHERE
+                        job_id = ?
+                        AND state = ?
+                        AND cancel_requested_at IS NOT NULL
+                        AND terminal_at IS NULL
+                        AND attempt_id IS NULL
+                        AND completion_kind IS NULL
+                        AND reused_attempt_id IS NULL
+                        AND reused_evidence_id IS NULL
+                        AND reused_result_artifact_id IS NULL
+                        AND failure_classification IS NULL
+                        AND failure_message IS NULL
+                    """,
+                    (
+                        ResearchJobState.CANCELLED.value,
+                        terminal_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        job_id,
+                        ResearchJobState.RUNNING.value,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "cancellation acknowledgement lost "
+                        "its RUNNING/pre-attempt precondition"
+                    )
+
+                other_active_count = (
+                    connection.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM research_jobs
+                        WHERE
+                            trial_id = ?
+                            AND job_id <> ?
+                            AND state IN ('QUEUED', 'RUNNING')
+                        """,
+                        (
+                            current.trial_id,
+                            job_id,
+                        ),
+                    ).fetchone()[0]
+                )
+
+                if other_active_count != 0:
+                    raise RuntimeError(
+                        "running cancellation acknowledgement "
+                        "found another active ResearchJob"
+                    )
+
+                cursor = connection.execute(
+                    """
+                    UPDATE trials
+                    SET
+                        disposition = ?,
+                        disposition_at = ?,
+                        reused_attempt_id = NULL,
+                        failure_classification = NULL,
+                        failure_message = NULL
+                    WHERE
+                        trial_id = ?
+                        AND disposition = ?
+                    """,
+                    (
+                        TrialDisposition.CANCELLED.value,
+                        terminal_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        current.trial_id,
+                        TrialDisposition.PENDING.value,
+                    ),
+                )
+
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "cancellation acknowledgement lost "
+                        "its PENDING Trial precondition"
+                    )
+
+                sequence_number = (
+                    connection.execute(
+                        """
+                        SELECT
+                            COALESCE(
+                                MAX(sequence_number),
+                                0
+                            ) + 1
+                        FROM trial_disposition_events
+                        WHERE trial_id = ?
+                        """,
+                        (current.trial_id,),
+                    ).fetchone()[0]
+                )
+
+                event_id = canonical_fingerprint(
+                    {
+                        "trial_id": current.trial_id,
+                        "sequence_number": sequence_number,
+                        "new_disposition": (
+                            TrialDisposition.CANCELLED.value
+                        ),
+                    },
+                    schema=(
+                        _TRIAL_DISPOSITION_EVENT_SCHEMA_ID
+                    ),
+                )
+
+                connection.execute(
+                    """
+                    INSERT INTO trial_disposition_events (
+                        event_id,
+                        trial_id,
+                        sequence_number,
+                        previous_disposition,
+                        new_disposition,
+                        occurred_at,
+                        causing_job_id,
+                        reason_classification,
+                        reason_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id,
+                        current.trial_id,
+                        sequence_number,
+                        TrialDisposition.PENDING.value,
+                        TrialDisposition.CANCELLED.value,
+                        terminal_at.isoformat(
+                            timespec="microseconds"
+                        ),
+                        job_id,
+                        "running_cancellation_acknowledged",
+                        (
+                            "ResearchJob cancellation acknowledged "
+                            "at a cooperative pre-execution checkpoint"
+                        ),
+                    ),
+                )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        trial = self.load_trial(
+            current.trial_id
+        )
+        job = self.load_research_job(
+            job_id
+        )
+        events = self.load_trial_disposition_events(
+            current.trial_id
+        )
+
+        if (
+            trial is None
+            or job is None
+            or not events
+        ):
+            raise RuntimeError(
+                "committed cancellation acknowledgement "
+                "could not be reloaded"
+            )
+
+        return trial, job, events[-1]
+
+    def recover_running_research_jobs(
+        self,
+        *,
+        terminal_at: datetime,
+    ) -> tuple[ResearchJob, ...]:
+        """
+        Atomically recover stale RUNNING ResearchJobs as INTERRUPTED.
+
+        When a job owns a RUNNING RunAttempt, the attempt, job and Trial
+        are interrupted in the same SQLite transaction. No retry or new
+        claim is created automatically.
+        """
+
+        if (
+            not isinstance(terminal_at, datetime)
+            or terminal_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "terminal_at must be a timezone-aware datetime"
+            )
+
+        recovered_job_ids: list[str] = []
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute(
+                    "BEGIN IMMEDIATE"
+                )
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        j.job_id,
+                        j.trial_id,
+                        j.state,
+                        j.created_at,
+                        j.claimed_at,
+                        j.terminal_at,
+                        j.worker_id,
+                        j.cancel_requested_at,
+                        j.attempt_id,
+                        j.completion_kind,
+                        j.reused_attempt_id,
+                        j.reused_evidence_id,
+                        j.reused_result_artifact_id,
+                        j.failure_classification,
+                        j.failure_message,
+                        t.disposition
+                    FROM research_jobs j
+                    JOIN trials t
+                        ON t.trial_id = j.trial_id
+                    WHERE j.state = ?
+                    ORDER BY
+                        j.claimed_at ASC,
+                        j.job_id ASC
+                    """,
+                    (
+                        ResearchJobState.RUNNING.value,
+                    ),
+                ).fetchall()
+
+                for row in rows:
+                    current = self._research_job_from_row(
+                        row[:15]
+                    )
+                    trial_disposition = row[15]
+
+                    if (
+                        trial_disposition
+                        != TrialDisposition.PENDING.value
+                    ):
+                        raise RuntimeError(
+                            "RUNNING ResearchJob recovery requires "
+                            "a PENDING Trial"
+                        )
+
+                    effective_terminal_at = max(
+                        terminal_at,
+                        current.created_at,
+                        current.claimed_at
+                        or current.created_at,
+                    )
+
+                    if any(
+                        value is not None
+                        for value in (
+                            current.terminal_at,
+                            current.completion_kind,
+                            current.reused_attempt_id,
+                            current.reused_evidence_id,
+                            current.reused_result_artifact_id,
+                        )
+                    ):
+                        raise RuntimeError(
+                            "RUNNING ResearchJob recovery found "
+                            "terminal or reuse lineage"
+                        )
+
+                    if current.attempt_id is not None:
+                        attempt_row = connection.execute(
+                            """
+                            SELECT
+                                state,
+                                created_at
+                            FROM run_attempts
+                            WHERE attempt_id = ?
+                            """,
+                            (
+                                current.attempt_id,
+                            ),
+                        ).fetchone()
+
+                        if attempt_row is None:
+                            raise RuntimeError(
+                                "RUNNING ResearchJob references "
+                                "a missing RunAttempt"
+                            )
+
+                        if (
+                            attempt_row[0]
+                            != RunAttemptState.RUNNING.value
+                        ):
+                            raise RuntimeError(
+                                "RUNNING ResearchJob recovery requires "
+                                "its linked RunAttempt to be RUNNING"
+                            )
+
+                        attempt_created_at = (
+                            datetime.fromisoformat(
+                                attempt_row[1]
+                            )
+                        )
+
+                        attempt_terminal_at = max(
+                            effective_terminal_at,
+                            attempt_created_at,
+                        )
+
+                        cursor = connection.execute(
+                            """
+                            UPDATE run_attempts
+                            SET
+                                state = ?,
+                                terminal_at = ?,
+                                result_artifact_id = NULL,
+                                evidence_id = NULL,
+                                failure_classification = ?,
+                                failure_message = ?
+                            WHERE
+                                attempt_id = ?
+                                AND state = ?
+                            """,
+                            (
+                                RunAttemptState.INTERRUPTED.value,
+                                attempt_terminal_at.isoformat(
+                                    timespec="microseconds"
+                                ),
+                                "application_restart",
+                                (
+                                    "RUNNING attempt recovered as "
+                                    "INTERRUPTED during application startup"
+                                ),
+                                current.attempt_id,
+                                RunAttemptState.RUNNING.value,
+                            ),
+                        )
+
+                        if cursor.rowcount != 1:
+                            raise RuntimeError(
+                                "RunAttempt restart recovery lost "
+                                "its RUNNING precondition"
+                            )
+
+                    cursor = connection.execute(
+                        """
+                        UPDATE research_jobs
+                        SET
+                            state = ?,
+                            terminal_at = ?,
+                            failure_classification = ?,
+                            failure_message = ?
+                        WHERE
+                            job_id = ?
+                            AND state = ?
+                            AND terminal_at IS NULL
+                            AND completion_kind IS NULL
+                            AND reused_attempt_id IS NULL
+                            AND reused_evidence_id IS NULL
+                            AND reused_result_artifact_id IS NULL
+                        """,
+                        (
+                            ResearchJobState.INTERRUPTED.value,
+                            effective_terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            "application_restart",
+                            (
+                                "RUNNING ResearchJob recovered as "
+                                "INTERRUPTED during application startup"
+                            ),
+                            current.job_id,
+                            ResearchJobState.RUNNING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "ResearchJob restart recovery lost "
+                            "its RUNNING precondition"
+                        )
+
+                    other_active_count = (
+                        connection.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM research_jobs
+                            WHERE
+                                trial_id = ?
+                                AND job_id <> ?
+                                AND state IN ('QUEUED', 'RUNNING')
+                            """,
+                            (
+                                current.trial_id,
+                                current.job_id,
+                            ),
+                        ).fetchone()[0]
+                    )
+
+                    if other_active_count != 0:
+                        raise RuntimeError(
+                            "restart recovery found another "
+                            "active ResearchJob for the Trial"
+                        )
+
+                    cursor = connection.execute(
+                        """
+                        UPDATE trials
+                        SET
+                            disposition = ?,
+                            disposition_at = ?,
+                            reused_attempt_id = NULL,
+                            failure_classification = ?,
+                            failure_message = ?
+                        WHERE
+                            trial_id = ?
+                            AND disposition = ?
+                        """,
+                        (
+                            TrialDisposition.INTERRUPTED.value,
+                            effective_terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            "application_restart",
+                            (
+                                "Trial interrupted because its "
+                                "RUNNING ResearchJob survived restart"
+                            ),
+                            current.trial_id,
+                            TrialDisposition.PENDING.value,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        raise RuntimeError(
+                            "restart recovery lost its "
+                            "PENDING Trial precondition"
+                        )
+
+                    sequence_number = (
+                        connection.execute(
+                            """
+                            SELECT
+                                COALESCE(
+                                    MAX(sequence_number),
+                                    0
+                                ) + 1
+                            FROM trial_disposition_events
+                            WHERE trial_id = ?
+                            """,
+                            (
+                                current.trial_id,
+                            ),
+                        ).fetchone()[0]
+                    )
+
+                    event_id = canonical_fingerprint(
+                        {
+                            "trial_id": current.trial_id,
+                            "sequence_number": (
+                                sequence_number
+                            ),
+                            "new_disposition": (
+                                TrialDisposition.INTERRUPTED.value
+                            ),
+                        },
+                        schema=(
+                            _TRIAL_DISPOSITION_EVENT_SCHEMA_ID
+                        ),
+                    )
+
+                    connection.execute(
+                        """
+                        INSERT INTO trial_disposition_events (
+                            event_id,
+                            trial_id,
+                            sequence_number,
+                            previous_disposition,
+                            new_disposition,
+                            occurred_at,
+                            causing_job_id,
+                            reason_classification,
+                            reason_message
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            event_id,
+                            current.trial_id,
+                            sequence_number,
+                            TrialDisposition.PENDING.value,
+                            TrialDisposition.INTERRUPTED.value,
+                            effective_terminal_at.isoformat(
+                                timespec="microseconds"
+                            ),
+                            current.job_id,
+                            "application_restart",
+                            (
+                                "RUNNING ResearchJob interrupted "
+                                "during application startup recovery"
+                            ),
+                        ),
+                    )
+
+                    recovered_job_ids.append(
+                        current.job_id
+                    )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        recovered = []
+
+        for job_id in recovered_job_ids:
+            job = self.load_research_job(
+                job_id
+            )
+
+            if (
+                job is None
+                or job.state
+                is not ResearchJobState.INTERRUPTED
+            ):
+                raise RuntimeError(
+                    "committed ResearchJob restart recovery "
+                    "could not be reloaded"
+                )
+
+            recovered.append(job)
+
+        return tuple(recovered)
 
     def save_queued_research_job(
         self,

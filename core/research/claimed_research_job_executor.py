@@ -175,6 +175,61 @@ class ClaimedResearchJobExecutor:
 
         return current
 
+    def _acknowledge_cancellation_if_requested(
+        self,
+        job_id: str,
+    ) -> ResearchJob | None:
+        """
+        Acknowledge one durable cooperative cancellation before
+        financial execution has acquired RunAttempt/reuse lineage.
+        """
+
+        current = (
+            self.catalog_store
+            .load_research_job(
+                job_id
+            )
+        )
+
+        if current is None:
+            raise RuntimeError(
+                "claimed ResearchJob disappeared "
+                "during cancellation checkpoint"
+            )
+
+        if (
+            current.state
+            is ResearchJobState.CANCELLED
+        ):
+            return current
+
+        if (
+            current.state
+            is not ResearchJobState.RUNNING
+            or current.cancel_requested_at is None
+        ):
+            return None
+
+        if (
+            current.attempt_id is not None
+            or current.terminal_at is not None
+            or current.completion_kind is not None
+            or current.reused_attempt_id is not None
+            or current.reused_evidence_id is not None
+            or current.reused_result_artifact_id is not None
+        ):
+            return None
+
+        _, terminal_job, _ = (
+            self.catalog_store
+            .acknowledge_running_research_job_cancellation(
+                job_id=job_id,
+                terminal_at=self._clock(),
+            )
+        )
+
+        return terminal_job
+
     def _terminalize_preparation_failure(
         self,
         job: ResearchJob,
@@ -264,6 +319,15 @@ class ClaimedResearchJobExecutor:
                 error=error,
             )
 
+        cancelled = (
+            self._acknowledge_cancellation_if_requested(
+                job.job_id
+            )
+        )
+
+        if cancelled is not None:
+            return cancelled
+
         try:
             prepared = (
                 self.successor_coordinator
@@ -347,6 +411,15 @@ class ClaimedResearchJobExecutor:
                 error=error,
             )
 
+        cancelled = (
+            self._acknowledge_cancellation_if_requested(
+                job.job_id
+            )
+        )
+
+        if cancelled is not None:
+            return cancelled
+
         experiment_spec_id = (
             prepared.experiment_spec_id
         )
@@ -363,33 +436,89 @@ class ClaimedResearchJobExecutor:
                 )
             )
 
-            if reusable is not None:
-                _, terminal_job, _ = (
-                    self.catalog_store
-                    .complete_running_job_with_exact_reuse(
-                        job_id=job.job_id,
-                        experiment_spec_id=(
-                            experiment_spec_id
-                        ),
-                        reused_attempt_id=(
-                            reusable.attempt.attempt_id
-                        ),
-                        terminal_at=self._clock(),
-                    )
+            cancelled = (
+                self._acknowledge_cancellation_if_requested(
+                    job.job_id
                 )
+            )
+
+            if cancelled is not None:
+                return cancelled
+
+            if reusable is not None:
+                try:
+                    _, terminal_job, _ = (
+                        self.catalog_store
+                        .complete_running_job_with_exact_reuse(
+                            job_id=job.job_id,
+                            experiment_spec_id=(
+                                experiment_spec_id
+                            ),
+                            reused_attempt_id=(
+                                reusable.attempt.attempt_id
+                            ),
+                            terminal_at=self._clock(),
+                        )
+                    )
+                except ValueError as error:
+                    if (
+                        "cancellation request blocks "
+                        "exact reuse completion"
+                        not in str(error)
+                    ):
+                        raise
+
+                    cancelled = (
+                        self._acknowledge_cancellation_if_requested(
+                            job.job_id
+                        )
+                    )
+
+                    if cancelled is None:
+                        raise
+
+                    return cancelled
 
                 return terminal_job
 
-        _, linked_job, attempt = (
-            self.catalog_store
-            .bind_trial_spec_create_attempt_for_running_job(
-                job_id=job.job_id,
-                experiment_spec_id=(
-                    experiment_spec_id
-                ),
-                attempt_created_at=self._clock(),
+        cancelled = (
+            self._acknowledge_cancellation_if_requested(
+                job.job_id
             )
         )
+
+        if cancelled is not None:
+            return cancelled
+
+        try:
+            _, linked_job, attempt = (
+                self.catalog_store
+                .bind_trial_spec_create_attempt_for_running_job(
+                    job_id=job.job_id,
+                    experiment_spec_id=(
+                        experiment_spec_id
+                    ),
+                    attempt_created_at=self._clock(),
+                )
+            )
+        except ValueError as error:
+            if (
+                "cancellation request blocks "
+                "fresh RunAttempt creation"
+                not in str(error)
+            ):
+                raise
+
+            cancelled = (
+                self._acknowledge_cancellation_if_requested(
+                    job.job_id
+                )
+            )
+
+            if cancelled is None:
+                raise
+
+            return cancelled
 
         if (
             linked_job.attempt_id

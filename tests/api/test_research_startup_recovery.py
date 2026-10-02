@@ -149,3 +149,78 @@ def test_api_startup_recovery_is_idempotent(
 
     assert first.state is RunAttemptState.INTERRUPTED
     assert second == first
+
+
+
+def test_api_startup_recovers_research_jobs_before_orphan_attempts(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+
+    class RecordingStore:
+        def __init__(self, database_path):
+            self.database_path = database_path
+
+        def recover_running_research_jobs(
+            self,
+            *,
+            terminal_at,
+        ):
+            calls.append(
+                (
+                    "jobs",
+                    terminal_at,
+                )
+            )
+            return ()
+
+        def recover_running_attempts(
+            self,
+            *,
+            terminal_at,
+        ):
+            calls.append(
+                (
+                    "attempts",
+                    terminal_at,
+                )
+            )
+            return ()
+
+    monkeypatch.setattr(
+        main_module,
+        "SQLiteResearchCatalogStore",
+        RecordingStore,
+    )
+
+    monkeypatch.setattr(
+        main_module,
+        "load_app_config",
+        lambda: AppConfig(
+            research_database_path=str(
+                tmp_path / "research.sqlite3"
+            ),
+            research_artifact_root=str(
+                tmp_path / "research_artifacts"
+            ),
+        ),
+    )
+
+    asyncio.run(run_application_lifespan())
+
+    assert [
+        name
+        for name, _ in calls
+    ] == [
+        "jobs",
+        "attempts",
+    ]
+
+    assert len(calls) == 2
+
+    job_terminal_at = calls[0][1]
+    attempt_terminal_at = calls[1][1]
+
+    assert job_terminal_at == attempt_terminal_at
+    assert job_terminal_at.utcoffset() is not None

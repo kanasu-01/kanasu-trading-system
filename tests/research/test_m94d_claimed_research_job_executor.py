@@ -141,9 +141,11 @@ class StaticSuccessorRetrieval:
     def __init__(
         self,
         error=None,
+        on_retrieve=None,
     ):
         self.calls = []
         self.error = error
+        self.on_retrieve = on_retrieve
 
     def retrieve(
         self,
@@ -168,6 +170,9 @@ class StaticSuccessorRetrieval:
 
         if self.error is not None:
             raise self.error
+
+        if self.on_retrieve is not None:
+            self.on_retrieve()
 
         return SuccessorHistoricalRetrievalResult(
             candles=tuple(_candles()),
@@ -281,6 +286,7 @@ def _environment(
     ),
     execution_error=None,
     retrieval_error=None,
+    retrieval_hook=None,
 ):
     database = (
         tmp_path / "research.sqlite3"
@@ -470,6 +476,7 @@ def _environment(
 
     retrieval = StaticSuccessorRetrieval(
         error=retrieval_error,
+        on_retrieve=retrieval_hook,
     )
 
     coordinator = (
@@ -1226,3 +1233,370 @@ def test_incomplete_history_becomes_nonretryable_insufficient_trial(
             trial.trial_id,
             retry_requested_at=TERMINAL_AT,
         )
+
+
+
+def test_m94e_cancellation_before_retrieval_stops_without_attempt_or_execution(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+    )
+
+    catalog.request_running_research_job_cancellation(
+        job_id=claimed.job_id,
+        requested_at=TERMINAL_AT,
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.CANCELLED
+    )
+    assert terminal_job.attempt_id is None
+    assert (
+        terminal_job.cancel_requested_at
+        == TERMINAL_AT
+    )
+    assert retrieval.calls == []
+    assert execution_calls == []
+    assert _attempt_count(catalog) == 0
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.CANCELLED
+    )
+
+
+def test_m94e_cancellation_after_retrieval_stops_before_attempt_and_execution(
+    tmp_path,
+):
+    holder = {}
+
+    def request_cancellation():
+        holder["catalog"].request_running_research_job_cancellation(
+            job_id=holder["claimed"].job_id,
+            requested_at=TERMINAL_AT,
+        )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+        retrieval_hook=request_cancellation,
+    )
+
+    holder["catalog"] = catalog
+    holder["claimed"] = claimed
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert len(retrieval.calls) == 1
+    assert (
+        terminal_job.state
+        is ResearchJobState.CANCELLED
+    )
+    assert terminal_job.attempt_id is None
+    assert execution_calls == []
+    assert _attempt_count(catalog) == 0
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.CANCELLED
+    )
+
+
+def test_m94e_cancellation_after_reuse_resolution_stops_before_new_attempt(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+
+    original_find = (
+        orchestrator.find_exact_reusable_execution
+    )
+
+    calls = []
+
+    def find_and_cancel(experiment_spec_id):
+        calls.append(experiment_spec_id)
+
+        reusable = original_find(
+            experiment_spec_id
+        )
+
+        assert reusable is None
+
+        catalog.request_running_research_job_cancellation(
+            job_id=claimed.job_id,
+            requested_at=TERMINAL_AT,
+        )
+
+        return None
+
+    orchestrator.find_exact_reusable_execution = (
+        find_and_cancel
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert len(retrieval.calls) == 1
+    assert len(calls) == 1
+    assert (
+        terminal_job.state
+        is ResearchJobState.CANCELLED
+    )
+    assert terminal_job.attempt_id is None
+    assert execution_calls == []
+    assert _attempt_count(catalog) == 0
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.CANCELLED
+    )
+
+
+
+def test_m94e_cancellation_wins_fresh_attempt_bind_race(
+    tmp_path,
+    monkeypatch,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+    )
+
+    original_bind = (
+        catalog
+        .bind_trial_spec_create_attempt_for_running_job
+    )
+
+    injected = False
+
+    def cancel_then_bind(*args, **kwargs):
+        nonlocal injected
+
+        if not injected:
+            injected = True
+
+            catalog.request_running_research_job_cancellation(
+                job_id=claimed.job_id,
+                requested_at=TERMINAL_AT,
+            )
+
+        return original_bind(
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        catalog,
+        "bind_trial_spec_create_attempt_for_running_job",
+        cancel_then_bind,
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert injected is True
+    assert (
+        terminal_job.state
+        is ResearchJobState.CANCELLED
+    )
+    assert terminal_job.cancel_requested_at == TERMINAL_AT
+    assert terminal_job.attempt_id is None
+    assert terminal_job.completion_kind is None
+    assert terminal_job.reused_attempt_id is None
+
+    assert _attempt_count(catalog) == 0
+    assert len(retrieval.calls) == 1
+    assert execution_calls == []
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.CANCELLED
+    )
+
+
+
+def test_m94e_cancellation_wins_exact_reuse_terminalization_race(
+    tmp_path,
+    monkeypatch,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=(
+                inputs.runtime_context
+            ),
+            dataset_context=(
+                inputs.dataset_context
+            ),
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+
+    original_complete = (
+        catalog
+        .complete_running_job_with_exact_reuse
+    )
+
+    injected = False
+
+    def cancel_then_complete(*args, **kwargs):
+        nonlocal injected
+
+        if not injected:
+            injected = True
+
+            catalog.request_running_research_job_cancellation(
+                job_id=claimed.job_id,
+                requested_at=TERMINAL_AT,
+            )
+
+        return original_complete(
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        catalog,
+        "complete_running_job_with_exact_reuse",
+        cancel_then_complete,
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert injected is True
+    assert (
+        terminal_job.state
+        is ResearchJobState.CANCELLED
+    )
+    assert terminal_job.cancel_requested_at == TERMINAL_AT
+    assert terminal_job.attempt_id is None
+    assert terminal_job.completion_kind is None
+    assert terminal_job.reused_attempt_id is None
+    assert terminal_job.reused_evidence_id is None
+    assert terminal_job.reused_result_artifact_id is None
+
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+    assert len(retrieval.calls) == 2
+
+    prior_attempt = catalog.load_run_attempt(
+        prior.attempt_id
+    )
+
+    assert prior_attempt is not None
+    assert (
+        prior_attempt.state
+        is RunAttemptState.SUCCEEDED
+    )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.CANCELLED
+    )

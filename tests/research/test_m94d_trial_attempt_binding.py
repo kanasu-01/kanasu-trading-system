@@ -393,6 +393,65 @@ def test_atomic_bind_creates_attempt_and_links_running_job(
     assert _attempt_count(catalog) == 1
 
 
+
+def test_m94e_cancel_request_blocks_fresh_attempt_binding(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        job,
+        spec,
+    ) = _environment(tmp_path)
+
+    requested = (
+        catalog
+        .request_running_research_job_cancellation(
+            job_id=job.job_id,
+            requested_at=JUN,
+        )
+    )
+
+    assert requested.cancel_requested_at == JUN
+
+    with pytest.raises(
+        ValueError,
+        match="cancellation",
+    ):
+        (
+            catalog
+            .bind_trial_spec_create_attempt_for_running_job(
+                job_id=job.job_id,
+                experiment_spec_id=(
+                    spec.experiment_spec_id
+                ),
+                attempt_created_at=JUN,
+            )
+        )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+    persisted_job = catalog.load_research_job(
+        job.job_id
+    )
+
+    assert persisted_trial is not None
+    assert persisted_job is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+    assert persisted_trial.experiment_spec_id is None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.cancel_requested_at == JUN
+    assert _attempt_count(catalog) == 0
+
+
 def test_existing_matching_trial_binding_allows_new_job_attempt(
     tmp_path,
 ):
@@ -1063,6 +1122,72 @@ def test_complete_running_job_with_exact_reuse_is_atomic(
     )
     assert len(events) == 2
 
+
+
+
+def test_m94e_cancel_request_blocks_exact_reuse_terminalization(
+    tmp_path,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path,
+        attempt_id_factory=lambda: "attempt-m94e-reuse-source",
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    source, _, _ = _create_reuse_source(
+        tmp_path,
+        catalog,
+        spec,
+    )
+
+    before_attempts = _attempt_count(catalog)
+
+    requested = (
+        catalog
+        .request_running_research_job_cancellation(
+            job_id=job.job_id,
+            requested_at=JUN,
+        )
+    )
+
+    assert requested.cancel_requested_at == JUN
+
+    with pytest.raises(
+        ValueError,
+        match="cancellation",
+    ):
+        catalog.complete_running_job_with_exact_reuse(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            reused_attempt_id=source.attempt_id,
+            terminal_at=JUN,
+        )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+    persisted_job = catalog.load_research_job(
+        job.job_id
+    )
+
+    assert persisted_trial is not None
+    assert persisted_job is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+    assert persisted_trial.experiment_spec_id is None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.cancel_requested_at == JUN
+    assert _attempt_count(catalog) == before_attempts
 
 
 def test_exact_reuse_rejects_evidence_missing_manifest_reference(

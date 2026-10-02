@@ -22,15 +22,27 @@ load_dotenv()
 
 
 def recover_stale_research_attempts():
-    """Recover durable RUNNING research attempts after application restart."""
+    """
+    Recover stale durable research execution state after restart.
+
+    ResearchJob recovery is authoritative for linked Trial/Job/Attempt
+    lifecycle state. Legacy attempt-only recovery then catches any
+    standalone RUNNING RunAttempts that are not owned by a ResearchJob.
+    """
 
     config = load_app_config()
     store = SQLiteResearchCatalogStore(
         config.research_database_path
     )
 
+    terminal_at = datetime.now(timezone.utc)
+
+    store.recover_running_research_jobs(
+        terminal_at=terminal_at
+    )
+
     return store.recover_running_attempts(
-        terminal_at=datetime.now(timezone.utc)
+        terminal_at=terminal_at
     )
 
 
