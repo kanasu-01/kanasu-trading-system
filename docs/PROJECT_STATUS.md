@@ -19,7 +19,7 @@
 | Milestone | M9 — V1 research platform completion |
 | Step | M9.4 - Registered Studies and bounded local batch execution - DONE/CLOSED |
 | Lifecycle | M0-M8 DONE at accepted scopes; M9.1 DONE at accepted design scope; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4 DONE/CLOSED through M9.4f implementation commit `b93ae6a`; M9.5 robustness/qualification design is next |
-| Next planned review | M9.4f final diff/staging review; after M9.4 closure, proceed to M9.5 robustness/qualification design |
+| Next planned review | M9.5 robustness/qualification design |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
 
