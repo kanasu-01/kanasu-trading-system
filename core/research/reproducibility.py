@@ -110,6 +110,214 @@ def canonical_bytes(value: Any, *, schema: str) -> bytes:
     ).encode("utf-8")
 
 
+def _decode_canonical_value(value: Any) -> Any:
+    if not isinstance(value, dict):
+        raise ValueError(
+            "canonical tagged value must be an object"
+        )
+
+    type_name = value.get("type")
+
+    if type_name == "none":
+        if set(value) != {"type"}:
+            raise ValueError(
+                "canonical none value must contain only "
+                "the 'type' field"
+            )
+        return None
+
+    if set(value) != {"type", "value"}:
+        raise ValueError(
+            "canonical tagged value must contain exactly "
+            "'type' and 'value'"
+        )
+
+    payload = value["value"]
+
+    if type_name == "bool":
+        if type(payload) is not bool:
+            raise ValueError(
+                "canonical bool value must contain a bool"
+            )
+        return payload
+
+    if type_name == "int":
+        if not isinstance(payload, str):
+            raise ValueError(
+                "canonical int value must contain a string"
+            )
+        try:
+            return int(payload)
+        except ValueError as error:
+            raise ValueError(
+                "canonical int payload is invalid"
+            ) from error
+
+    if type_name == "float":
+        if not isinstance(payload, str):
+            raise ValueError(
+                "canonical float value must contain a string"
+            )
+        try:
+            decoded = float.fromhex(payload)
+        except ValueError as error:
+            raise ValueError(
+                "canonical float payload is invalid"
+            ) from error
+        if not math.isfinite(decoded):
+            raise ValueError(
+                "canonical float values must be finite"
+            )
+        return decoded
+
+    if type_name == "str":
+        if not isinstance(payload, str):
+            raise ValueError(
+                "canonical str value must contain a string"
+            )
+        return payload
+
+    if type_name == "datetime":
+        if not isinstance(payload, str):
+            raise ValueError(
+                "canonical datetime value must contain a string"
+            )
+        try:
+            return datetime.fromisoformat(payload)
+        except ValueError as error:
+            raise ValueError(
+                "canonical datetime payload is invalid"
+            ) from error
+
+    if type_name in {"list", "tuple"}:
+        if not isinstance(payload, list):
+            raise ValueError(
+                "canonical sequence value must contain a list"
+            )
+        decoded = [
+            _decode_canonical_value(item)
+            for item in payload
+        ]
+        return (
+            tuple(decoded)
+            if type_name == "tuple"
+            else decoded
+        )
+
+    if type_name == "mapping":
+        if not isinstance(payload, list):
+            raise ValueError(
+                "canonical mapping value must contain a list"
+            )
+
+        decoded = {}
+        previous_key = None
+
+        for item in payload:
+            if (
+                not isinstance(item, list)
+                or len(item) != 2
+                or not isinstance(item[0], str)
+            ):
+                raise ValueError(
+                    "canonical mapping entries must be "
+                    "[string, tagged-value] pairs"
+                )
+
+            key, tagged_value = item
+
+            if key in decoded:
+                raise ValueError(
+                    "canonical mapping keys must be unique"
+                )
+
+            if (
+                previous_key is not None
+                and key <= previous_key
+            ):
+                raise ValueError(
+                    "canonical mapping keys must be "
+                    "strictly sorted"
+                )
+
+            decoded[key] = _decode_canonical_value(
+                tagged_value
+            )
+            previous_key = key
+
+        return decoded
+
+    raise ValueError(
+        f"unsupported canonical tagged type: {type_name!r}"
+    )
+
+
+def decode_canonical_bytes(
+    payload: bytes,
+    *,
+    schema: str,
+) -> Any:
+    """
+    Strictly decode bytes produced by canonical_bytes().
+
+    Decoding is accepted only when schema identity matches and the
+    decoded value re-encodes to the exact original byte sequence.
+    """
+
+    if type(payload) is not bytes:
+        raise TypeError(
+            "canonical payload must be exact bytes"
+        )
+
+    if not isinstance(schema, str) or not schema:
+        raise ValueError(
+            "canonical schema must be a non-empty string"
+        )
+
+    try:
+        tagged = json.loads(
+            payload.decode("utf-8")
+        )
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as error:
+        raise ValueError(
+            "canonical payload is not valid UTF-8 JSON"
+        ) from error
+
+    decoded = _decode_canonical_value(tagged)
+
+    if (
+        not isinstance(decoded, dict)
+        or set(decoded)
+        != {"schema", "payload"}
+    ):
+        raise ValueError(
+            "canonical document must contain exactly "
+            "'schema' and 'payload'"
+        )
+
+    if decoded["schema"] != schema:
+        raise ValueError(
+            "canonical document schema does not match "
+            "the required schema"
+        )
+
+    value = decoded["payload"]
+
+    if canonical_bytes(
+        value,
+        schema=schema,
+    ) != payload:
+        raise ValueError(
+            "canonical payload is not in the exact "
+            "accepted canonical representation"
+        )
+
+    return value
+
+
 def canonical_fingerprint(value: Any, *, schema: str) -> str:
     """Hash exact canonical bytes with a self-describing SHA-256 prefix."""
 

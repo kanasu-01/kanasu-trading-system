@@ -2,9 +2,11 @@ from datetime import datetime, timezone
 
 import pytest
 
+from core.research.reproducibility import decode_canonical_bytes
 from core.config.app_config import AppConfig
 from core.market_data.historical_coverage import TimeRange
 from core.research.models.registered_study import (
+    STUDY_REVISION_SCHEMA_ID,
     EvidenceReusePolicy,
     Study,
 )
@@ -550,4 +552,139 @@ def test_service_rejects_nonpositive_trial_limit(
             catalog_store=catalog,
             artifact_store=artifacts,
             max_trials_per_revision=0,
+        )
+
+
+
+def test_registered_plan_can_be_strictly_decoded_without_identity_loss(
+    tmp_path,
+):
+    _, artifacts, service = _environment(
+        tmp_path
+    )
+
+    definition = UniverseDefinition(
+        name="decoder-test",
+        selection_spec="fixture",
+        source_reference="decoder-fixture-v1",
+    )
+
+    first = _snapshot(
+        definition,
+        ("NSE:A",),
+        JAN,
+        FEB,
+        provenance="decoder-source-1",
+    )
+
+    second = _snapshot(
+        definition,
+        ("NSE:A",),
+        FEB,
+        MAR,
+        provenance="decoder-source-2",
+    )
+
+    snapshots = (first, second)
+
+    population = _register(
+        service,
+        definition,
+        snapshots,
+        parameters=(
+            {"fast": 5, "slow": 20},
+            {"fast": 10, "slow": 40},
+        ),
+    )
+
+    raw = artifacts.load_bytes(
+        population.revision.plan_artifact_id
+    )
+
+    plan = decode_canonical_bytes(
+        raw,
+        schema=STUDY_REVISION_SCHEMA_ID,
+    )
+
+    assert plan["study_id"] == "study-m94b"
+    assert (
+        plan["strategy_procedure_id"]
+        == "sma-crossover-v1"
+    )
+    assert plan["timeframe"] == "1d"
+    assert plan["timezone"] == "UTC"
+    assert plan["initial_capital"] == 1_000_000.0
+    assert (
+        plan["risk_economic_configuration"][
+            "risk_per_trade_pct"
+        ]
+        == 1.0
+    )
+    assert len(plan["parameter_variants"]) == 2
+
+    fingerprints = {
+        item["fingerprint"]
+        for item in plan["parameter_variants"]
+    }
+
+    assert fingerprints == {
+        trial.parameter_configuration_fingerprint
+        for trial in population.trials
+    }
+
+
+def test_canonical_decoder_rejects_wrong_schema_and_noncanonical_bytes(
+    tmp_path,
+):
+    _, artifacts, service = _environment(
+        tmp_path
+    )
+
+    definition = UniverseDefinition(
+        name="decoder-test",
+        selection_spec="fixture",
+        source_reference="decoder-fixture-v1",
+    )
+
+    first = _snapshot(
+        definition,
+        ("NSE:A",),
+        JAN,
+        FEB,
+        provenance="decoder-source-1",
+    )
+
+    second = _snapshot(
+        definition,
+        ("NSE:A",),
+        FEB,
+        MAR,
+        provenance="decoder-source-2",
+    )
+
+    snapshots = (first, second)
+
+    population = _register(
+        service,
+        definition,
+        snapshots,
+    )
+
+    raw = artifacts.load_bytes(
+        population.revision.plan_artifact_id
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="schema does not match",
+    ):
+        decode_canonical_bytes(
+            raw,
+            schema="kanasu.wrong-schema.v1",
+        )
+
+    with pytest.raises(ValueError):
+        decode_canonical_bytes(
+            raw + b" ",
+            schema=STUDY_REVISION_SCHEMA_ID,
         )

@@ -19,6 +19,7 @@ from core.research.models.research_evidence import (
 )
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
+    research_artifact_reference,
 )
 from core.research.software_identity import SoftwareIdentity
 from core.research.sqlite_research_catalog_store import (
@@ -664,4 +665,313 @@ def test_execute_delegates_through_preparation_seam(
     assert (
         execution.evidence_status
         is ResearchEvidenceStatus.ACCEPTED
+    )
+
+
+def test_exact_reuse_resolver_accepts_only_verified_accepted_execution(
+    tmp_path,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-reuse-source",
+        ),
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        execution.attempt_id
+    )
+    assert source_attempt is not None
+
+    before = row_count(database, "run_attempts")
+
+    reusable = service.find_exact_reusable_execution(
+        source_attempt.experiment_spec_id
+    )
+
+    assert reusable is not None
+    assert reusable.attempt == source_attempt
+    assert (
+        reusable.evidence.status
+        is ResearchEvidenceStatus.ACCEPTED
+    )
+    assert (
+        reusable.result_artifact.artifact_id
+        == source_attempt.result_artifact_id
+    )
+    assert row_count(database, "run_attempts") == before
+
+
+
+def test_exact_reuse_resolver_rejects_missing_manifest_reference(
+    tmp_path,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-reuse-missing-manifest-reference",
+        ),
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        execution.attempt_id
+    )
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+    assert source_attempt.result_artifact_id is not None
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET artifact_references = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                (
+                    '["'
+                    + research_artifact_reference(
+                        source_attempt.result_artifact_id
+                    )
+                    + '"]'
+                ),
+                source_attempt.evidence_id,
+            ),
+        )
+        connection.commit()
+
+    assert (
+        service.find_exact_reusable_execution(
+            source_attempt.experiment_spec_id
+        )
+        is None
+    )
+
+
+
+def test_exact_reuse_resolver_rejects_incomplete_evidence(
+    tmp_path,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-reuse-rejected",
+        ),
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        execution.attempt_id
+    )
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET status = 'INCOMPLETE'
+            WHERE evidence_id = ?
+            """,
+            (source_attempt.evidence_id,),
+        )
+        connection.commit()
+
+    before = row_count(database, "run_attempts")
+
+    assert (
+        service.find_exact_reusable_execution(
+            source_attempt.experiment_spec_id
+        )
+        is None
+    )
+    assert row_count(database, "run_attempts") == before
+
+
+def test_execute_prepared_uses_supplied_attempt_without_duplicate(
+    tmp_path,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-supplied-attempt",
+        ),
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert prepared.experiment_spec_id is not None
+
+    attempt = catalog.create_running_attempt(
+        experiment_spec_id=prepared.experiment_spec_id,
+        created_at=CREATED_AT,
+    )
+
+    calls = []
+
+    def terminalize(attempt_id, **kwargs):
+        calls.append((attempt_id, kwargs["state"]))
+        return catalog.terminalize_attempt_with_evidence(
+            attempt_id,
+            **kwargs,
+        )
+
+    before = row_count(database, "run_attempts")
+
+    execution = service.execute_prepared(
+        prepared=prepared,
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+        attempt=attempt,
+        attempt_terminalizer=terminalize,
+    )
+
+    assert row_count(database, "run_attempts") == before
+    assert execution.attempt_id == attempt.attempt_id
+    assert calls == [
+        (
+            attempt.attempt_id,
+            RunAttemptState.SUCCEEDED,
+        )
+    ]
+
+    persisted = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    assert persisted is not None
+    assert persisted.state is RunAttemptState.SUCCEEDED
+    assert persisted.runtime_session_id == "runtime-supplied-attempt"
+
+
+def test_execute_prepared_terminalizes_supplied_attempt_on_failure(
+    tmp_path,
+):
+    def fail_execute(**kwargs):
+        raise RuntimeError("m94d supplied-attempt failure")
+
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=fail_execute,
+        evidence_id="evidence-supplied-failure",
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert prepared.experiment_spec_id is not None
+
+    attempt = catalog.create_running_attempt(
+        experiment_spec_id=prepared.experiment_spec_id,
+        created_at=CREATED_AT,
+    )
+
+    calls = []
+
+    def terminalize(attempt_id, **kwargs):
+        calls.append((attempt_id, kwargs["state"]))
+        return catalog.terminalize_attempt_with_evidence(
+            attempt_id,
+            **kwargs,
+        )
+
+    before = row_count(database, "run_attempts")
+
+    with pytest.raises(
+        RuntimeError,
+        match="m94d supplied-attempt failure",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=create_strategy(config()),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+            attempt=attempt,
+            attempt_terminalizer=terminalize,
+        )
+
+    assert row_count(database, "run_attempts") == before
+    assert calls == [
+        (
+            attempt.attempt_id,
+            RunAttemptState.FAILED,
+        )
+    ]
+
+    persisted = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    assert persisted is not None
+    assert persisted.state is RunAttemptState.FAILED
+    assert (
+        persisted.failure_classification
+        == "backtest_execution_failed"
     )

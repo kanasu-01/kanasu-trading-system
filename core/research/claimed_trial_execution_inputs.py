@@ -1,0 +1,260 @@
+"""Explicit application/core inputs for one claimed registered Trial.
+
+BEHAVIOR IMPACT: ADDED
+PRIMARY BEHAVIOR IDS: RESEARCH-RULE-014, RESEARCH-RULE-015
+PRESERVED BEHAVIOR IDS: RESEARCH-RULE-010, RESEARCH-RULE-011
+
+M9.4 does not infer strategy procedure mappings, provider mappings or
+risk/economic translation from naming conventions. Application/core
+composition supplies those concrete inputs explicitly and this module
+verifies every registered field that can be checked independently.
+"""
+
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any
+
+from core.config.backtest_config import BacktestConfig
+from core.research.models.dataset import PriceAdjustmentBasis
+from core.research.registered_trial_execution_plan import (
+    RegisteredTrialExecutionPlan,
+)
+from core.runtime.dataset_context import DatasetContext
+from core.runtime.runtime_context import RuntimeContext
+from core.strategies.base_strategy import BaseStrategy
+
+
+@dataclass(frozen=True)
+class ClaimedTrialExecutionInputs:
+    strategy: BaseStrategy
+    config: BacktestConfig
+    runtime_context: RuntimeContext
+    dataset_context: DatasetContext
+    provider: str
+    price_adjustment_basis: PriceAdjustmentBasis
+    strategy_procedure_id: str
+    risk_economic_configuration: Mapping[str, Any]
+    data_treatment_basis: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.strategy,
+            BaseStrategy,
+        ):
+            raise TypeError(
+                "strategy must be a BaseStrategy"
+            )
+
+        if not isinstance(
+            self.config,
+            BacktestConfig,
+        ):
+            raise TypeError(
+                "config must be a BacktestConfig"
+            )
+
+        if not isinstance(
+            self.runtime_context,
+            RuntimeContext,
+        ):
+            raise TypeError(
+                "runtime_context must be a RuntimeContext"
+            )
+
+        if not isinstance(
+            self.dataset_context,
+            DatasetContext,
+        ):
+            raise TypeError(
+                "dataset_context must be a DatasetContext"
+            )
+
+        for field_name, value in (
+            ("provider", self.provider),
+            (
+                "strategy_procedure_id",
+                self.strategy_procedure_id,
+            ),
+        ):
+            if (
+                not isinstance(value, str)
+                or not value
+            ):
+                raise ValueError(
+                    f"{field_name} must be a non-empty string"
+                )
+
+        if not isinstance(
+            self.price_adjustment_basis,
+            PriceAdjustmentBasis,
+        ):
+            raise TypeError(
+                "price_adjustment_basis must be "
+                "a PriceAdjustmentBasis"
+            )
+
+        for field_name, value in (
+            (
+                "risk_economic_configuration",
+                self.risk_economic_configuration,
+            ),
+            (
+                "data_treatment_basis",
+                self.data_treatment_basis,
+            ),
+        ):
+            if not isinstance(
+                value,
+                Mapping,
+            ):
+                raise TypeError(
+                    f"{field_name} must be a mapping"
+                )
+
+            object.__setattr__(
+                self,
+                field_name,
+                MappingProxyType(
+                    dict(value)
+                ),
+            )
+
+
+TrialExecutionInputResolver = Callable[
+    [RegisteredTrialExecutionPlan],
+    ClaimedTrialExecutionInputs,
+]
+
+
+def validate_claimed_trial_execution_inputs(
+    plan: RegisteredTrialExecutionPlan,
+    inputs: ClaimedTrialExecutionInputs,
+) -> None:
+    """Fail closed when concrete execution inputs drift from registration."""
+
+    if not isinstance(
+        plan,
+        RegisteredTrialExecutionPlan,
+    ):
+        raise TypeError(
+            "plan must be a RegisteredTrialExecutionPlan"
+        )
+
+    if not isinstance(
+        inputs,
+        ClaimedTrialExecutionInputs,
+    ):
+        raise TypeError(
+            "inputs must be ClaimedTrialExecutionInputs"
+        )
+
+    if (
+        inputs.strategy_procedure_id
+        != plan.strategy_procedure_id
+    ):
+        raise ValueError(
+            "resolved strategy procedure does not match "
+            "the registered Trial plan"
+        )
+
+    if inputs.config.timeframe != plan.timeframe:
+        raise ValueError(
+            "resolved Backtest timeframe does not match "
+            "the registered Trial plan"
+        )
+
+    if (
+        inputs.config.start
+        != plan.trial_range.start
+        or inputs.config.end
+        != plan.trial_range.end
+    ):
+        raise ValueError(
+            "resolved Backtest range does not match "
+            "the Trial membership episode"
+        )
+
+    if (
+        float(inputs.config.initial_capital)
+        != float(plan.initial_capital)
+    ):
+        raise ValueError(
+            "resolved initial capital does not match "
+            "the registered Trial plan"
+        )
+
+    if inputs.config.timezone != plan.timezone:
+        raise ValueError(
+            "resolved Backtest timezone does not match "
+            "the registered Trial plan"
+        )
+
+    if (
+        inputs.dataset_context.timeframe
+        != plan.timeframe
+        or inputs.dataset_context.timezone
+        != plan.timezone
+    ):
+        raise ValueError(
+            "resolved DatasetContext does not match "
+            "the registered timeframe/timezone"
+        )
+
+    if (
+        inputs.config.symbol
+        != inputs.dataset_context.symbol
+    ):
+        raise ValueError(
+            "BacktestConfig and DatasetContext symbols "
+            "must agree"
+        )
+
+    registered_parameters = dict(
+        plan.parameter_configuration
+    )
+
+    if (
+        dict(inputs.config.strategy_params)
+        != registered_parameters
+    ):
+        raise ValueError(
+            "resolved Backtest strategy parameters do not "
+            "match the registered Trial variant"
+        )
+
+    if (
+        inputs.strategy.research_parameters()
+        != registered_parameters
+    ):
+        raise ValueError(
+            "resolved strategy effective parameters do not "
+            "match the registered Trial variant"
+        )
+
+    if (
+        dict(
+            inputs.risk_economic_configuration
+        )
+        != dict(
+            plan.risk_economic_configuration
+        )
+    ):
+        raise ValueError(
+            "resolved risk/economic declaration does not "
+            "match the registered Trial plan"
+        )
+
+
+    if (
+        dict(
+            inputs.data_treatment_basis
+        )
+        != dict(
+            plan.data_treatment_basis
+        )
+    ):
+        raise ValueError(
+            "resolved data-treatment declaration does not "
+            "match the registered Trial plan"
+        )

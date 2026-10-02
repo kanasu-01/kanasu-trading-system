@@ -23,6 +23,9 @@ from core.market_data.historical_coverage import TimeRange
 from core.market_data.historical_source import HistoricalSource
 from core.research.models.research_catalog import (
     ComputationKind,
+    ResearchArtifact,
+    ResearchArtifactKind,
+    RunAttempt,
     RunAttemptState,
 )
 from core.research.models.research_evidence import (
@@ -34,6 +37,8 @@ from core.research.reproducibility import (
     build_backtest_run_manifest,
     dataset_fingerprint,
     stable_backtest_result_fingerprint,
+    BACKTEST_RESULT_SCHEMA,
+    BACKTEST_RUN_MANIFEST_SCHEMA,
 )
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
@@ -62,6 +67,7 @@ Clock = Callable[[], datetime]
 EvidenceIdFactory = Callable[[], str]
 RetrieveCandles = Callable[..., list[Candle]]
 ExecuteCandles = Callable[..., BacktestResult]
+AttemptTerminalizer = Callable[..., RunAttempt]
 
 
 def _utc_now() -> datetime:
@@ -282,6 +288,13 @@ class PreparedBacktestResearchSpecification:
                 "non-exact software identity cannot carry "
                 "experiment_spec_id"
             )
+
+
+@dataclass(frozen=True)
+class ReusableBacktestResearchExecution:
+    attempt: RunAttempt
+    evidence: ResearchEvidence
+    result_artifact: ResearchArtifact
 
 
 @dataclass(frozen=True)
@@ -648,34 +661,165 @@ class BacktestResearchOrchestrator:
             ),
         )
 
-    def execute(
+    def find_exact_reusable_execution(
+        self,
+        experiment_spec_id: str,
+    ) -> ReusableBacktestResearchExecution | None:
+        """Resolve only fully verified exact accepted historical evidence."""
+
+        spec = self.catalog_store.load_experiment_spec(
+            experiment_spec_id
+        )
+        if spec is None:
+            raise ValueError(
+                f"ExperimentSpec does not exist: {experiment_spec_id}"
+            )
+
+        candidates = (
+            self.catalog_store
+            .list_succeeded_attempts_for_experiment_spec(
+                experiment_spec_id
+            )
+        )
+
+        for attempt in candidates:
+            if (
+                attempt.evidence_id is None
+                or attempt.result_artifact_id is None
+            ):
+                continue
+
+            evidence = self.evidence_store.load(
+                attempt.evidence_id
+            )
+            artifact = self.catalog_store.load_artifact(
+                attempt.result_artifact_id
+            )
+            manifest_artifact = (
+                self.catalog_store.load_artifact(
+                    spec.manifest_artifact_id
+                )
+            )
+
+            if (
+                evidence is None
+                or artifact is None
+                or manifest_artifact is None
+            ):
+                continue
+            if evidence.status is not ResearchEvidenceStatus.ACCEPTED:
+                continue
+            if (
+                manifest_artifact.artifact_kind
+                is not ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+                or manifest_artifact.schema_id
+                != BACKTEST_RUN_MANIFEST_SCHEMA
+            ):
+                continue
+            if artifact.artifact_kind is not ResearchArtifactKind.BACKTEST_RESULT:
+                continue
+            if artifact.schema_id != BACKTEST_RESULT_SCHEMA:
+                continue
+            if evidence.dataset_fingerprint != spec.dataset_fingerprint:
+                continue
+            if evidence.configuration_fingerprint != spec.configuration_fingerprint:
+                continue
+            if evidence.repository_revision != spec.repository_revision:
+                continue
+            if evidence.result_fingerprint != artifact.artifact_id:
+                continue
+            if (
+                research_artifact_reference(
+                    manifest_artifact.artifact_id
+                )
+                not in evidence.artifact_references
+            ):
+                continue
+            if (
+                research_artifact_reference(artifact.artifact_id)
+                not in evidence.artifact_references
+            ):
+                continue
+
+            try:
+                manifest_payload = (
+                    self.artifact_store.load_bytes(
+                        manifest_artifact.artifact_id
+                    )
+                )
+                payload = self.artifact_store.load_bytes(
+                    artifact.artifact_id
+                )
+            except (FileNotFoundError, RuntimeError):
+                continue
+
+            if (
+                len(manifest_payload)
+                != manifest_artifact.byte_count
+                or len(payload) != artifact.byte_count
+            ):
+                continue
+
+            return ReusableBacktestResearchExecution(
+                attempt=attempt,
+                evidence=evidence,
+                result_artifact=artifact,
+            )
+
+        return None
+
+    def execute_prepared(
         self,
         *,
-        historical_source: HistoricalSource | None,
+        prepared: PreparedBacktestResearchSpecification,
         strategy: BaseStrategy,
         config: BacktestConfig,
         runtime_context: RuntimeContext,
         dataset_context: DatasetContext,
-        prepared_retrieval: (
-            Callable[[], PreparedResearchRetrieval]
-            | None
-        ) = None,
+        attempt: RunAttempt | None = None,
+        attempt_terminalizer: AttemptTerminalizer | None = None,
     ) -> BacktestResearchExecution:
-        prepared = self.prepare_specification(
-            historical_source=historical_source,
-            strategy=strategy,
-            config=config,
-            runtime_context=runtime_context,
-            dataset_context=dataset_context,
-            prepared_retrieval=prepared_retrieval,
-        )
+        """
+        Execute one already-prepared Backtest specification.
 
-        attempt = None
+        M9.4 may supply the RUNNING RunAttempt already linked to its
+        ResearchJob. Existing callers may omit it and retain the
+        established attempt-creation behavior.
+        """
 
-        if (
-            prepared.experiment_spec_id
-            is not None
+        if not isinstance(
+            prepared,
+            PreparedBacktestResearchSpecification,
         ):
+            raise TypeError(
+                "prepared must be a "
+                "PreparedBacktestResearchSpecification"
+            )
+
+        if attempt is not None:
+            if not isinstance(attempt, RunAttempt):
+                raise TypeError(
+                    "attempt must be a RunAttempt or None"
+                )
+            if attempt.state is not RunAttemptState.RUNNING:
+                raise ValueError(
+                    "supplied RunAttempt must be RUNNING"
+                )
+            if prepared.experiment_spec_id is None:
+                raise ValueError(
+                    "non-exact prepared research cannot use "
+                    "a supplied RunAttempt"
+                )
+            if (
+                attempt.experiment_spec_id
+                != prepared.experiment_spec_id
+            ):
+                raise ValueError(
+                    "supplied RunAttempt must match the "
+                    "prepared ExperimentSpec"
+                )
+
+        elif prepared.experiment_spec_id is not None:
             attempt = (
                 self.catalog_store
                 .create_running_attempt(
@@ -685,6 +829,20 @@ class BacktestResearchOrchestrator:
                     created_at=self._clock(),
                 )
             )
+
+        if (
+            attempt is None
+            and attempt_terminalizer is not None
+        ):
+            raise ValueError(
+                "attempt_terminalizer requires a RunAttempt"
+            )
+
+        terminalizer = (
+            attempt_terminalizer
+            or self.catalog_store
+            .terminalize_attempt_with_evidence
+        )
 
         try:
             result = self._execute_candles(
@@ -728,7 +886,7 @@ class BacktestResearchOrchestrator:
             )
 
             if attempt is not None:
-                self.catalog_store.terminalize_attempt_with_evidence(
+                terminalizer(
                     attempt.attempt_id,
                     state=RunAttemptState.FAILED,
                     terminal_at=self._clock(),
@@ -813,20 +971,13 @@ class BacktestResearchOrchestrator:
         )
 
         if attempt is not None:
-            attempt = (
-                self.catalog_store
-                .terminalize_attempt_with_evidence(
-                    attempt.attempt_id,
-                    state=RunAttemptState.SUCCEEDED,
-                    terminal_at=self._clock(),
-                    runtime_session_id=(
-                        result.session_id
-                    ),
-                    result_artifact=(
-                        result_artifact
-                    ),
-                    evidence=evidence,
-                )
+            attempt = terminalizer(
+                attempt.attempt_id,
+                state=RunAttemptState.SUCCEEDED,
+                terminal_at=self._clock(),
+                runtime_session_id=result.session_id,
+                result_artifact=result_artifact,
+                evidence=evidence,
             )
 
         return BacktestResearchExecution(
@@ -836,10 +987,36 @@ class BacktestResearchOrchestrator:
                 if attempt is not None
                 else None
             ),
-            evidence_id=(
-                evidence.evidence_id
-            ),
-            evidence_status=(
-                evidence.status
-            ),
+            evidence_id=evidence.evidence_id,
+            evidence_status=evidence.status,
+        )
+
+    def execute(
+        self,
+        *,
+        historical_source: HistoricalSource | None,
+        strategy: BaseStrategy,
+        config: BacktestConfig,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
+        prepared_retrieval: (
+            Callable[[], PreparedResearchRetrieval]
+            | None
+        ) = None,
+    ) -> BacktestResearchExecution:
+        prepared = self.prepare_specification(
+            historical_source=historical_source,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+            prepared_retrieval=prepared_retrieval,
+        )
+
+        return self.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
         )

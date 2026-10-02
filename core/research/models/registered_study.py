@@ -18,6 +18,9 @@ TRIAL_MEMBERSHIP_EVIDENCE_SCHEMA_ID = (
 INITIAL_RESEARCH_JOB_SCHEMA_ID = (
     "kanasu.initial-research-job.v1"
 )
+RETRY_RESEARCH_JOB_SCHEMA_ID = (
+    "kanasu.retry-research-job.v1"
+)
 RESEARCH_MAX_WORKERS_SAFETY_CEILING = 16
 
 

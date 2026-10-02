@@ -6,6 +6,7 @@ from core.market_data.historical_coverage import TimeRange
 from core.research.backtest_research_orchestrator import (
     BacktestResearchExecution,
     BacktestResearchOrchestrator,
+    PreparedBacktestResearchSpecification,
     PreparedResearchRetrieval,
     PreparedResearchSpecificationError,
 )
@@ -35,6 +36,17 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class SuccessorHistoricalRetrievalError(RuntimeError):
+    """Provider/dataset retrieval failed before specification building."""
+
+    def __init__(
+        self,
+        original_error: Exception,
+    ) -> None:
+        self.original_error = original_error
+        super().__init__(str(original_error))
+
+
 class SuccessorBacktestResearchCoordinator:
     """
     Add successor dataset truth to the existing Backtest research path.
@@ -54,7 +66,7 @@ class SuccessorBacktestResearchCoordinator:
         self.orchestrator = orchestrator
         self._clock = clock or _utc_now
 
-    def execute(
+    def prepare_specification(
         self,
         *,
         strategy: BaseStrategy,
@@ -64,22 +76,34 @@ class SuccessorBacktestResearchCoordinator:
         instrument_id: str,
         provider: str,
         price_adjustment_basis: PriceAdjustmentBasis,
-    ) -> BacktestResearchExecution:
+    ) -> PreparedBacktestResearchSpecification:
+        """
+        Prepare exact successor dataset/specification without execution.
+
+        M9.4 uses this seam to decide exact evidence reuse before any
+        new physical Backtest RunAttempt is created.
+        """
+
         requested_range = TimeRange(
             config.start,
             config.end,
         )
 
         def prepare() -> PreparedResearchRetrieval:
-            retrieval = self.retrieval_service.retrieve(
-                dataset_context,
-                requested_range,
-                instrument_id=instrument_id,
-                provider=provider,
-                price_adjustment_basis=(
-                    price_adjustment_basis
-                ),
-            )
+            try:
+                retrieval = self.retrieval_service.retrieve(
+                    dataset_context,
+                    requested_range,
+                    instrument_id=instrument_id,
+                    provider=provider,
+                    price_adjustment_basis=(
+                        price_adjustment_basis
+                    ),
+                )
+            except Exception as error:
+                raise SuccessorHistoricalRetrievalError(
+                    error
+                ) from error
 
             try:
                 candles = list(
@@ -158,16 +182,48 @@ class SuccessorBacktestResearchCoordinator:
                         ),
                     ),
                 )
+
             except Exception as error:
                 raise PreparedResearchSpecificationError(
                     error
                 ) from error
 
-        return self.orchestrator.execute(
+        return self.orchestrator.prepare_specification(
             historical_source=None,
             strategy=strategy,
             config=config,
             runtime_context=runtime_context,
             dataset_context=dataset_context,
             prepared_retrieval=prepare,
+        )
+
+    def execute(
+        self,
+        *,
+        strategy: BaseStrategy,
+        config: BacktestConfig,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
+        instrument_id: str,
+        provider: str,
+        price_adjustment_basis: PriceAdjustmentBasis,
+    ) -> BacktestResearchExecution:
+        prepared = self.prepare_specification(
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+            instrument_id=instrument_id,
+            provider=provider,
+            price_adjustment_basis=(
+                price_adjustment_basis
+            ),
+        )
+
+        return self.orchestrator.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
         )
