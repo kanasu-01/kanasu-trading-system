@@ -83,7 +83,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - DESIGN ACCEPTED/PUBLISHED; IMPLEMENTATION NOT STARTED** - Registered Studies and bounded local batch execution. Accepted design baseline: `9b7ab42`; implementation begins with M9.4a only after authoritative-document synchronization.
+  - **M9.4 - IMPLEMENTED/VALIDATED; CLOSURE CANDIDATE** - Registered Studies and bounded local batch execution. M9.4a-M9.4e are published through `878e929`; M9.4f aggregation/application/closure is validated locally and awaits final diff/staging/commit review.
   - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4 design baseline accepted/published at `9b7ab42`; M9.4 production implementation has not started; M9.4a is next after authoritative-document synchronization.
+**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4 implemented/validated as a closure candidate; final M9.4f diff/staging/commit review is next before M9.5.
 
 M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
 

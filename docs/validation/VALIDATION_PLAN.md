@@ -1123,6 +1123,49 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 19. new M9.3 behavior IDs remain `DESIGNED` until implementation and checked test/evidence traces exist.
 
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
+### M9.4 - Registered Studies and bounded local batch execution
+
+**Status:** IMPLEMENTED/VALIDATED; CLOSURE CANDIDATE - FINAL DIFF/STAGING/COMMIT REVIEW PENDING
+
+M9.4 closure evidence establishes the following accepted boundaries:
+
+1. `Study`, immutable `StudyRevision`, registered `Trial`, append-only disposition history and durable `ResearchJob` state persist in the additive research schema;
+2. a complete deterministic finite Trial population is registered atomically before execution and remains the fixed research denominator;
+3. identical registration and repeated Start are duplicate-safe and idempotent, while material research-plan changes create new revision lineage;
+4. continuous universe membership remains one Trial/account episode and genuine membership gaps create separate episodes;
+5. backend-controlled Trial and worker bounds fail closed rather than silently sampling, truncating or over-claiming work;
+6. queue claiming is atomic, FIFO, bounded by actual worker slots and creates no RunAttempt merely by claiming;
+7. fresh registered execution reuses the authoritative Backtest/research path rather than duplicating financial computation;
+8. exact prior evidence reuse requires exact compatible ExperimentSpec/evidence/result lineage, creates no fake new attempt and preserves the historical timing of pre-M9.4 execution;
+9. explicit retry preserves the Trial and bound computation identity while appending new ResearchJob/RunAttempt/disposition lineage;
+10. queued and running cancellation semantics remain truthful and cooperative rather than retrospectively rewriting terminal outcomes;
+11. startup recovery reconciles stale RUNNING ResearchJobs/RunAttempts to truthful interruption state and does not automatically invent retries or resume work;
+12. ordinary Trial failures remain isolated while persistence/reconciliation authority fails closed;
+13. progress exposes the immutable registered-Trial denominator and separate ResearchJob counts;
+14. Study aggregation reports descriptive distributions across independent Trial accounts with explicit result-bearing/excluded counts and never sums independent P&L/equity into shared-capital portfolio economics;
+15. losing, invalid, insufficient, failed, cancelled, interrupted, retried and reused work remains inspectable through durable Trial/job/disposition/result lineage;
+16. M9.4 remains execution/lineage/descriptive-evidence infrastructure only: strategy qualification belongs to M9.5 and real-money execution remains outside V1;
+17. canonical instrument/dataset/provider truth remains governed by M9.3; the M9.4 backend does not invent default provider mappings or data assumptions;
+18. complete research-workspace/frontend integration remains M9.8 scope.
+
+Published implementation evidence:
+
+- accepted design baseline: `9b7ab42`;
+- accepted-design documentation synchronization: `199ec34`;
+- M9.4a persistence foundation: `6a68d0a`;
+- M9.4b registered population: `d3abbfc`;
+- M9.4c durable queue: `8d2e572`;
+- M9.4d preparation/worker/binding/execution chain: `610916a`, `0de1ab8`, `28f60e8`, `6116863`;
+- M9.4e cancellation/restart recovery: `878e929`;
+- M9.4f current closure candidate: independent-account aggregation, backend workflow/API integration, progress/read contracts and lineage inspection in the current unstaged worktree;
+- M9.4-wide regression: 154 passed;
+- cross-milestone M4 financial + M9.2 + M9.3 + M9.4 + startup-recovery preservation matrix: 682 passed;
+- complete Python regression: 1250 passed in 18.93s;
+- `git diff --check`: passed.
+
+The M9.4f HTTP boundary intentionally exposes Study creation/reopen, StudyRevision registration, Trial/progress/aggregation/lineage reads, Start and cancellation. Start initializes the durable queue; it does not manufacture a production execution-input resolver. Actual bounded queue draining remains composed through the application seam with an explicit execution handler until authoritative provider/procedure/data mappings are supplied. This preserves the M9.3 truthfulness boundary rather than guessing from legacy symbol/token data.
+
+The detailed normative baseline and closure evidence record is `docs/design/REGISTERED_STUDIES_BATCH_EXECUTION.md`. M9.4 is not marked DONE/CLOSED until the final candidate diff is reviewed, staged and committed through the controlled workflow.
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:

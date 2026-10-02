@@ -2,11 +2,11 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE**
+**ACCEPTED DESIGN BASELINE; IMPLEMENTED / VALIDATED CLOSURE CANDIDATE**
 
 `M94_DESIGN_ACCEPTED=True`
 
-This accepted design baseline does not by itself authorize production implementation. Production changes remain blocked until the accepted baseline diff is reviewed and the baseline is staged and committed through the controlled workflow.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The current M9.4f worktree is a validated closure candidate pending final human diff/staging/commit review.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
@@ -1571,7 +1571,7 @@ M9.4 may be considered complete only when:
 - accepted M0-M9.3 invariants remain green; and
 - behavior, validation and authoritative documentation are synchronized.
 
-After explicit human design acceptance, and until accepted-baseline staging/commit is complete:
+Historical pre-implementation gate after explicit human design acceptance and before accepted-baseline staging/commit:
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -1583,9 +1583,9 @@ Review date: 2026-09-30
 
 Human review status: ALL 24 M9.4 DECISIONS APPROVED IN SUBSTANCE.
 
-Design-baseline status: ACCEPTED DESIGN BASELINE - PENDING BASELINE DIFF/STAGING REVIEW.
+Design-baseline status: ACCEPTED AND PUBLISHED at `9b7ab42`; authoritative baseline synchronization published at `199ec34`.
 
-Production implementation remains unauthorized until this accepted design baseline is separately diff-reviewed, staged and committed through the controlled workflow.
+That pre-implementation authorization gate was satisfied before M9.4a began. Production implementation then proceeded through separately reviewed M9.4a-M9.4f slices under the accepted 24-decision baseline.
 
 The following decisions are normative for the accepted M9.4 design baseline.
 
@@ -1637,4 +1637,39 @@ The following decisions are normative for the accepted M9.4 design baseline.
 
 24. **M9.4 closure evidence standard.** M9.4 is not DONE merely because implementation exists. Closure requires reviewed evidence covering persistence/restart survival; deterministic and duplicate-safe registration; universe membership continuity and true-gap splitting; idempotent Start; bounded duplicate-safe claiming; authoritative Backtest parity; positive and negative exact-reuse cases; preservation of pre-M9.4 history; retry lineage; queued and running cancellation; mixed-state restart recovery; partial-failure isolation and fail-closed persistence behavior; fixed denominators; independent-account reporting; truthful failure classification; absence of M9.4 qualification and live-order authority; full regression preservation; and an inspectable durable lineage from Study through result evidence/artifact.
 
-These 24 decisions constitute the human-reviewed accepted M9.4 design baseline. Production implementation remains blocked until the accepted baseline diff is reviewed and the baseline is staged and committed through the controlled workflow.
+These 24 decisions constitute the human-reviewed accepted M9.4 design baseline. They remain normative and are not rewritten by the implementation/closure evidence below.
+
+
+## M9.4 implementation and closure evidence
+
+BEHAVIOR IMPACT: ADDED across M9.4a-M9.4f. The slices implement the already accepted registered-research workflow without changing accepted M4 financial semantics, M5 WFA mathematics, M6/M7 Paper causality, M8 application authority, M9.2 evidence identity or M9.3 canonical instrument/universe/dataset truth.
+
+Published implementation chain:
+
+- accepted design baseline: `9b7ab42`;
+- authoritative accepted-design synchronization: `199ec34`;
+- M9.4a registered Study persistence foundation: `6a68d0a`;
+- M9.4b deterministic finite StudyRevision/Trial registration: `d3abbfc`;
+- M9.4c durable ResearchJob queue: `8d2e572`;
+- execution-preparation refactor preserving Backtest authority: `610916a`;
+- actual bounded worker-slot enforcement: `0de1ab8`;
+- atomic Trial/RunAttempt binding: `28f60e8`;
+- M9.4d execution, exact reuse and retry lineage: `6116863`;
+- M9.4e cancellation and restart recovery: `878e929`;
+- M9.4f current closure candidate: truthful progress/read models, independent-account Study aggregation, backend workflow/API integration and closure synchronization.
+
+Current closure validation:
+
+- M9.4-wide regression: 154 passed;
+- M4 financial + accepted M9.2 + accepted M9.3 + M9.4 + startup-recovery preservation matrix: 682 passed;
+- complete Python regression: 1250 passed in 18.93s;
+- `git diff --check`: passed;
+- no files staged at the validation checkpoint.
+
+The current backend HTTP workflow supports Study creation/reopen, complete StudyRevision registration, Trial/progress/aggregation/lineage reads, Start and cancellation. Start initializes the durable bounded queue; it does not expose a guessed production execution-input resolver. Actual queue draining remains composed through the application service with an explicit execution handler because M9.4 must not manufacture canonical instrument/provider/data mappings that M9.3 does not supply.
+
+Independent-account aggregation reports result-bearing/excluded denominators and per-Trial account-return/drawdown distributions. It does not sum independent capital, P&L, equity or drawdown into shared-capital portfolio economics.
+
+M9.4 remains an execution, lineage and descriptive-evidence layer. It does not qualify strategies, promote Candidates, launch qualified Paper campaigns or place real broker orders.
+
+Closure status: IMPLEMENTED/VALIDATED CANDIDATE. Final `DONE/CLOSED` status requires human review of the complete candidate diff followed by controlled staging and commit.

@@ -79,7 +79,7 @@ The supported V1 Backtest and Paper application paths use simulated execution. R
 
 ### RESEARCH-RULE-001 ? Tested research lineage is not silently erased
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A registered Trial remains represented in research history when it influenced the search process, including losing, invalid, failed, cancelled, interrupted and reused cases according to its accepted disposition contract.
 
@@ -97,7 +97,7 @@ Workflow, execution, validity and evidence-decision state remain distinct.
 
 ### RESEARCH-RULE-004 ? Independent universe accounts are not a portfolio
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Independent per-instrument P&L or returns are not summed and represented as one shared-capital portfolio.
 
@@ -150,30 +150,30 @@ When research is represented as point-in-time universe evidence, the membership 
 
 ### RESEARCH-RULE-014 - Registered Trial truth precedes registered execution
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A registered Trial exists before any new physical execution performed for that Trial. Exact compatible earlier evidence may be reused only with explicit reused-source lineage; the earlier execution is never rewritten as though it had been registered beforehand.
 
 ### RESEARCH-RULE-015 - Trial, job and execution identities remain distinct
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Trial, ResearchJob, ExperimentSpec, RunAttempt and runtime/session identities remain distinct. Retry keeps the same Trial, creates new operational job/attempt lineage where applicable, does not inflate the registered Trial denominator and preserves prior disposition history.
 
 ### RESEARCH-RULE-016 - Queue ownership and cancellation remain truthful
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A durable queued ResearchJob is claimed atomically by at most one worker. Cancellation and interruption states describe what actually happened rather than what was merely requested; running work is not falsely reported cancelled before cancellation becomes effective.
 
 ### RESEARCH-RULE-017 - Registered Trial population is immutable
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A registered StudyRevision owns one complete finite Trial population before execution starts. Material research-plan changes create new StudyRevision lineage rather than silently changing that population or its denominator.
 
 ### RESEARCH-RULE-018 - Continuous universe membership does not reset the account
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 A universe snapshot transition does not reset an instrument's simulated account while that instrument remains continuously eligible. Trial boundaries follow maximal continuous membership episodes; a genuine membership gap creates a separate episode.

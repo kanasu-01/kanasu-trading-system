@@ -12,6 +12,9 @@ from api.routes.backtest_routes import router as backtest_router
 from api.routes.paper_trading_routes import (
     router as paper_trading_router,
 )
+from api.routes.research_routes import (
+    router as research_router,
+)
 from core.config.loaders import load_app_config
 from core.research.sqlite_research_catalog_store import (
     SQLiteResearchCatalogStore,
@@ -92,4 +95,10 @@ app.include_router(
     paper_trading_router,
     prefix="/api/paper-trading",
     tags=["Paper Trading"],
+)
+
+app.include_router(
+    research_router,
+    prefix="/api/research",
+    tags=["Research"],
 )

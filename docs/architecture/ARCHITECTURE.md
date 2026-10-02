@@ -71,7 +71,7 @@ AI may assist future research, but it cannot silently mutate registered protocol
 
 **Status: DONE/CLOSED at accepted implementation/validation scope**
 
-M9.2 remains the implemented durable computation/evidence layer beneath the complete M9 research workflow. The accepted M9.4 design now defines the registered Study/StudyRevision/Trial/ResearchJob workflow above it; M9.4 production implementation has not started.
+M9.2 remains the durable computation/evidence substrate beneath the M9 research workflow. M9.4 now implements the registered Study/StudyRevision/Trial/ResearchJob layer above it, including finite registration, bounded queueing, exact reuse/retry lineage, cancellation/restart recovery, truthful progress and independent-account aggregation.
 
 The implemented M9.2 Backtest lineage is:
 
@@ -138,10 +138,10 @@ Stable behavior identifiers are never silently renumbered. Important future impl
 | core/portfolio | Authoritative simulated account state and open-position ownership. |
 | core/risk | Position sizing, stops and recorded drawdown controls. |
 | core/backtest | Historical strategy/execution loop, bar reporting, results and replay-related paths. |
-| core/research | Existing placeholder `ResearchSession`, `ResearchRequest` and `ResearchResult` workflow plus implemented deterministic canonical serialization, versioned dataset/configuration/result fingerprints, immutable research-evidence records, and dedicated SQLite evidence persistence. |
+| core/research | Durable ExperimentSpec/RunAttempt/evidence lineage plus M9.4 Study/StudyRevision/Trial/ResearchJob persistence, deterministic Trial registration, bounded research queueing, claimed-job execution/reuse/retry lineage and independent-account Study aggregation. |
 | core/walk_forward | Window generation, optimization, out-of-sample evaluation and aggregation. |
 | core/runtime | Backtest, walk-forward and paper runtime orchestration plus dataset identity. |
-| api | Backtest configuration/mock result and paper-session metadata endpoints. |
+| api | Authoritative Backtest/Paper application boundaries plus M9.4 research Study/revision registration, Trial/progress/aggregation/lineage reads, durable Start/cancellation controls and startup research recovery. |
 | frontend | Browser pages for home, backtest, replay, paper and portfolio workflows. |
 
 The repository is effectively single-symbol. Some containers could hold multiple positions, but aggregate capital, exposure and risk semantics have not been validated as a multi-symbol portfolio.
@@ -421,7 +421,7 @@ M4.6 subsequently introduced the successor research-configuration identity and a
 
 M5 subsequently resolved the WFA termination, configuration/economic propagation, account-metric, stitching and verdict issues described by the earlier baseline. M4.6/M4.7 implemented and integrated the successor Backtest economic-policy/manifest identity.
 
-Automatic application-level Backtest research execution/evidence persistence remains wired through the M9.2 orchestration boundary and exposed through the authoritative Backtest application response. Registered Study/Trial/ResearchJob ownership is now defined by the accepted M9.4 design baseline, while its production implementation remains pending. PivotBoss remains unvalidated and must not be treated as the reference strategy.
+Automatic application-level Backtest execution/evidence persistence remains wired through the M9.2 orchestration boundary. M9.4 now composes registered Study/Trial/ResearchJob ownership above that authority and exposes the backend workflow needed to create/reopen Studies, register revisions, inspect Trials/progress/aggregation/lineage, initialize bounded execution and request cancellation. Queue draining still requires explicit authoritative execution inputs and does not invent provider mappings. PivotBoss remains unvalidated and must not be treated as the reference strategy.
 
 ## 8. Paper-runtime architecture
 
@@ -493,10 +493,10 @@ M8 authoritative frontend scope is Backtest and Paper. Legacy Replay/export beha
 
 Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md). The most material remaining V1 divergences are:
 
-- Backtest execution is authoritative but remains request-scoped rather than owned by a durable Study/job catalog;
-- automatic Backtest research-result/evidence persistence is implemented by M9.2, while registered Study/Trial/ResearchJob ownership is specified by the accepted M9.4 design and remains unimplemented;
-- M9.3 is closed at its accepted truthfulness scope: canonical instrument/provider-binding contracts, temporal universe snapshots, successor dataset/provenance and acquisition streams, AngelOne wall-time handling, binding-aware historical retrieval and DatasetReference-backed research integration are implemented; successor application use remains explicit opt-in until authoritative canonical registry data is supplied. The accepted M9.4 design owns registered Study/Trial batch execution, but that production workflow has not yet been implemented;
-- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle is specified by the accepted M9.4 design but is not yet implemented; M9.2 continues to provide the currently implemented durable ExperimentSpec/RunAttempt/evidence lineage;
+- ordinary standalone Backtest execution remains request-scoped, while M9.4 now provides a separate durable registered Study/StudyRevision/Trial/ResearchJob workflow for research batches;
+- automatic Backtest research-result/evidence persistence remains implemented by M9.2, and M9.4 now adds registered Study/Trial/ResearchJob ownership plus truthful batch progress and aggregation;
+- M9.3 remains authoritative for canonical instrument/provider/dataset truth. M9.4 consumes explicit registered truth and intentionally does not manufacture default provider mappings; successor application activation remains explicit until authoritative canonical registry data is supplied;
+- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle is now implemented; remaining research-platform work includes qualification/Candidate/WFA/PaperCampaign progression and complete research-workspace integration in later M9 milestones;
 - the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
 - no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;
 - current Paper ownership is one process-local authoritative session rather than a durable multi-session `PaperCampaign`;

@@ -563,7 +563,7 @@ Implementation evidence: design baseline `4eb28d8`; implementation slices `07f4b
 
 ### AD-024 - Instrument, universe and dataset truthfulness
 
-**Status:** ACCEPTED - M9.3 DESIGN BASELINE / NOT IMPLEMENTED
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED IN M9.3
 
 **Target:** M9.3
 
@@ -578,6 +578,25 @@ The existing `kanasu.dataset.v1` schema and existing historical storage keys are
 For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wall-time interpretation and aware bounds are converted to `Asia/Kolkata` before provider request formatting. Provider-wall-time conversion does not rewrite the canonical requested range, candle timestamps or accepted dataset fingerprint semantics.
 
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
+### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
+
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED THROUGH M9.4f CLOSURE CANDIDATE
+
+**Target:** M9.4
+
+M9.4 introduces the durable registered research workflow above M9.2 execution/evidence lineage and M9.3 canonical instrument/universe/dataset truth. A Study owns immutable StudyRevisions; each revision atomically registers its complete finite Trial population before execution. The registered Trial population is the fixed research denominator.
+
+ResearchJob is the durable operational queue identity. Start is separate and idempotent, queue claiming is atomic/FIFO and bounded by actual configured worker slots, and a claimed job does not itself create a RunAttempt. One Trial may accumulate multiple ResearchJobs through explicit retry while retaining one Trial identity and append-only disposition history.
+
+Fresh execution reuses the established Backtest/research authority rather than implementing competing trading economics. Exact compatible prior execution may be reused only with verified ExperimentSpec/evidence/result lineage, creates no fake new RunAttempt and does not rewrite historical execution timing. M9.4 does not manufacture provider mappings or data assumptions when the authoritative M9.3 execution-input truth is unavailable.
+
+Cancellation distinguishes queued terminal cancellation from cooperative running cancellation. Startup recovery reconciles stale running ResearchJobs/RunAttempts truthfully to interruption where required, does not invent retries and does not automatically resume queued work.
+
+Study aggregation is descriptive cross-sectional aggregation over independent Trial accounts. It reports explicit registered/result-bearing/excluded denominators and distributions such as account return and drawdown. Independent capital, P&L, equity and drawdown are never summed and represented as one shared-capital portfolio.
+
+The M9.4 backend application boundary supports Study creation/reopen, StudyRevision registration, Trial/progress/aggregation/lineage inspection, bounded Start composition and cancellation. Complete research-workspace frontend integration remains M9.8. Strategy qualification/Candidate progression remains M9.5+, and real-money execution remains outside V1.
+
+Implementation evidence: accepted design baseline `9b7ab42`; documentation synchronization `199ec34`; M9.4a `6a68d0a`; M9.4b `d3abbfc`; M9.4c `8d2e572`; M9.4d chain `610916a`, `0de1ab8`, `28f60e8`, `6116863`; M9.4e `878e929`; M9.4f current closure candidate. Validation: 154 M9.4 tests, 682 cross-milestone preservation tests and 1250 complete Python tests passed with `git diff --check` clean. Final M9.4 DONE/CLOSED status remains pending human diff/staging/commit review.
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.
