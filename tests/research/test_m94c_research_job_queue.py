@@ -842,7 +842,7 @@ def test_queue_snapshot_separates_trial_and_job_counts(
     assert after.total_jobs == 6
 
 
-def test_existing_schema_v2_restores_queue_indexes_without_version_bump(
+def test_existing_schema_v3_restores_queue_indexes_without_version_bump(
     tmp_path,
 ):
     path = tmp_path / "research.sqlite3"
@@ -861,7 +861,7 @@ def test_existing_schema_v2_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 2
+            == 3
         )
 
         for name in names:
@@ -880,7 +880,7 @@ def test_existing_schema_v2_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 2
+            == 3
         )
 
         state_columns = tuple(

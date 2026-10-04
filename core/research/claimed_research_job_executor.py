@@ -23,11 +23,19 @@ from core.research.claimed_trial_execution_inputs import (
     TrialExecutionInputResolver,
     validate_claimed_trial_execution_inputs,
 )
+from core.research.models.dataset_reference import (
+    DATASET_REFERENCE_SCHEMA_ID,
+    DatasetReference,
+    decode_dataset_reference_bytes,
+)
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
     ResearchJob,
     ResearchJobState,
     TrialDisposition,
+)
+from core.research.models.research_catalog import (
+    ResearchArtifactKind,
 )
 from core.research.registered_trial_execution_plan import (
     RegisteredTrialExecutionPlanResolver,
@@ -283,6 +291,123 @@ class ClaimedResearchJobExecutor:
 
         return inputs
 
+    def _successor_dataset_reference(
+        self,
+        artifact_references,
+    ) -> tuple[str, DatasetReference] | None:
+        matches = []
+
+        for reference in artifact_references:
+            if (
+                not isinstance(reference, str)
+                or not reference.startswith(
+                    "artifact:sha256:"
+                )
+            ):
+                continue
+
+            artifact_id = reference.removeprefix(
+                "artifact:"
+            )
+
+            artifact = (
+                self.catalog_store
+                .load_artifact(
+                    artifact_id
+                )
+            )
+
+            if artifact is None:
+                continue
+
+            if (
+                artifact.artifact_kind
+                is not ResearchArtifactKind.DATASET_REFERENCE
+            ):
+                continue
+
+            if (
+                artifact.schema_id
+                != DATASET_REFERENCE_SCHEMA_ID
+            ):
+                return None
+
+            matches.append(
+                (artifact_id, artifact)
+            )
+
+        if len(matches) != 1:
+            return None
+
+        artifact_id, artifact = matches[0]
+
+        try:
+            payload = (
+                self.successor_coordinator
+                .orchestrator
+                .artifact_store
+                .load_bytes(
+                    artifact_id
+                )
+            )
+
+            if len(payload) != artifact.byte_count:
+                return None
+
+            reference = (
+                decode_dataset_reference_bytes(
+                    payload
+                )
+            )
+
+        except (
+            FileNotFoundError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ):
+            return None
+
+        return (
+            artifact_id,
+            reference,
+        )
+
+    def _successor_reuse_dataset_lineage(
+        self,
+        *,
+        prepared,
+        reusable,
+    ) -> tuple[str, str] | None:
+        requested = (
+            self._successor_dataset_reference(
+                prepared.retrieval_artifact_references
+            )
+        )
+
+        source = (
+            self._successor_dataset_reference(
+                reusable.evidence.artifact_references
+            )
+        )
+
+        if (
+            requested is None
+            or source is None
+        ):
+            return None
+
+        if (
+            requested[1].identity.dataset_id
+            != source[1].identity.dataset_id
+        ):
+            return None
+
+        return (
+            requested[0],
+            source[0],
+        )
+
     def execute(
         self,
         claimed_job: ResearchJob,
@@ -436,6 +561,19 @@ class ClaimedResearchJobExecutor:
                 )
             )
 
+            reuse_dataset_lineage = None
+
+            if reusable is not None:
+                reuse_dataset_lineage = (
+                    self._successor_reuse_dataset_lineage(
+                        prepared=prepared,
+                        reusable=reusable,
+                    )
+                )
+
+                if reuse_dataset_lineage is None:
+                    reusable = None
+
             cancelled = (
                 self._acknowledge_cancellation_if_requested(
                     job.job_id
@@ -458,6 +596,12 @@ class ClaimedResearchJobExecutor:
                                 reusable.attempt.attempt_id
                             ),
                             terminal_at=self._clock(),
+                            requested_dataset_reference_artifact_id=(
+                                reuse_dataset_lineage[0]
+                            ),
+                            source_dataset_reference_artifact_id=(
+                                reuse_dataset_lineage[1]
+                            ),
                         )
                     )
                 except ValueError as error:

@@ -232,29 +232,98 @@ def validate_claimed_trial_execution_inputs(
             "match the registered Trial variant"
         )
 
+    registered_risk_economic = dict(
+        plan.risk_economic_configuration
+    )
+
     if (
         dict(
             inputs.risk_economic_configuration
         )
-        != dict(
-            plan.risk_economic_configuration
-        )
+        != registered_risk_economic
     ):
         raise ValueError(
             "resolved risk/economic declaration does not "
             "match the registered Trial plan"
         )
 
+    executable_risk_economic = {
+        "risk_per_trade_pct": (
+            inputs.runtime_context.risk_per_trade_pct
+        ),
+        "slippage_pct": (
+            inputs.runtime_context
+            .execution_config
+            .slippage_pct
+        ),
+        "slippage_enabled": (
+            inputs.runtime_context
+            .execution_config
+            .slippage_enabled
+        ),
+        "brokerage_enabled": (
+            inputs.runtime_context
+            .execution_config
+            .brokerage_enabled
+        ),
+        **inputs.runtime_context.economic_policy.to_payload(),
+    }
+
+    for field_name, registered_value in (
+        registered_risk_economic.items()
+    ):
+        if field_name not in executable_risk_economic:
+            raise ValueError(
+                "registered risk/economic declaration "
+                f"is unverifiable from executable inputs: {field_name}"
+            )
+
+        if (
+            executable_risk_economic[field_name]
+            != registered_value
+        ):
+            raise ValueError(
+                "resolved executable risk/economic setting "
+                "does not match the registered Trial plan: "
+                f"{field_name}"
+            )
+
+    registered_data_treatment = dict(
+        plan.data_treatment_basis
+    )
 
     if (
         dict(
             inputs.data_treatment_basis
         )
-        != dict(
-            plan.data_treatment_basis
-        )
+        != registered_data_treatment
     ):
         raise ValueError(
             "resolved data-treatment declaration does not "
             "match the registered Trial plan"
         )
+
+    executable_data_treatment = {
+        "price_adjustment": (
+            inputs.price_adjustment_basis.value.lower()
+        ),
+    }
+
+    for field_name, registered_value in (
+        registered_data_treatment.items()
+    ):
+        if field_name not in executable_data_treatment:
+            raise ValueError(
+                "registered data-treatment declaration "
+                f"is unverifiable from executable inputs: {field_name}"
+            )
+
+        if (
+            executable_data_treatment[field_name]
+            != registered_value
+        ):
+            raise ValueError(
+                "resolved executable data-treatment setting "
+                "does not match the registered Trial plan: "
+                f"{field_name}"
+            )

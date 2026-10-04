@@ -975,3 +975,212 @@ def test_execute_prepared_terminalizes_supplied_attempt_on_failure(
         persisted.failure_classification
         == "backtest_execution_failed"
     )
+
+
+def _m94g1_prepared_environment(tmp_path):
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-m94g1-drift",
+        )
+
+    service, _, _, _ = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=execute,
+        evidence_id="evidence-m94g1-drift",
+    )
+
+    cfg = config()
+    strategy = create_strategy(cfg)
+    runtime_context = RuntimeContext(
+        risk_per_trade_pct=1.0
+    )
+    dataset_context = context()
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=strategy,
+        config=cfg,
+        runtime_context=runtime_context,
+        dataset_context=dataset_context,
+    )
+
+    return (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        dataset_context,
+        execution_calls,
+    )
+
+
+def test_m94g1_execute_prepared_rejects_initial_capital_drift(
+    tmp_path,
+):
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        dataset_context,
+        execution_calls,
+    ) = _m94g1_prepared_environment(tmp_path)
+
+    cfg.initial_capital = 200000
+
+    with pytest.raises(
+        ValueError,
+        match="prepared.*execution|execution.*prepared|identity",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=cfg,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+
+    assert execution_calls == []
+
+
+def test_m94g1_execute_prepared_rejects_runtime_economic_drift(
+    tmp_path,
+):
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        _,
+        dataset_context,
+        execution_calls,
+    ) = _m94g1_prepared_environment(tmp_path)
+
+    drifted_runtime = RuntimeContext(
+        risk_per_trade_pct=2.0
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="prepared.*execution|execution.*prepared|identity",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=cfg,
+            runtime_context=drifted_runtime,
+            dataset_context=dataset_context,
+        )
+
+    assert execution_calls == []
+
+
+def test_m94g1_execute_prepared_rejects_strategy_parameter_drift(
+    tmp_path,
+):
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        dataset_context,
+        execution_calls,
+    ) = _m94g1_prepared_environment(tmp_path)
+
+    strategy.slow_period = 3
+
+    with pytest.raises(
+        ValueError,
+        match="prepared.*execution|execution.*prepared|identity",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=cfg,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+
+    assert execution_calls == []
+
+
+def test_m94g1_execute_prepared_rejects_dataset_context_drift(
+    tmp_path,
+):
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        _,
+        execution_calls,
+    ) = _m94g1_prepared_environment(tmp_path)
+
+    drifted_context = DatasetContext(
+        symbol="TCS",
+        timeframe="15m",
+        timezone="Asia/Kolkata",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="prepared.*execution|execution.*prepared|identity",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=cfg,
+            runtime_context=runtime_context,
+            dataset_context=drifted_context,
+        )
+
+    assert execution_calls == []
+
+
+def test_m94g1_execute_prepared_rejects_candle_content_drift(
+    tmp_path,
+):
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        dataset_context,
+        execution_calls,
+    ) = _m94g1_prepared_environment(tmp_path)
+
+    original = prepared.candles[0]
+    prepared.candles[0] = Candle(
+        timestamp=original.timestamp,
+        open=original.open + 1.0,
+        high=original.high + 1.0,
+        low=original.low + 1.0,
+        close=original.close + 1.0,
+        volume=original.volume,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="prepared.*execution|execution.*prepared|identity",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=strategy,
+            config=cfg,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+
+    assert execution_calls == []

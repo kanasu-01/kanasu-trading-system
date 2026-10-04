@@ -1,4 +1,5 @@
 from contextlib import closing
+import json
 from datetime import datetime, timedelta, timezone
 import sqlite3
 
@@ -33,6 +34,7 @@ from core.research.models.registered_study import (
     TrialDisposition,
 )
 from core.research.models.research_catalog import (
+    ResearchArtifactKind,
     RunAttemptState,
 )
 from core.research.registered_study_registration import (
@@ -146,6 +148,7 @@ class StaticSuccessorRetrieval:
         self.calls = []
         self.error = error
         self.on_retrieve = on_retrieve
+        self.source = "provider:angelone"
 
     def retrieve(
         self,
@@ -176,7 +179,7 @@ class StaticSuccessorRetrieval:
 
         return SuccessorHistoricalRetrievalResult(
             candles=tuple(_candles()),
-            source="provider:angelone",
+            source=self.source,
             binding_segments=(
                 ProviderBindingProvenance(
                     binding_id="angelone-abc-v1",
@@ -254,7 +257,7 @@ def _inputs(
         ),
         provider="angelone",
         price_adjustment_basis=(
-            PriceAdjustmentBasis.UNKNOWN
+            PriceAdjustmentBasis.RAW
         ),
         strategy_procedure_id=procedure_id,
         risk_economic_configuration=(
@@ -1600,3 +1603,454 @@ def test_m94e_cancellation_wins_exact_reuse_terminalization_race(
         persisted_trial.disposition
         is TrialDisposition.CANCELLED
     )
+
+
+def _m94g1_source_dataset_reference(
+    catalog,
+    executor,
+    prior,
+):
+    source_attempt = catalog.load_run_attempt(
+        prior.attempt_id
+    )
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+
+    evidence = (
+        executor
+        .successor_coordinator
+        .orchestrator
+        .evidence_store
+        .load(source_attempt.evidence_id)
+    )
+
+    assert evidence is not None
+
+    matches = []
+
+    for reference in evidence.artifact_references:
+        artifact_id = reference.removeprefix(
+            "artifact:"
+        )
+
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.DATASET_REFERENCE
+        ):
+            matches.append(
+                (reference, artifact)
+            )
+
+    assert len(matches) == 1
+
+    return (
+        source_attempt,
+        evidence,
+        matches[0][0],
+        matches[0][1],
+    )
+
+
+def test_m94g1_reuse_allows_different_acquisition_provenance(
+    tmp_path,
+):
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    (
+        _,
+        _,
+        source_reference,
+        source_artifact,
+    ) = _m94g1_source_dataset_reference(
+        catalog,
+        executor,
+        prior,
+    )
+
+    retrieval.source = "provider:alternate-trusted"
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.REUSED
+    )
+    assert (
+        terminal_job.reused_attempt_id
+        == prior.attempt_id
+    )
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+    assert source_reference.startswith(
+        "artifact:sha256:"
+    )
+    assert (
+        source_artifact.artifact_kind
+        is ResearchArtifactKind.DATASET_REFERENCE
+    )
+
+    dataset_lineage = (
+        catalog
+        .load_research_job_reuse_dataset_lineage(
+            terminal_job.job_id
+        )
+    )
+
+    assert dataset_lineage is not None
+
+    (
+        requested_dataset_reference_artifact_id,
+        source_dataset_reference_artifact_id,
+    ) = dataset_lineage
+
+    assert (
+        source_dataset_reference_artifact_id
+        == source_artifact.artifact_id
+    )
+
+    # Different acquisition provenance may produce a different
+    # DatasetReference artifact while retaining the same canonical
+    # DatasetIdentityV2.dataset_id.
+    assert (
+        requested_dataset_reference_artifact_id
+        != source_dataset_reference_artifact_id
+    )
+
+    requested_artifact = catalog.load_artifact(
+        requested_dataset_reference_artifact_id
+    )
+
+    assert requested_artifact is not None
+    assert (
+        requested_artifact.artifact_kind
+        is ResearchArtifactKind.DATASET_REFERENCE
+    )
+    assert len(retrieval.calls) == 2
+
+
+def test_m94g1_reuse_rejects_incompatible_successor_instrument(
+    tmp_path,
+):
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        _,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id="NSE-EQ-DIFFERENT",
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.EXECUTED
+    )
+    assert terminal_job.reused_attempt_id is None
+    assert terminal_job.attempt_id != prior.attempt_id
+    assert _attempt_count(catalog) == 2
+    assert len(execution_calls) == 2
+    assert (
+        catalog.load_research_job_reuse_dataset_lineage(
+            terminal_job.job_id
+        )
+        is None
+    )
+
+
+def test_m94g1_reuse_rejects_incompatible_price_adjustment_basis(
+    tmp_path,
+):
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        _,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                PriceAdjustmentBasis.ADJUSTED
+            ),
+        )
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.EXECUTED
+    )
+    assert terminal_job.reused_attempt_id is None
+    assert terminal_job.attempt_id != prior.attempt_id
+    assert _attempt_count(catalog) == 2
+    assert len(execution_calls) == 2
+
+
+def test_m94g1_reuse_rejects_missing_source_dataset_lineage(
+    tmp_path,
+):
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        _,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    (
+        source_attempt,
+        evidence,
+        dataset_reference,
+        _,
+    ) = _m94g1_source_dataset_reference(
+        catalog,
+        executor,
+        prior,
+    )
+
+    remaining_references = tuple(
+        reference
+        for reference in evidence.artifact_references
+        if reference != dataset_reference
+    )
+
+    with closing(
+        sqlite3.connect(
+            catalog.database_path
+        )
+    ) as connection:
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET artifact_references = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                json.dumps(
+                    list(remaining_references),
+                    separators=(",", ":"),
+                ),
+                source_attempt.evidence_id,
+            ),
+        )
+        connection.commit()
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.EXECUTED
+    )
+    assert terminal_job.reused_attempt_id is None
+    assert terminal_job.attempt_id != prior.attempt_id
+    assert _attempt_count(catalog) == 2
+    assert len(execution_calls) == 2
+
+
+def test_m94g1_reuse_rejects_corrupt_source_dataset_lineage(
+    tmp_path,
+):
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    (
+        _,
+        _,
+        _,
+        source_artifact,
+    ) = _m94g1_source_dataset_reference(
+        catalog,
+        executor,
+        prior,
+    )
+
+    artifact_store = (
+        executor
+        .successor_coordinator
+        .orchestrator
+        .artifact_store
+    )
+
+    source_path = (
+        artifact_store
+        .root_directory
+        .joinpath(
+            *source_artifact
+            .relative_path
+            .split("/")
+        )
+    )
+
+    retrieval.source = (
+        "provider:alternate-trusted"
+    )
+
+    source_path.write_bytes(
+        b"corrupt-dataset-reference"
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.EXECUTED
+    )
+    assert terminal_job.reused_attempt_id is None
+    assert terminal_job.attempt_id != prior.attempt_id
+    assert _attempt_count(catalog) == 2
+    assert len(execution_calls) == 2

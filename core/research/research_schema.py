@@ -3,7 +3,7 @@
 import sqlite3
 
 
-RESEARCH_SCHEMA_VERSION = 2
+RESEARCH_SCHEMA_VERSION = 3
 
 
 _CREATE_RESEARCH_EVIDENCE_TABLE = """
@@ -227,6 +227,21 @@ CREATE TABLE IF NOT EXISTS research_jobs (
 """
 
 
+_CREATE_RESEARCH_JOB_REUSE_DATASET_LINEAGE_TABLE = """
+CREATE TABLE IF NOT EXISTS research_job_reuse_dataset_lineage (
+    job_id TEXT PRIMARY KEY,
+    requested_dataset_reference_artifact_id TEXT NOT NULL,
+    source_dataset_reference_artifact_id TEXT NOT NULL,
+    FOREIGN KEY (job_id)
+        REFERENCES research_jobs (job_id),
+    FOREIGN KEY (requested_dataset_reference_artifact_id)
+        REFERENCES research_artifacts (artifact_id),
+    FOREIGN KEY (source_dataset_reference_artifact_id)
+        REFERENCES research_artifacts (artifact_id)
+)
+"""
+
+
 _CREATE_RESEARCH_JOBS_STATE_CREATED_JOB_INDEX = """
 CREATE INDEX IF NOT EXISTS
 ix_research_jobs_state_created_job
@@ -325,6 +340,11 @@ _CREATE_V2_TABLES = (
     _CREATE_TRIALS_TABLE,
     _CREATE_RESEARCH_JOBS_TABLE,
     _CREATE_TRIAL_DISPOSITION_EVENTS_TABLE,
+)
+
+
+_CREATE_V3_TABLES = (
+    _CREATE_RESEARCH_JOB_REUSE_DATASET_LINEAGE_TABLE,
 )
 
 
@@ -443,6 +463,27 @@ _EXPECTED_TABLE_COLUMNS = {
         ("causing_job_id", "TEXT", 0, 0),
         ("reason_classification", "TEXT", 0, 0),
         ("reason_message", "TEXT", 0, 0),
+    ),
+}
+
+_V2_EXPECTED_TABLE_COLUMNS = _EXPECTED_TABLE_COLUMNS
+
+_EXPECTED_TABLE_COLUMNS = {
+    **_V2_EXPECTED_TABLE_COLUMNS,
+    "research_job_reuse_dataset_lineage": (
+        ("job_id", "TEXT", 0, 1),
+        (
+            "requested_dataset_reference_artifact_id",
+            "TEXT",
+            1,
+            0,
+        ),
+        (
+            "source_dataset_reference_artifact_id",
+            "TEXT",
+            1,
+            0,
+        ),
     ),
 }
 
@@ -586,7 +627,7 @@ def _create_and_validate_v2_indexes(
     )
 
 
-def _migrate_v1_to_v2(
+def _migrate_v1_to_v3(
     connection: sqlite3.Connection,
 ) -> None:
     _validate_required_schema(
@@ -599,6 +640,40 @@ def _migrate_v1_to_v2(
         connection.execute("BEGIN IMMEDIATE")
 
         for statement in _CREATE_V2_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V3_TABLES:
+            connection.execute(statement)
+
+        _create_and_validate_v2_indexes(
+            connection
+        )
+
+        _validate_current_schema(connection)
+
+        connection.execute(
+            f"PRAGMA user_version = {RESEARCH_SCHEMA_VERSION}"
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    else:
+        connection.commit()
+
+
+def _migrate_v2_to_v3(
+    connection: sqlite3.Connection,
+) -> None:
+    _validate_required_schema(
+        connection,
+        _V2_EXPECTED_TABLE_COLUMNS,
+        2,
+    )
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+
+        for statement in _CREATE_V3_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(
@@ -659,8 +734,12 @@ def initialize_research_schema(
 
         return
 
+    if current_version == 2:
+        _migrate_v2_to_v3(connection)
+        return
+
     if current_version == 1:
-        _migrate_v1_to_v2(connection)
+        _migrate_v1_to_v3(connection)
         return
 
     if current_version != 0:
@@ -700,6 +779,9 @@ def initialize_research_schema(
             connection.execute(statement)
 
         for statement in _CREATE_V2_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V3_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(

@@ -34,6 +34,7 @@ from core.research.models.research_evidence import (
 )
 from core.research.reproducibility import (
     backtest_configuration_fingerprint_v2,
+    backtest_run_manifest_bytes,
     build_backtest_run_manifest,
     dataset_fingerprint,
     stable_backtest_result_fingerprint,
@@ -768,6 +769,123 @@ class BacktestResearchOrchestrator:
 
         return None
 
+    def _validate_prepared_execution_identity(
+        self,
+        *,
+        prepared: PreparedBacktestResearchSpecification,
+        strategy: BaseStrategy,
+        config: BacktestConfig,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
+    ) -> None:
+        """
+        Prove that the exact inputs about to execute still match
+        the canonical research identity prepared earlier.
+
+        M9.4g1 intentionally reuses the existing M4/M9 canonical
+        dataset fingerprint and Backtest run-manifest authorities.
+        """
+
+        execution_range = TimeRange(
+            config.start,
+            config.end,
+        )
+
+        if execution_range != prepared.requested_range:
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "requested range changed"
+            )
+
+        execution_dataset_fingerprint = (
+            dataset_fingerprint(
+                dataset_context,
+                execution_range,
+                prepared.candles,
+            )
+        )
+
+        if (
+            execution_dataset_fingerprint
+            != prepared.dataset_fingerprint
+        ):
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "dataset inputs changed"
+            )
+
+        execution_manifest = (
+            build_backtest_run_manifest(
+                dataset_context,
+                execution_range,
+                execution_dataset_fingerprint,
+                strategy,
+                initial_capital=(
+                    config.initial_capital
+                ),
+                runtime_context=runtime_context,
+            )
+        )
+
+        execution_configuration_fingerprint = (
+            backtest_configuration_fingerprint_v2(
+                execution_manifest
+            )
+        )
+
+        if (
+            execution_configuration_fingerprint
+            != prepared.configuration_fingerprint
+        ):
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "Backtest configuration changed"
+            )
+
+        expected_manifest_reference = (
+            research_artifact_reference(
+                prepared.manifest_artifact_id
+            )
+        )
+
+        if (
+            expected_manifest_reference
+            != prepared.manifest_reference
+        ):
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "manifest reference changed"
+            )
+
+        try:
+            prepared_manifest_bytes = (
+                self.artifact_store.load_bytes(
+                    prepared.manifest_artifact_id
+                )
+            )
+        except (
+            FileNotFoundError,
+            RuntimeError,
+        ) as error:
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "manifest artifact is unavailable or corrupt"
+            ) from error
+
+        execution_manifest_bytes = (
+            backtest_run_manifest_bytes(
+                execution_manifest
+            )
+        )
+
+        if (
+            execution_manifest_bytes
+            != prepared_manifest_bytes
+        ):
+            raise ValueError(
+                "prepared execution identity mismatch: "
+                "manifest does not describe execution inputs"
+            )
     def execute_prepared(
         self,
         *,
@@ -845,6 +963,14 @@ class BacktestResearchOrchestrator:
         )
 
         try:
+            self._validate_prepared_execution_identity(
+                prepared=prepared,
+                strategy=strategy,
+                config=config,
+                runtime_context=runtime_context,
+                dataset_context=dataset_context,
+            )
+
             result = self._execute_candles(
                 candles=prepared.candles,
                 strategy=strategy,

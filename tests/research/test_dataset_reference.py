@@ -14,9 +14,14 @@ from core.research.models.dataset_reference import (
     DATASET_REFERENCE_SCHEMA_ID,
     DatasetReference,
     dataset_reference_bytes,
+    dataset_reference_payload,
+    decode_dataset_reference_bytes,
 )
 from core.research.models.research_catalog import (
     ResearchArtifactKind,
+)
+from core.research.reproducibility import (
+    canonical_bytes,
 )
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
@@ -233,3 +238,36 @@ def test_artifact_store_persists_versioned_dataset_reference(
     )
 
     assert repeated == artifact
+
+
+
+def test_dataset_reference_strict_decoder_round_trips():
+    value = reference()
+
+    assert decode_dataset_reference_bytes(
+        dataset_reference_bytes(value)
+    ) == value
+
+
+def test_dataset_reference_strict_decoder_rejects_false_dataset_id():
+    value = reference()
+    payload = dataset_reference_payload(
+        value
+    )
+
+    payload["dataset"]["dataset_id"] = (
+        "sha256:" + ("0" * 64)
+    )
+
+    forged = canonical_bytes(
+        payload,
+        schema=DATASET_REFERENCE_SCHEMA_ID,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="dataset_id",
+    ):
+        decode_dataset_reference_bytes(
+            forged
+        )

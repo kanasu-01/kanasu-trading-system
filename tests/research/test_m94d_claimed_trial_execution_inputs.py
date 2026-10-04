@@ -39,7 +39,11 @@ class FixtureStrategy(BaseStrategy):
         return None
 
 
-def _plan():
+def _plan(
+    *,
+    risk=None,
+    data_treatment=None,
+):
     return RegisteredTrialExecutionPlan(
         trial_id="trial-fixture",
         study_revision_id="revision-fixture",
@@ -50,17 +54,24 @@ def _plan():
         trial_range=TimeRange(JAN, FEB),
         timezone="UTC",
         initial_capital=1_000_000.0,
-        risk_economic_configuration={
-            "risk_per_trade_pct": 1.0,
-            "execution_policy": "fixture-v1",
-        },
+        risk_economic_configuration=(
+            risk
+            if risk is not None
+            else {
+                "risk_per_trade_pct": 1.0,
+            }
+        ),
         parameter_configuration={
             "fast": 5,
             "slow": 20,
         },
-        data_treatment_basis={
-            "price_adjustment": "raw",
-        },
+        data_treatment_basis=(
+            data_treatment
+            if data_treatment is not None
+            else {
+                "price_adjustment": "raw",
+            }
+        ),
         repository_revision="repo-fixture",
         evidence_reuse_policy=(
             EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
@@ -73,6 +84,8 @@ def _inputs(
     params=None,
     risk=None,
     data_treatment=None,
+    runtime_risk=1.0,
+    price_basis=PriceAdjustmentBasis.RAW,
 ):
     resolved_params = (
         params
@@ -105,7 +118,7 @@ def _inputs(
         ),
         config=config,
         runtime_context=RuntimeContext(
-            risk_per_trade_pct=1.0
+            risk_per_trade_pct=runtime_risk
         ),
         dataset_context=DatasetContext(
             symbol="A",
@@ -114,7 +127,7 @@ def _inputs(
         ),
         provider="fixture-provider",
         price_adjustment_basis=(
-            PriceAdjustmentBasis.UNKNOWN
+            price_basis
         ),
         strategy_procedure_id=(
             "fixture-procedure-v1"
@@ -124,7 +137,6 @@ def _inputs(
             if risk is not None
             else {
                 "risk_per_trade_pct": 1.0,
-                "execution_policy": "fixture-v1",
             }
         ),
         data_treatment_basis=(
@@ -170,7 +182,6 @@ def test_rejects_risk_economic_declaration_drift():
             _inputs(
                 risk={
                     "risk_per_trade_pct": 2.0,
-                    "execution_policy": "fixture-v1",
                 }
             ),
         )
@@ -188,5 +199,72 @@ def test_rejects_data_treatment_declaration_drift():
                 data_treatment={
                     "price_adjustment": "adjusted",
                 }
+            ),
+        )
+
+
+def test_m94g1_rejects_matching_risk_declaration_when_runtime_risk_drifted():
+    with pytest.raises(
+        ValueError,
+        match="risk|economic|runtime",
+    ):
+        validate_claimed_trial_execution_inputs(
+            _plan(),
+            _inputs(
+                runtime_risk=2.0,
+            ),
+        )
+
+
+def test_m94g1_rejects_matching_data_declaration_when_price_basis_drifted():
+    with pytest.raises(
+        ValueError,
+        match="data|price|adjustment",
+    ):
+        validate_claimed_trial_execution_inputs(
+            _plan(),
+            _inputs(
+                price_basis=(
+                    PriceAdjustmentBasis.ADJUSTED
+                ),
+            ),
+        )
+
+def test_m94g1_rejects_unverifiable_risk_economic_semantics():
+    declaration = {
+        "risk_per_trade_pct": 1.0,
+        "execution_policy": "fixture-v1",
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="risk/economic.*unverifiable",
+    ):
+        validate_claimed_trial_execution_inputs(
+            _plan(
+                risk=declaration,
+            ),
+            _inputs(
+                risk=declaration,
+            ),
+        )
+
+
+def test_m94g1_rejects_unverifiable_data_treatment_semantics():
+    declaration = {
+        "price_adjustment": "raw",
+        "corporate_actions": "explicit",
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="data-treatment.*unverifiable",
+    ):
+        validate_claimed_trial_execution_inputs(
+            _plan(
+                data_treatment=declaration,
+            ),
+            _inputs(
+                data_treatment=declaration,
             ),
         )

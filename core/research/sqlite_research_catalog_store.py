@@ -8,6 +8,9 @@ from pathlib import Path
 import sqlite3
 from uuid import uuid4
 
+from core.research.models.dataset_reference import (
+    DATASET_REFERENCE_SCHEMA_ID,
+)
 from core.research.models.research_catalog import (
     ComputationKind,
     ExperimentSpec,
@@ -4302,11 +4305,35 @@ class SQLiteResearchCatalogStore:
         experiment_spec_id: str,
         reused_attempt_id: str,
         terminal_at: datetime,
+        requested_dataset_reference_artifact_id: (
+            str | None
+        ) = None,
+        source_dataset_reference_artifact_id: (
+            str | None
+        ) = None,
     ) -> tuple[Trial, ResearchJob, TrialDispositionEvent]:
         """Atomically complete one RUNNING job by exact accepted reuse."""
 
         if not isinstance(terminal_at, datetime) or terminal_at.utcoffset() is None:
             raise ValueError("terminal_at must be a timezone-aware datetime")
+
+        dataset_lineage_supplied = (
+            requested_dataset_reference_artifact_id
+            is not None
+            or source_dataset_reference_artifact_id
+            is not None
+        )
+
+        if dataset_lineage_supplied and (
+            requested_dataset_reference_artifact_id
+            is None
+            or source_dataset_reference_artifact_id
+            is None
+        ):
+            raise ValueError(
+                "exact reuse DatasetReference lineage "
+                "requires both requested and source artifacts"
+            )
 
         with closing(self._connect()) as connection:
             try:
@@ -4463,6 +4490,79 @@ class SQLiteResearchCatalogStore:
                         "the exact Backtest result artifact"
                     )
 
+                if dataset_lineage_supplied:
+                    requested_dataset_row = (
+                        connection.execute(
+                            """
+                            SELECT artifact_kind, schema_id
+                            FROM research_artifacts
+                            WHERE artifact_id = ?
+                            """,
+                            (
+                                requested_dataset_reference_artifact_id,
+                            ),
+                        ).fetchone()
+                    )
+
+                    source_dataset_row = (
+                        connection.execute(
+                            """
+                            SELECT artifact_kind, schema_id
+                            FROM research_artifacts
+                            WHERE artifact_id = ?
+                            """,
+                            (
+                                source_dataset_reference_artifact_id,
+                            ),
+                        ).fetchone()
+                    )
+
+                    for (
+                        label,
+                        artifact_row,
+                    ) in (
+                        (
+                            "requested",
+                            requested_dataset_row,
+                        ),
+                        (
+                            "source",
+                            source_dataset_row,
+                        ),
+                    ):
+                        if artifact_row is None:
+                            raise ValueError(
+                                "exact reuse "
+                                f"{label} DatasetReference "
+                                "artifact does not exist"
+                            )
+
+                        if (
+                            artifact_row[0]
+                            != ResearchArtifactKind
+                            .DATASET_REFERENCE
+                            .value
+                            or artifact_row[1]
+                            != DATASET_REFERENCE_SCHEMA_ID
+                        ):
+                            raise ValueError(
+                                "exact reuse "
+                                f"{label} dataset lineage "
+                                "requires a canonical "
+                                "DatasetReference artifact"
+                            )
+
+                    if (
+                        research_artifact_reference(
+                            source_dataset_reference_artifact_id
+                        )
+                        not in evidence_artifact_references
+                    ):
+                        raise ValueError(
+                            "reuse evidence must reference "
+                            "the exact source DatasetReference artifact"
+                        )
+
                 sequence_number = connection.execute(
                     """
                     SELECT COALESCE(MAX(sequence_number), 0) + 1
@@ -4550,6 +4650,24 @@ class SQLiteResearchCatalogStore:
                 if cursor.rowcount != 1:
                     raise RuntimeError(
                         "exact reuse lost its RUNNING/uncompleted job precondition"
+                    )
+
+                if dataset_lineage_supplied:
+                    connection.execute(
+                        """
+                        INSERT INTO
+                            research_job_reuse_dataset_lineage (
+                                job_id,
+                                requested_dataset_reference_artifact_id,
+                                source_dataset_reference_artifact_id
+                            )
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            job_id,
+                            requested_dataset_reference_artifact_id,
+                            source_dataset_reference_artifact_id,
+                        ),
                     )
 
                 connection.commit()
@@ -6458,6 +6576,43 @@ class SQLiteResearchCatalogStore:
             return None
 
         return self._research_job_from_row(row)
+
+    def load_research_job_reuse_dataset_lineage(
+        self,
+        job_id: str,
+    ) -> tuple[str, str] | None:
+        """
+        Load durable requested/source DatasetReference artifact IDs
+        for one registered exact-reuse completion.
+        """
+
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+        ):
+            raise ValueError(
+                "job_id must be a non-empty string"
+            )
+
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    requested_dataset_reference_artifact_id,
+                    source_dataset_reference_artifact_id
+                FROM research_job_reuse_dataset_lineage
+                WHERE job_id = ?
+                """,
+                (job_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return (
+            row[0],
+            row[1],
+        )
 
     def list_research_jobs_for_trial(
         self,
