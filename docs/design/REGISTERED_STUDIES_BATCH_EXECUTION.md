@@ -2,11 +2,11 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; IMPLEMENTED / VALIDATED / DONE/CLOSED**
+**ACCEPTED DESIGN BASELINE; M9.4g INDEPENDENT-AUDIT REMEDIATION / RE-CLOSURE ACTIVE**
 
 `M94_DESIGN_ACCEPTED=True`
 
-The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was published at `b93ae6a` after final human diff review, controlled staging, commit and push. M9.4 is DONE/CLOSED.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was historically published at `b93ae6a` after final human diff review, controlled staging, commit and push. A later independent post-closure audit reproduced bounded correctness defects and missing closure evidence. M9.4g is correcting those findings without replacing the accepted 24-decision baseline. M9.4 is not re-closed until the M9.4g D20 gate completes.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
@@ -1672,4 +1672,44 @@ Independent-account aggregation reports result-bearing/excluded denominators and
 
 M9.4 remains an execution, lineage and descriptive-evidence layer. It does not qualify strategies, promote Candidates, launch qualified Paper campaigns or place real broker orders.
 
-Closure status: DONE/CLOSED. Human review of the complete candidate diff, controlled staging, commit and push completed successfully for M9.4f at `b93ae6a`.
+Historical M9.4f closure status: DONE/CLOSED. Human review of the complete candidate diff, controlled staging, commit and push completed successfully for M9.4f at `b93ae6a`; that historical status is now subject to the active M9.4g remediation/re-closure described below.
+
+## M9.4g independent-audit remediation and re-closure evidence
+
+The historical M9.4a-M9.4f commit identities and their validation counts above
+remain historical facts. They are not rewritten.
+
+A later independent post-closure audit demonstrated that additional bounded
+correction and closure proof were required. The accepted remediation design is
+`docs/design/M9_4G_INDEPENDENT_AUDIT_REMEDIATION.md`.
+
+M9.4g preserves the 24 accepted M9.4 decisions and specifically verifies the
+previously missing closure scenarios:
+
+- mixed-state restart with QUEUED, RUNNING, EXECUTED, REUSED, FAILED and
+  CANCELLED work represented simultaneously;
+- cancellation requested during already-running financial computation;
+- recovery persistence failure with transaction rollback and fail-closed
+  startup refusal;
+- retry after recovered interrupted bound work while preserving Trial,
+  ExperimentSpec and prior attempt history;
+- real ASGI persistence through the actual HTTP/application boundary; and
+- representative measurement of the configured Trial-population safety bound.
+
+The representative D18 workload used one membership episode and 5,000 distinct
+parameter variants through production registration code. On the recorded local
+environment (Windows 10 AMD64, Python 3.11.9, SQLite 3.45.1, repository head
+`a32e22d5b59bc625595d0c0ff3e6036a5e4ac527`) it registered and persisted all
+5,000 Trials in 10.837931 seconds with 11.857 MiB traced peak Python memory,
+6.855 MiB SQLite storage and 1.104 MiB content-addressed artifacts.
+
+The 5,000 value therefore remains the reviewed backend safety ceiling for the
+current single-user local implementation. This evidence is not a throughput
+SLA, latency guarantee or distributed-capacity claim. Changing the limit still
+requires explicit review and does not change StudyRevision or Trial identity.
+
+D20 automated validation has passed: 64 focused tests, 222 M9.4-wide tests,
+757 cross-milestone preservation tests and 1325 complete Python tests,
+with `git diff --check` clean. Re-closure remains pending final human diff
+review, separately approved staging, commit and push, and post-push repository
+verification.

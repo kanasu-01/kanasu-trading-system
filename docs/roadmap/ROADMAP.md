@@ -83,7 +83,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - DONE/CLOSED** - Registered Studies and bounded local batch execution. M9.4a-M9.4e are published through `878e929`; M9.4f aggregation/application integration and closure evidence was published at `b93ae6a` after final human diff review and controlled staging/commit/push.
+  - **M9.4g - ACTIVE REMEDIATION/RE-CLOSURE** - The historical M9.4f closure at `b93ae6a` was subsequently challenged by an independent audit. Bounded corrections g1-g3 are implemented; g4 is completing missing closure scenarios, measured resource-bound evidence, authoritative-document synchronization and the D20 final validation/review/publication gates. M9.5 implementation remains blocked until repaired M9.4 re-closure and the planned independent audit.
   - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4 DONE/CLOSED through M9.4f at `b93ae6a`; M9.5 robustness/qualification design is next.
+**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4g remediation/re-closure is active after the post-closure audit of historical M9.4f at `b93ae6a`; M9.5 implementation is blocked pending repaired M9.4 re-closure and independent audit.
 
 M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
 

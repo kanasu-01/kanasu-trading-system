@@ -2432,3 +2432,108 @@ def test_m94g3_unknown_execution_failure_is_durably_classified(
 
     assert len(retrieval.calls) == 1
     assert len(execution_calls) == 1
+
+def test_m94g4_cancellation_requested_during_financial_execution_preserves_truthful_execution_result(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+    )
+
+    assert claimed is not None
+
+    original_execute = (
+        executor.successor_coordinator
+        .orchestrator
+        ._execute_candles
+    )
+
+    def execute_with_inflight_cancellation(
+        **kwargs,
+    ):
+        current = catalog.load_research_job(
+            claimed.job_id
+        )
+        assert current is not None
+        assert (
+            current.state
+            is ResearchJobState.RUNNING
+        )
+        assert current.attempt_id is not None
+
+        requested = (
+            catalog
+            .request_running_research_job_cancellation(
+                job_id=claimed.job_id,
+                requested_at=TERMINAL_AT,
+            )
+        )
+
+        assert (
+            requested.state
+            is ResearchJobState.RUNNING
+        )
+        assert (
+            requested.cancel_requested_at
+            == TERMINAL_AT
+        )
+        assert requested.attempt_id is not None
+
+        return original_execute(
+            **kwargs
+        )
+
+    (
+        executor.successor_coordinator
+        .orchestrator
+        ._execute_candles
+    ) = execute_with_inflight_cancellation
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.SUCCEEDED
+    )
+    assert terminal_job.attempt_id is not None
+    assert (
+        terminal_job.cancel_requested_at
+        == TERMINAL_AT
+    )
+
+    persisted_attempt = (
+        catalog.load_run_attempt(
+            terminal_job.attempt_id
+        )
+    )
+
+    assert persisted_attempt is not None
+    assert (
+        persisted_attempt.state
+        is RunAttemptState.SUCCEEDED
+    )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.EXECUTED
+    )
+
+    assert len(retrieval.calls) == 1
+    assert len(execution_calls) == 1

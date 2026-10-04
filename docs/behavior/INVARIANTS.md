@@ -164,7 +164,7 @@ Trial, ResearchJob, ExperimentSpec, RunAttempt and runtime/session identities re
 
 **Status:** VERIFIED
 
-A durable queued ResearchJob is claimed atomically by at most one worker. Cancellation and interruption states describe what actually happened rather than what was merely requested; running work is not falsely reported cancelled before cancellation becomes effective.
+A durable queued ResearchJob is claimed atomically by at most one worker. Cancellation and interruption states describe what actually happened rather than what was merely requested; running work is not falsely reported cancelled before cancellation becomes effective. Startup recovery changes only stale RUNNING work that requires reconciliation; already queued or terminal executed, reused, failed and cancelled work is not rewritten. If recovery persistence cannot be committed reliably, startup fails closed.
 
 ### RESEARCH-RULE-017 - Registered Trial population is immutable
 

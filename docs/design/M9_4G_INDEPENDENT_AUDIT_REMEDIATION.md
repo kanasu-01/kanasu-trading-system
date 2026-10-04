@@ -2,11 +2,13 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE - PRODUCTION IMPLEMENTATION NOT YET AUTHORIZED**
+**ACCEPTED DESIGN BASELINE - M9.4g1-M9.4g3 IMPLEMENTED; M9.4g4 RE-CLOSURE EVIDENCE ACTIVE**
 
 `M94G_DESIGN_ACCEPTED=True`
 
-`M94G_PRODUCTION_MUTATION_AUTHORIZED=False`
+`M94G_PRODUCTION_MUTATION_AUTHORIZED=True`
+
+`M94G_RECLOSURE_COMPLETE=False`
 
 Human acceptance recorded: 2026-10-03.
 
@@ -600,6 +602,45 @@ The accepted design baseline must first be reviewed, staged, committed
 and pushed under the normal separate human approval gates. After that
 published design baseline exists, beginning M9.4g1 production
 implementation requires a separate explicit human authorization.
+
+## 9.1 M9.4g4 evidence status - 2026-10-04
+
+The accepted D17 closure scenarios now have direct regression evidence for:
+
+1. one mixed-state restart containing QUEUED, RUNNING, EXECUTED, REUSED,
+   FAILED and CANCELLED work, where recovery changes only stale RUNNING work
+   to INTERRUPTED and preserves the six-Trial denominator;
+2. cancellation requested while financial computation is already running,
+   where truthful completed execution is retained rather than fabricated as
+   cancelled;
+3. recovery persistence failure, transaction rollback and fail-closed startup
+   refusal;
+4. explicit retry after recovered interrupted bound work while preserving the
+   Trial, ExperimentSpec binding and prior attempt history;
+5. real ASGI workflow persistence into the independent SQLite catalog; and
+6. representative resource measurement at the reviewed
+   `research_max_trials_per_revision=5000` ceiling.
+
+The one-off local resource measurement used production registration code with
+one continuous membership episode and 5,000 distinct parameter variants on
+Windows 10 AMD64, Python 3.11.9 and SQLite 3.45.1 at repository head
+`a32e22d5b59bc625595d0c0ff3e6036a5e4ac527`.
+
+Observed measurement:
+
+- 5,000 Trials registered and 5,000 Trials persisted;
+- elapsed registration time: 10.837931 seconds;
+- traced peak Python memory: 11.857 MiB;
+- SQLite database size: 6.855 MiB;
+- content-addressed artifact footprint: 1.104 MiB across two files.
+
+This is local safety-envelope evidence, not a throughput SLA or production
+capacity guarantee. The value 5,000 remains a backend safety ceiling and
+changing it requires explicit review. It is operational configuration and does
+not participate in StudyRevision or Trial identity.
+
+D19 documentation synchronization is part of M9.4g4. D20 automated validation has now passed: 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests, with `git diff --check` clean.
+M9.4 must not be represented as re-closed until final human diff review, separately approved staging/commit/push and post-push verification are complete.
 
 ## 10. Implementation order
 

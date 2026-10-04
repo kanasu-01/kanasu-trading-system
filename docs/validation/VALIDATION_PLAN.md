@@ -1125,7 +1125,7 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9.4 - Registered Studies and bounded local batch execution
 
-**Status:** DONE/CLOSED - FINAL DIFF/STAGING/COMMIT/PUSH REVIEW COMPLETED
+**Status:** M9.4g INDEPENDENT-AUDIT REMEDIATION / RE-CLOSURE ACTIVE
 
 M9.4 closure evidence establishes the following accepted boundaries:
 
@@ -1165,7 +1165,11 @@ Published implementation evidence:
 
 The M9.4f HTTP boundary intentionally exposes Study creation/reopen, StudyRevision registration, Trial/progress/aggregation/lineage reads, Start and cancellation. Start initializes the durable queue; it does not manufacture a production execution-input resolver. Actual bounded queue draining remains composed through the application seam with an explicit execution handler until authoritative provider/procedure/data mappings are supplied. This preserves the M9.3 truthfulness boundary rather than guessing from legacy symbol/token data.
 
-The detailed normative baseline and closure evidence record is `docs/design/REGISTERED_STUDIES_BATCH_EXECUTION.md`. M9.4 is DONE/CLOSED after final candidate diff review, controlled staging, commit and push of the M9.4f implementation/closure slice at `b93ae6a`.
+The detailed normative baseline and closure evidence record is `docs/design/REGISTERED_STUDIES_BATCH_EXECUTION.md`. The M9.4f slice was historically published at `b93ae6a`, but a later independent post-closure audit established bounded correctness and closure-evidence gaps. M9.4g remediation/re-closure is therefore active.
+
+Additional M9.4g4 closure evidence now covers the required mixed-state restart, cancellation-during-financial-computation, recovery-persistence rollback/fail-closed startup, retry-after-recovery, and real ASGI persistence scenarios. The 5,000-Trial registration ceiling also has representative one-off local measurement evidence using production registration code: 5,000 registered/persisted Trials in 10.837931 seconds, 11.857 MiB traced peak Python memory, 6.855 MiB SQLite storage and 1.104 MiB artifacts on Windows 10 AMD64 / Python 3.11.9 / SQLite 3.45.1. This is safety-envelope evidence rather than a performance SLA.
+
+D20 automated validation has now passed: 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests, with `git diff --check` clean. M9.4 is not re-closed until human final diff review, separately approved stage/commit/push and post-push repository verification are complete.
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:
