@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from core.config.backtest_config import BacktestConfig
 from core.market_data.historical_coverage import TimeRange
 from core.research.backtest_research_orchestrator import (
+    AuthoritativeResearchStateError,
     BacktestResearchExecution,
     BacktestResearchOrchestrator,
     PreparedBacktestResearchSpecification,
@@ -157,22 +158,27 @@ class SuccessorBacktestResearchCoordinator:
                     provenance=provenance,
                 )
 
-                artifact = (
-                    self.orchestrator
-                    .artifact_store
-                    .persist_dataset_reference(
-                        reference,
-                        created_at=created_at,
+                try:
+                    artifact = (
+                        self.orchestrator
+                        .artifact_store
+                        .persist_dataset_reference(
+                            reference,
+                            created_at=created_at,
+                        )
                     )
-                )
 
-                artifact = (
-                    self.orchestrator
-                    .catalog_store
-                    .save_artifact(
-                        artifact
+                    artifact = (
+                        self.orchestrator
+                        .catalog_store
+                        .save_artifact(
+                            artifact
+                        )
                     )
-                )
+                except Exception as error:
+                    raise AuthoritativeResearchStateError(
+                        error
+                    ) from error
 
                 return PreparedResearchRetrieval(
                     candles=candles,
@@ -183,6 +189,8 @@ class SuccessorBacktestResearchCoordinator:
                     ),
                 )
 
+            except AuthoritativeResearchStateError:
+                raise
             except Exception as error:
                 raise PreparedResearchSpecificationError(
                     error

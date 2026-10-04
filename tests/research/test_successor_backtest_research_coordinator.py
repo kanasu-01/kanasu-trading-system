@@ -9,6 +9,7 @@ from core.config.backtest_config import BacktestConfig
 from core.entities.candle import Candle
 from core.market_data.historical_coverage import TimeRange
 from core.research.backtest_research_orchestrator import (
+    AuthoritativeResearchStateError,
     BacktestResearchOrchestrator,
 )
 from core.research.models.dataset import (
@@ -549,7 +550,7 @@ def test_successor_retrieval_failure_keeps_existing_incomplete_evidence_semantic
 
 
 
-def test_dataset_reference_persistence_failure_is_classified_as_specification_preparation(
+def test_dataset_reference_persistence_failure_propagates_authoritative_state_failure(
     tmp_path,
     monkeypatch,
 ):
@@ -599,7 +600,7 @@ def test_dataset_reference_persistence_failure_is_classified_as_specification_pr
     )
 
     with pytest.raises(
-        OSError,
+        AuthoritativeResearchStateError,
         match=(
             "dataset reference persistence failed"
         ),
@@ -628,22 +629,7 @@ def test_dataset_reference_persistence_failure_is_classified_as_specification_pr
         "evidence-reference-persist-failed"
     )
 
-    assert evidence is not None
-
-    assert (
-        evidence.status
-        is ResearchEvidenceStatus.INCOMPLETE
-    )
-
-    assert evidence.summary == (
-        "research_specification_preparation_failed: "
-        "dataset reference persistence failed"
-    )
-
-    assert (
-        evidence.artifact_references
-        == ()
-    )
+    assert evidence is None
 
     assert (
         row_count(
@@ -670,7 +656,7 @@ def test_dataset_reference_persistence_failure_is_classified_as_specification_pr
     )
 
 
-def test_dataset_reference_catalog_failure_is_classified_as_specification_preparation(
+def test_dataset_reference_catalog_failure_propagates_authoritative_state_failure(
     tmp_path,
     monkeypatch,
 ):
@@ -727,7 +713,7 @@ def test_dataset_reference_catalog_failure_is_classified_as_specification_prepar
     )
 
     with pytest.raises(
-        ValueError,
+        AuthoritativeResearchStateError,
         match=(
             "dataset reference catalog registration failed"
         ),
@@ -756,32 +742,7 @@ def test_dataset_reference_catalog_failure_is_classified_as_specification_prepar
         "evidence-reference-catalog-failed"
     )
 
-    assert evidence is not None
-
-    assert (
-        evidence.status
-        is ResearchEvidenceStatus.INCOMPLETE
-    )
-
-    assert evidence.summary == (
-        "research_specification_preparation_failed: "
-        "dataset reference catalog registration failed"
-    )
-
-    assert (
-        evidence.artifact_references
-        == ()
-    )
-
-    artifact = captured["artifact"]
-
-    assert artifact_store.load_bytes(
-        artifact.artifact_id
-    )
-
-    assert catalog.load_artifact(
-        artifact.artifact_id
-    ) is None
+    assert evidence is None
 
     assert (
         row_count(

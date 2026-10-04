@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -688,3 +688,154 @@ def test_canonical_decoder_rejects_wrong_schema_and_noncanonical_bytes(
             raw + b" ",
             schema=STUDY_REVISION_SCHEMA_ID,
         )
+
+
+def test_m94g2_mixed_offset_registration_replay_is_idempotent(
+    tmp_path,
+):
+    catalog, _, service = _environment(
+        tmp_path
+    )
+
+    definition = UniverseDefinition(
+        name="mixed-offset-idempotence",
+        selection_spec="fixture",
+    )
+
+    plus_fourteen = timezone(
+        timedelta(hours=14)
+    )
+    minus_ten = timezone(
+        timedelta(hours=-10)
+    )
+
+    # These starts intentionally sort differently as ISO text versus
+    # absolute chronology:
+    #   first_start  == 2020-01-01 00:00 UTC
+    #   second_start == 2020-01-01 01:30 UTC
+    # but second_start's stored ISO text begins with 2019-12-31.
+    first_start = datetime(
+        2020,
+        1,
+        1,
+        14,
+        0,
+        tzinfo=plus_fourteen,
+    )
+    first_end = datetime(
+        2020,
+        1,
+        1,
+        15,
+        30,
+        tzinfo=plus_fourteen,
+    )
+    second_start = datetime(
+        2019,
+        12,
+        31,
+        15,
+        30,
+        tzinfo=minus_ten,
+    )
+    second_end = datetime(
+        2020,
+        1,
+        1,
+        18,
+        0,
+        tzinfo=minus_ten,
+    )
+
+    assert first_end == second_start
+    assert first_start < second_start
+
+    first = _snapshot(
+        definition,
+        ("NSE:A",),
+        first_start,
+        first_end,
+        provenance="mixed-offset-source-1",
+    )
+    second = _snapshot(
+        definition,
+        ("NSE:B",),
+        second_start,
+        second_end,
+        provenance="mixed-offset-source-2",
+    )
+
+    def register(snapshots):
+        return service.register_study_revision(
+            study_id="study-m94b",
+            research_intent=(
+                "mixed-offset registration idempotence"
+            ),
+            strategy_procedure_id=(
+                "sma-crossover-v1"
+            ),
+            timeframe="1d",
+            research_range=TimeRange(
+                first_start,
+                second_end,
+            ),
+            timezone="UTC",
+            initial_capital=1_000_000.0,
+            risk_economic_configuration={
+                "risk_per_trade_pct": 1.0,
+                "slippage_pct": 0.05,
+                "brokerage_pct": 0.01,
+            },
+            parameter_variants=(
+                {"fast": 5, "slow": 20},
+            ),
+            universe_definition=definition,
+            universe_snapshots=snapshots,
+            require_point_in_time=True,
+            data_treatment_basis={
+                "price_adjustment": "raw",
+                "corporate_actions": "explicit",
+            },
+            repository_revision=(
+                "repo-revision-1"
+            ),
+            evidence_reuse_policy=(
+                EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            ),
+            registered_at=APR,
+        )
+
+    one = register(
+        (first, second)
+    )
+    two = register(
+        (second, first)
+    )
+
+    assert (
+        one.revision.study_revision_id
+        == two.revision.study_revision_id
+    )
+    assert (
+        one.revision.registered_at
+        == two.revision.registered_at
+        == APR
+    )
+    assert one.trials == two.trials
+
+    assert [
+        (
+            trial.instrument_id,
+            trial.membership_episode_start,
+        )
+        for trial in two.trials
+    ] == [
+        ("NSE:A", first_start),
+        ("NSE:B", second_start),
+    ]
+
+    assert len(
+        catalog.list_study_revisions(
+            "study-m94b"
+        )
+    ) == 1

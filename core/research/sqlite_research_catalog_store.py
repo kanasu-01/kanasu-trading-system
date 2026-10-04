@@ -1776,8 +1776,20 @@ class SQLiteResearchCatalogStore:
                     ).fetchall()
 
                     existing_trials = tuple(
-                        self._trial_from_row(row)
-                        for row in existing_trial_rows
+                        sorted(
+                            (
+                                self._trial_from_row(row)
+                                for row in existing_trial_rows
+                            ),
+                            key=lambda trial: (
+                                trial.membership_episode_start,
+                                trial.membership_episode_end,
+                                trial.instrument_id,
+                                trial.membership_evidence_fingerprint,
+                                trial.parameter_configuration_fingerprint,
+                                trial.trial_id,
+                            ),
+                        )
                     )
 
                     existing_identity = tuple(
@@ -1992,7 +2004,26 @@ class SQLiteResearchCatalogStore:
         trial: Trial,
         initial_event: TrialDispositionEvent,
     ) -> Trial:
-        """Persist one PENDING Trial and its initial event atomically."""
+        """
+        Reject supported single-Trial registration bypasses.
+
+        Whole-population registration is the sole authority for the
+        immutable initial Trial denominator.
+        """
+        raise ValueError(
+            "single-Trial persistence is unsupported; "
+            "use whole-population StudyRevision registration"
+        )
+
+    def _save_registered_trial(
+        self,
+        trial: Trial,
+        initial_event: TrialDispositionEvent,
+    ) -> Trial:
+        """
+        Legacy storage primitive retained only for internal/test
+        persistence verification. It is not a supported lifecycle API.
+        """
 
         if not isinstance(trial, Trial):
             raise TypeError("trial must be a Trial")
@@ -6472,7 +6503,24 @@ class SQLiteResearchCatalogStore:
         self,
         job: ResearchJob,
     ) -> ResearchJob:
-        """Persist one initial QUEUED ResearchJob."""
+        """
+        Reject supported lower-level ResearchJob insertion bypasses.
+
+        Initial jobs belong to Start; retry jobs belong to Retry.
+        """
+        raise ValueError(
+            "direct ResearchJob persistence is unsupported; "
+            "use authoritative Start or Retry"
+        )
+
+    def _save_queued_research_job(
+        self,
+        job: ResearchJob,
+    ) -> ResearchJob:
+        """
+        Legacy storage primitive retained only for internal/test
+        persistence verification. It is not a supported lifecycle API.
+        """
 
         if not isinstance(job, ResearchJob):
             raise TypeError(

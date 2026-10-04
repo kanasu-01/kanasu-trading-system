@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from core.market_data.historical_retrieval import (
     IncompleteHistoricalCoverageError,
 )
+from core.research.backtest_research_orchestrator import (
+    AuthoritativeResearchStateError,
+)
 from core.research.claimed_trial_execution_inputs import (
     ClaimedTrialExecutionInputs,
     TrialExecutionInputResolver,
@@ -503,6 +506,12 @@ class ClaimedResearchJobExecutor:
                     "match the Trial membership episode"
                 )
 
+        except AuthoritativeResearchStateError:
+            # D08: authoritative persistence/integrity failure is not
+            # an independent Trial outcome. Leave the already-claimed
+            # job truthfully RUNNING for explicit durable recovery and
+            # propagate to the worker-pool fail-closed boundary.
+            raise
         except SuccessorHistoricalRetrievalError as error:
             if isinstance(
                 error.original_error,

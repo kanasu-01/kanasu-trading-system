@@ -2204,3 +2204,210 @@ def test_duplicate_retry_request_cannot_create_second_active_job(
             trial.trial_id
         )
     ) == 3
+
+
+def test_m94g2_public_retry_job_insert_cannot_bypass_retry(
+    tmp_path,
+):
+    catalog, trial, job, _ = _environment(
+        tmp_path
+    )
+
+    catalog.fail_running_job_without_attempt(
+        job_id=job.job_id,
+        terminal_at=JUN,
+        failure_classification=(
+            "fixture_retryable_pre_attempt_failure"
+        ),
+        failure_message=(
+            "retryable preparation failure"
+        ),
+    )
+
+    jobs_before = (
+        catalog.list_research_jobs_for_trial(
+            trial.trial_id
+        )
+    )
+
+    bypass = ResearchJob(
+        job_id="out-of-band-retry",
+        trial_id=trial.trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=JUN,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="authoritative Start or Retry",
+    ):
+        catalog.save_queued_research_job(
+            bypass
+        )
+
+    assert (
+        catalog.list_research_jobs_for_trial(
+            trial.trial_id
+        )
+        == jobs_before
+    )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.FAILED
+    )
+
+    updated_trial, retry_job, _ = (
+        catalog.retry_trial(
+            trial.trial_id,
+            retry_requested_at=JUN,
+        )
+    )
+
+    assert (
+        updated_trial.disposition
+        is TrialDisposition.PENDING
+    )
+    assert (
+        retry_job.state
+        is ResearchJobState.QUEUED
+    )
+    assert retry_job.job_id != bypass.job_id
+
+
+def test_m94g2_trial_denominator_stays_fixed_across_failure_retry_and_reuse(
+    tmp_path,
+):
+    catalog, trial, initial_job, spec = _environment(
+        tmp_path,
+        attempt_id_factory=(
+            lambda: "attempt-denominator-source"
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    def snapshot():
+        return queue.snapshot(
+            trial.study_revision_id
+        )
+
+    initial = snapshot()
+
+    assert initial.total_registered_trials == 1
+    assert initial.total_jobs == 1
+    assert initial.running_jobs == 1
+
+    catalog.fail_running_job_without_attempt(
+        job_id=initial_job.job_id,
+        terminal_at=JUN,
+        failure_classification=(
+            "fixture_denominator_failure"
+        ),
+        failure_message=(
+            "denominator failure fixture"
+        ),
+    )
+
+    failed = snapshot()
+
+    assert failed.total_registered_trials == 1
+    assert failed.total_jobs == 1
+    assert failed.failed_trials == 1
+    assert failed.failed_jobs == 1
+
+    updated_trial, retry_job, _ = (
+        catalog.retry_trial(
+            trial.trial_id,
+            retry_requested_at=JUN,
+        )
+    )
+
+    assert (
+        updated_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+    retried = snapshot()
+
+    assert retried.total_registered_trials == 1
+    assert retried.total_jobs == 2
+    assert retried.pending_trials == 1
+    assert retried.queued_jobs == 1
+    assert retried.failed_jobs == 1
+
+    claimed_retry = (
+        catalog.claim_next_research_job(
+            trial.study_revision_id,
+            "worker-denominator-reuse",
+            JUN,
+            max_running_jobs=1,
+        )
+    )
+
+    assert claimed_retry is not None
+    assert claimed_retry.job_id == retry_job.job_id
+
+    source, _, _ = _create_reuse_source(
+        tmp_path,
+        catalog,
+        spec,
+    )
+
+    reused_trial, reused_job, _ = (
+        catalog.complete_running_job_with_exact_reuse(
+            job_id=claimed_retry.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            reused_attempt_id=(
+                source.attempt_id
+            ),
+            terminal_at=JUN,
+        )
+    )
+
+    assert (
+        reused_trial.disposition
+        is TrialDisposition.REUSED
+    )
+    assert (
+        reused_job.completion_kind
+        is ResearchJobCompletionKind.REUSED
+    )
+
+    final = snapshot()
+
+    assert final.total_registered_trials == 1
+    assert final.total_jobs == 2
+    assert final.reused_trials == 1
+    assert final.succeeded_jobs == 1
+    assert final.failed_jobs == 1
+
+    jobs = (
+        catalog.list_research_jobs_for_trial(
+            trial.trial_id
+        )
+    )
+
+    assert len(jobs) == 2
+    assert {
+        job.job_id
+        for job in jobs
+    } == {
+        initial_job.job_id,
+        retry_job.job_id,
+    }

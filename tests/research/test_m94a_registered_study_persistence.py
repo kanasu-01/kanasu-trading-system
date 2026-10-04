@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from core.research.models.registered_study import (
+    STUDY_REVISION_SCHEMA_ID,
     EvidenceReusePolicy,
     ResearchJob,
     ResearchJobState,
@@ -176,7 +177,7 @@ def prepared_trial_store(tmp_path):
     store = prepared_store(tmp_path)
     registered = trial()
     event = initial_event()
-    store.save_registered_trial(
+    store._save_registered_trial(
         registered,
         event,
     )
@@ -302,7 +303,7 @@ def test_trial_and_initial_event_commit_atomically(
     registered = trial()
     event = initial_event()
 
-    saved = store.save_registered_trial(
+    saved = store._save_registered_trial(
         registered,
         event,
     )
@@ -337,7 +338,7 @@ def test_trial_registration_failure_leaves_no_partial_trial(
         ValueError,
         match="existing StudyRevision",
     ):
-        store.save_registered_trial(
+        store._save_registered_trial(
             orphan,
             event,
         )
@@ -367,7 +368,7 @@ def test_trial_registration_rejects_non_initial_event(
         ValueError,
         match="sequence 1",
     ):
-        store.save_registered_trial(
+        store._save_registered_trial(
             registered,
             bad_event,
         )
@@ -385,7 +386,7 @@ def test_trial_exact_registration_replay_is_idempotent(
     event = initial_event()
 
     assert (
-        store.save_registered_trial(
+        store._save_registered_trial(
             registered,
             event,
         )
@@ -393,7 +394,7 @@ def test_trial_exact_registration_replay_is_idempotent(
     )
 
     assert (
-        store.save_registered_trial(
+        store._save_registered_trial(
             registered,
             event,
         )
@@ -419,7 +420,7 @@ def test_queued_job_round_trip_has_no_run_attempt(
         created_at=CREATED_AT,
     )
 
-    assert store.save_queued_research_job(
+    assert store._save_queued_research_job(
         job
     ) == job
     assert store.load_research_job(
@@ -451,7 +452,7 @@ def test_job_persistence_rejects_nonqueued_lifecycle_state(
         ValueError,
         match="uncancelled QUEUED",
     ):
-        store.save_queued_research_job(running)
+        store._save_queued_research_job(running)
 
     assert store.load_research_job(
         running.job_id
@@ -476,7 +477,7 @@ def test_job_requires_existing_trial(
         ValueError,
         match="existing Trial",
     ):
-        store.save_queued_research_job(orphan)
+        store._save_queued_research_job(orphan)
 
 
 def test_reopen_preserves_registered_catalog_records(
@@ -489,7 +490,7 @@ def test_reopen_preserves_registered_catalog_records(
     first.save_artifact(plan_artifact())
     first.save_artifact(membership_evidence_artifact())
     first.save_study_revision(revision())
-    first.save_registered_trial(
+    first._save_registered_trial(
         trial(),
         initial_event(),
     )
@@ -500,7 +501,7 @@ def test_reopen_preserves_registered_catalog_records(
         state=ResearchJobState.QUEUED,
         created_at=CREATED_AT,
     )
-    first.save_queued_research_job(job)
+    first._save_queued_research_job(job)
 
     reopened = SQLiteResearchCatalogStore(path)
 
@@ -537,7 +538,7 @@ def test_trial_requires_registered_membership_evidence_artifact(
         ValueError,
         match="TRIAL_MEMBERSHIP_EVIDENCE",
     ):
-        store.save_registered_trial(
+        store._save_registered_trial(
             registered,
             initial_event(),
         )
@@ -579,7 +580,175 @@ def test_trial_rejects_wrong_membership_evidence_artifact_kind(
         ValueError,
         match="TRIAL_MEMBERSHIP_EVIDENCE",
     ):
-        store.save_registered_trial(
+        store._save_registered_trial(
             trial(),
             initial_event(),
         )
+
+
+def _m94g2_complete_registered_store(tmp_path):
+    store = SQLiteResearchCatalogStore(
+        tmp_path / "research.sqlite3"
+    )
+    store.save_study(study())
+
+    valid_plan = plan_artifact()
+
+    store.save_artifact(
+        ResearchArtifact(
+            artifact_id=valid_plan.artifact_id,
+            artifact_kind=valid_plan.artifact_kind,
+            schema_id=STUDY_REVISION_SCHEMA_ID,
+            relative_path=valid_plan.relative_path,
+            byte_count=valid_plan.byte_count,
+            created_at=valid_plan.created_at,
+        )
+    )
+
+    store.save_artifact(
+        membership_evidence_artifact()
+    )
+
+    registered_revision = revision()
+    authoritative_revision_id = (
+        registered_revision.plan_artifact_id
+    )
+    registered_trial = trial(
+        study_revision_id=authoritative_revision_id,
+    )
+    event = initial_event(
+        trial_id=registered_trial.trial_id,
+    )
+
+    persisted_revision, persisted_trials = (
+        store.save_registered_revision_population(
+            study_id=registered_revision.study_id,
+            study_revision_id=(
+                authoritative_revision_id
+            ),
+            plan_artifact_id=(
+                authoritative_revision_id
+            ),
+            repository_revision=(
+                registered_revision.repository_revision
+            ),
+            evidence_reuse_policy=(
+                registered_revision.evidence_reuse_policy
+            ),
+            registered_at=(
+                registered_revision.registered_at
+            ),
+            trials=(registered_trial,),
+            initial_events=(event,),
+        )
+    )
+
+    assert len(persisted_trials) == 1
+
+    return (
+        store,
+        persisted_revision,
+        persisted_trials[0],
+    )
+
+
+def test_m94g2_public_trial_append_rejected_after_complete_registration(
+    tmp_path,
+):
+    (
+        store,
+        registered_revision,
+        registered_trial,
+    ) = _m94g2_complete_registered_store(
+        tmp_path
+    )
+
+    extra = trial(
+        trial_id=fp("1"),
+        study_revision_id=(
+            registered_revision.study_revision_id
+        ),
+    )
+    extra_event = initial_event(
+        event_id="event-m94g2-extra",
+        trial_id=extra.trial_id,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="single-Trial persistence is unsupported",
+    ):
+        store.save_registered_trial(
+            extra,
+            extra_event,
+        )
+
+    assert store.load_trial(
+        registered_trial.trial_id
+    ) == registered_trial
+    assert store.load_trial(
+        extra.trial_id
+    ) is None
+    assert store.load_trial_disposition_events(
+        extra.trial_id
+    ) == ()
+
+
+def test_m94g2_public_trial_append_rejected_after_start_without_mutation(
+    tmp_path,
+):
+    (
+        store,
+        registered_revision,
+        registered_trial,
+    ) = _m94g2_complete_registered_store(
+        tmp_path
+    )
+
+    started_at = CREATED_AT + timedelta(
+        days=1
+    )
+
+    store.start_study_revision_batch(
+        registered_revision.study_revision_id,
+        started_at,
+    )
+
+    jobs_before = (
+        store.list_research_jobs_for_trial(
+            registered_trial.trial_id
+        )
+    )
+
+    extra = trial(
+        trial_id=fp("2"),
+        study_revision_id=(
+            registered_revision.study_revision_id
+        ),
+    )
+    extra_event = initial_event(
+        event_id="event-m94g2-after-start",
+        trial_id=extra.trial_id,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="single-Trial persistence is unsupported",
+    ):
+        store.save_registered_trial(
+            extra,
+            extra_event,
+        )
+
+    assert store.load_trial(
+        extra.trial_id
+    ) is None
+    assert store.load_trial_disposition_events(
+        extra.trial_id
+    ) == ()
+    assert (
+        store.list_research_jobs_for_trial(
+            registered_trial.trial_id
+        )
+        == jobs_before
+    )

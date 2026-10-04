@@ -14,6 +14,7 @@ from core.market_data.historical_retrieval import (
     IncompleteHistoricalCoverageError,
 )
 from core.research.backtest_research_orchestrator import (
+    AuthoritativeResearchStateError,
     BacktestResearchOrchestrator,
 )
 from core.research.claimed_research_job_executor import (
@@ -290,6 +291,8 @@ def _environment(
     execution_error=None,
     retrieval_error=None,
     retrieval_hook=None,
+    members=(INSTRUMENT_ID,),
+    claim_job=True,
 ):
     database = (
         tmp_path / "research.sqlite3"
@@ -339,7 +342,7 @@ def _environment(
 
     snapshot = UniverseSnapshot(
         definition=definition,
-        members=(INSTRUMENT_ID,),
+        members=tuple(members),
         quality=UniverseQuality.PIT_VERIFIED,
         as_of=START,
         provenance_refs=(
@@ -413,16 +416,19 @@ def _environment(
         started_at=BATCH_STARTED_AT,
     )
 
-    claimed = (
-        catalog.claim_next_research_job(
-            revision_id,
-            "worker-claimed-job",
-            CLAIMED_AT,
-            max_running_jobs=1,
-        )
-    )
+    claimed = None
 
-    assert claimed is not None
+    if claim_job:
+        claimed = (
+            catalog.claim_next_research_job(
+                revision_id,
+                "worker-claimed-job",
+                CLAIMED_AT,
+                max_running_jobs=1,
+            )
+        )
+
+        assert claimed is not None
 
     def legacy_retrieval_must_not_run(
         **kwargs,
@@ -1089,7 +1095,7 @@ def test_provider_retrieval_failure_is_classified_before_attempt(
     assert execution_calls == []
 
 
-def test_dataset_reference_failure_is_specification_preparation_failure(
+def test_dataset_reference_persistence_failure_propagates_fail_closed(
     tmp_path,
 ):
     (
@@ -1120,23 +1126,25 @@ def test_dataset_reference_failure_is_specification_preparation_failure(
         .persist_dataset_reference
     ) = fail_dataset_reference_persistence
 
-    terminal_job = executor.execute(
-        claimed
-    )
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match="dataset reference persistence failed",
+    ):
+        executor.execute(
+            claimed
+        )
 
-    assert (
-        terminal_job.state
-        is ResearchJobState.FAILED
+    persisted_job = catalog.load_research_job(
+        claimed.job_id
     )
-    assert terminal_job.attempt_id is None
+    assert persisted_job is not None
     assert (
-        terminal_job.failure_classification
-        == "exact_specification_preparation_failed"
+        persisted_job.state
+        is ResearchJobState.RUNNING
     )
-    assert (
-        terminal_job.failure_message
-        == "dataset reference persistence failed"
-    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.failure_classification is None
+    assert persisted_job.failure_message is None
 
     terminal_trial = catalog.load_trial(
         trial.trial_id
@@ -1144,8 +1152,9 @@ def test_dataset_reference_failure_is_specification_preparation_failure(
     assert terminal_trial is not None
     assert (
         terminal_trial.disposition
-        is TrialDisposition.FAILED
+        is TrialDisposition.PENDING
     )
+
     assert _attempt_count(catalog) == 0
     assert len(retrieval.calls) == 1
     assert execution_calls == []
@@ -2054,3 +2063,227 @@ def test_m94g1_reuse_rejects_corrupt_source_dataset_lineage(
     assert terminal_job.attempt_id != prior.attempt_id
     assert _attempt_count(catalog) == 2
     assert len(execution_calls) == 2
+
+
+def test_m94g2_worker_pool_stops_after_authoritative_artifact_persistence_failure(
+    tmp_path,
+):
+    (
+        catalog,
+        first_trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        members=(
+            INSTRUMENT_ID,
+            "NSE-EQ-XYZ",
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    revision_id = first_trial.study_revision_id
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    original_persist = (
+        executor.successor_coordinator
+        .orchestrator.artifact_store
+        .persist_dataset_reference
+    )
+    persist_calls = 0
+
+    def fail_first_dataset_reference(
+        *args,
+        **kwargs,
+    ):
+        nonlocal persist_calls
+        persist_calls += 1
+
+        if persist_calls == 1:
+            raise OSError(
+                "authoritative dataset reference persistence failed"
+            )
+
+        return original_persist(
+            *args,
+            **kwargs,
+        )
+
+    (
+        executor.successor_coordinator
+        .orchestrator.artifact_store
+        .persist_dataset_reference
+    ) = fail_first_dataset_reference
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "authoritative dataset reference "
+            "persistence failed"
+        ),
+    ):
+        queue.run_worker_pool(
+            revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-g2-{slot}"
+            ),
+            claimed_at_factory=lambda: CLAIMED_AT,
+            execute_claimed_job=executor.execute,
+        )
+
+    snapshot = queue.snapshot(
+        revision_id
+    )
+
+    assert snapshot.total_registered_trials == 2
+    assert snapshot.running_jobs == 1
+    assert snapshot.queued_jobs == 1
+    assert snapshot.failed_jobs == 0
+    assert persist_calls == 1
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 0
+    assert execution_calls == []
+
+
+def test_m94g2_worker_pool_continues_after_ordinary_trial_failure(
+    tmp_path,
+):
+    (
+        catalog,
+        first_trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        retrieval_error=RuntimeError(
+            "provider unavailable"
+        ),
+        members=(
+            INSTRUMENT_ID,
+            "NSE-EQ-XYZ",
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    revision_id = first_trial.study_revision_id
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    snapshot = queue.run_worker_pool(
+        revision_id,
+        worker_id_factory=(
+            lambda slot: f"worker-g2-{slot}"
+        ),
+        claimed_at_factory=lambda: CLAIMED_AT,
+        execute_claimed_job=executor.execute,
+    )
+
+    assert snapshot.total_registered_trials == 2
+    assert snapshot.running_jobs == 0
+    assert snapshot.queued_jobs == 0
+    assert snapshot.failed_jobs == 2
+    assert len(retrieval.calls) == 2
+    assert _attempt_count(catalog) == 0
+    assert execution_calls == []
+
+
+def test_m94g2_manifest_persistence_failure_propagates_without_false_evidence(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+    )
+
+    def fail_manifest_persistence(
+        *args,
+        **kwargs,
+    ):
+        raise OSError(
+            "authoritative manifest persistence failed"
+        )
+
+    (
+        executor.successor_coordinator
+        .orchestrator.artifact_store
+        .persist_backtest_manifest
+    ) = fail_manifest_persistence
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match="authoritative manifest persistence failed",
+    ):
+        executor.execute(
+            claimed
+        )
+
+    persisted_job = catalog.load_research_job(
+        claimed.job_id
+    )
+
+    assert persisted_job is not None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.failure_classification is None
+    assert persisted_job.failure_message is None
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+    with closing(
+        sqlite3.connect(
+            catalog.database_path
+        )
+    ) as connection:
+        evidence_count = connection.execute(
+            "SELECT COUNT(*) FROM research_evidence"
+        ).fetchone()[0]
+
+    assert evidence_count == 0
+    assert _attempt_count(catalog) == 0
+    assert len(retrieval.calls) == 1
+    assert execution_calls == []

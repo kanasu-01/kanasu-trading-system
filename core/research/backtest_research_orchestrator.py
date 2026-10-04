@@ -169,6 +169,40 @@ class PreparedResearchSpecificationError(RuntimeError):
         )
 
 
+class AuthoritativeResearchStateError(RuntimeError):
+    """
+    Authoritative research persistence/integrity state could not be
+    durably established.
+
+    This is not an ordinary independent Trial outcome. Callers must
+    propagate it to the scheduler fail-closed boundary so no new job is
+    claimed by the affected worker-pool run.
+    """
+
+    def __init__(
+        self,
+        original_error: Exception,
+    ):
+        if not isinstance(
+            original_error,
+            Exception,
+        ):
+            raise TypeError(
+                "original_error must be an Exception"
+            )
+
+        self.original_error = original_error
+
+        message = str(original_error)
+
+        if not message:
+            message = type(
+                original_error
+            ).__name__
+
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class PreparedBacktestResearchSpecification:
     """
@@ -503,6 +537,10 @@ class BacktestResearchOrchestrator:
                     prepared.artifact_references
                 )
 
+        except AuthoritativeResearchStateError:
+            # Authoritative persistence/integrity failure is not an
+            # ordinary Trial-specific preparation outcome.
+            raise
         except PreparedResearchSpecificationError as error:
             original_error = error.original_error
 
@@ -555,19 +593,24 @@ class BacktestResearchOrchestrator:
                 runtime_context=runtime_context,
             )
 
-            manifest_artifact = (
-                self.artifact_store
-                .persist_backtest_manifest(
-                    manifest,
-                    created_at=self._clock(),
+            try:
+                manifest_artifact = (
+                    self.artifact_store
+                    .persist_backtest_manifest(
+                        manifest,
+                        created_at=self._clock(),
+                    )
                 )
-            )
 
-            manifest_artifact = (
-                self.catalog_store.save_artifact(
-                    manifest_artifact
+                manifest_artifact = (
+                    self.catalog_store.save_artifact(
+                        manifest_artifact
+                    )
                 )
-            )
+            except Exception as error:
+                raise AuthoritativeResearchStateError(
+                    error
+                ) from error
 
             manifest_reference = (
                 research_artifact_reference(
@@ -581,6 +624,11 @@ class BacktestResearchOrchestrator:
                 )
             )
 
+        except AuthoritativeResearchStateError:
+            # Authoritative persistence/integrity failure must reach
+            # the scheduler unchanged and must not be represented as
+            # an ordinary incomplete research outcome.
+            raise
         except Exception as error:
             self._try_pre_spec_evidence(
                 dataset_context=dataset_context,
@@ -614,27 +662,32 @@ class BacktestResearchOrchestrator:
         experiment_spec_id = None
 
         if identity.is_exact:
-            spec = (
-                self.catalog_store
-                .resolve_experiment_spec(
-                    computation_kind=(
-                        ComputationKind.BACKTEST
-                    ),
-                    manifest_artifact_id=(
-                        manifest_artifact.artifact_id
-                    ),
-                    dataset_fingerprint=(
-                        dataset_fp
-                    ),
-                    configuration_fingerprint=(
-                        configuration_fp
-                    ),
-                    repository_revision=(
-                        identity.repository_revision
-                    ),
-                    created_at=self._clock(),
+            try:
+                spec = (
+                    self.catalog_store
+                    .resolve_experiment_spec(
+                        computation_kind=(
+                            ComputationKind.BACKTEST
+                        ),
+                        manifest_artifact_id=(
+                            manifest_artifact.artifact_id
+                        ),
+                        dataset_fingerprint=(
+                            dataset_fp
+                        ),
+                        configuration_fingerprint=(
+                            configuration_fp
+                        ),
+                        repository_revision=(
+                            identity.repository_revision
+                        ),
+                        created_at=self._clock(),
+                    )
                 )
-            )
+            except Exception as error:
+                raise AuthoritativeResearchStateError(
+                    error
+                ) from error
 
             experiment_spec_id = (
                 spec.experiment_spec_id

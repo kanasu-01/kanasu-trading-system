@@ -440,7 +440,9 @@ def test_start_fails_closed_on_prestart_job(
         ),
     )
 
-    catalog.save_queued_research_job(
+    # Test-only corruption injection through the explicitly private
+    # storage seam. Supported public insertion is tested separately.
+    catalog._save_queued_research_job(
         ResearchJob(
             job_id="out-of-band",
             trial_id=population.trials[0].trial_id,
@@ -1547,3 +1549,66 @@ def test_worker_pool_preserves_fifo_atomic_claiming(
     assert result.queued_jobs == 0
     assert result.running_jobs == 0
     assert result.failed_jobs == 3
+
+
+def test_m94g2_public_initial_job_insert_cannot_bypass_start(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="public initial-job bypass rejection",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    trial = population.trials[0]
+
+    bypass = ResearchJob(
+        job_id="out-of-band-initial",
+        trial_id=trial.trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=APR,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="authoritative Start or Retry",
+    ):
+        catalog.save_queued_research_job(
+            bypass
+        )
+
+    assert (
+        catalog.list_research_jobs_for_trial(
+            trial.trial_id
+        )
+        == ()
+    )
+
+    started = queue.start_revision(
+        population.revision.study_revision_id,
+        started_at=APR,
+    )
+
+    expected_trials = len(
+        population.trials
+    )
+
+    assert started.total_registered_trials == expected_trials
+    assert started.total_jobs == expected_trials
+    assert started.queued_jobs == expected_trials
