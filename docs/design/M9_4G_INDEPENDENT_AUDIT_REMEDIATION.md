@@ -2,13 +2,13 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE - M9.4g1-M9.4g3 IMPLEMENTED; M9.4g4 RE-CLOSURE EVIDENCE ACTIVE**
+**ACCEPTED DESIGN BASELINE - M9.4g1-M9.4g4 IMPLEMENTED / VALIDATED / PUBLISHED; M9.4 RECLOSED**
 
 `M94G_DESIGN_ACCEPTED=True`
 
 `M94G_PRODUCTION_MUTATION_AUTHORIZED=True`
 
-`M94G_RECLOSURE_COMPLETE=False`
+`M94G_RECLOSURE_COMPLETE=True`
 
 Human acceptance recorded: 2026-10-03.
 
@@ -640,7 +640,7 @@ changing it requires explicit review. It is operational configuration and does
 not participate in StudyRevision or Trial identity.
 
 D19 documentation synchronization is part of M9.4g4. D20 automated validation has now passed: 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests, with `git diff --check` clean.
-M9.4 must not be represented as re-closed until final human diff review, separately approved staging/commit/push and post-push verification are complete.
+Final human diff review, separately approved staging/commit/push and post-push verification subsequently completed successfully. The exact human-reviewed candidate was published at `68df76b853ebdb8881109798aaa5dac8906c453d`; local and remote branch heads were verified equal after push. M9.4 is therefore re-closed. The planned independent M9.4 post-remediation audit remains the next gate before fresh M9.5 design or implementation.
 
 ## 10. Implementation order
 
