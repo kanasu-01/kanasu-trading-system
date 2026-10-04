@@ -59,6 +59,10 @@ from core.runtime.backtest_runtime import (
     execute_backtest_candles,
     retrieve_backtest_candles,
 )
+from core.runtime.backtest_runtime import (
+    DeterministicBacktestComputationError,
+    TransientBacktestOperationalError,
+)
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
@@ -474,6 +478,36 @@ class BacktestResearchOrchestrator:
         if not message:
             message = type(error).__name__
         return message[:1000]
+
+    @staticmethod
+    def _semantic_failure_classification(
+        error: Exception,
+    ) -> str:
+        if isinstance(
+            error,
+            DeterministicBacktestComputationError,
+        ):
+            return "deterministic_compute_failure"
+
+        if isinstance(
+            error,
+            TransientBacktestOperationalError,
+        ):
+            return "transient_operational_failure"
+
+        return "unknown_failure"
+
+    @classmethod
+    def _semantic_failure_message(
+        cls,
+        error: Exception,
+    ) -> str:
+        original = getattr(
+            error,
+            "original_error",
+            error,
+        )
+        return cls._failure_message(original)
 
     def prepare_specification(
         self,
@@ -1043,8 +1077,11 @@ class BacktestResearchOrchestrator:
                 ),
                 identity=prepared.identity,
                 summary=(
-                    "backtest_execution_failed: "
-                    + self._failure_message(
+                    self._semantic_failure_classification(
+                        error
+                    )
+                    + ": "
+                    + self._semantic_failure_message(
                         error
                     )
                 ),
@@ -1071,10 +1108,12 @@ class BacktestResearchOrchestrator:
                     terminal_at=self._clock(),
                     evidence=evidence,
                     failure_classification=(
-                        "backtest_execution_failed"
+                        self._semantic_failure_classification(
+                            error
+                        )
                     ),
                     failure_message=(
-                        self._failure_message(
+                        self._semantic_failure_message(
                             error
                         )
                     ),

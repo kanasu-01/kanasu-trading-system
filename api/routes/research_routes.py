@@ -31,6 +31,7 @@ from api.models.research_models import (
     ResearchTrialListResponse,
 )
 from api.research_application import (
+    ResearchIdentifierValidationError,
     ResearchRevisionNotFound,
     ResearchStudyNotFound,
     ResearchTrialNotFound,
@@ -297,6 +298,13 @@ async def get_research_progress(
             message="Research revision was not found",
         )
 
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
+        )
+
     except Exception:
         logger.exception(
             "Research progress load failed"
@@ -334,6 +342,13 @@ async def list_research_trials(
             status_code=404,
             code="research_revision_not_found",
             message="Research revision was not found",
+        )
+
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
         )
 
     except Exception:
@@ -375,6 +390,13 @@ async def get_research_trial_detail(
             message="Research trial was not found",
         )
 
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
+        )
+
     except Exception:
         logger.exception(
             "Research Trial detail load failed"
@@ -412,6 +434,13 @@ async def get_research_aggregation(
             status_code=404,
             code="research_revision_not_found",
             message="Research revision was not found",
+        )
+
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
         )
 
     except Exception:
@@ -455,6 +484,13 @@ async def start_research_revision(
             status_code=404,
             code="research_revision_not_found",
             message="Research revision was not found",
+        )
+
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
         )
 
     except ValueError:
@@ -506,6 +542,13 @@ async def cancel_research_revision(
             status_code=404,
             code="research_revision_not_found",
             message="Research revision was not found",
+        )
+
+    except ResearchIdentifierValidationError:
+        return _error_response(
+            status_code=422,
+            code="invalid_research_identifier",
+            message="Research identifier was invalid",
         )
 
     except ValueError:

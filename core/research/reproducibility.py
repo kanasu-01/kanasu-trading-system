@@ -28,6 +28,7 @@ from core.research.models.research_catalog import (
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
+from math import isfinite
 
 
 DATASET_SCHEMA = "kanasu.dataset.v1"
@@ -653,6 +654,436 @@ def stable_backtest_result_bytes(
             stable_backtest_result_payload(result)
         ),
         schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+
+
+_BACKTEST_RESULT_FIELDS = frozenset(
+    {
+        "trades",
+        "bar_records",
+        "equity_curve",
+    }
+)
+
+_BACKTEST_TRADE_FIELDS = frozenset(
+    {
+        "symbol",
+        "entry_time",
+        "entry_price",
+        "exit_time",
+        "exit_price",
+        "stop_price",
+        "quantity",
+        "direction",
+        "exit_reason",
+        "pnl",
+        "gross_pnl",
+        "transaction_cost",
+        "pnl_pct",
+    }
+)
+
+_BACKTEST_BAR_RECORD_FIELDS = frozenset(
+    {
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "strategy",
+        "state",
+        "signal",
+        "execution_event",
+        "execution_price",
+        "execution_quantity",
+        "decision_snapshot",
+        "equity",
+        "cash",
+        "position_size",
+        "drawdown",
+    }
+)
+
+
+def _require_result_mapping(
+    value: Any,
+    *,
+    expected_fields: frozenset[str],
+    label: str,
+) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected_fields
+    ):
+        raise ValueError(
+            f"{label} has an invalid canonical field set"
+        )
+
+    return value
+
+
+def _require_result_string(
+    value: Any,
+    *,
+    label: str,
+) -> str:
+    if not isinstance(value, str):
+        raise ValueError(
+            f"{label} must be a string"
+        )
+
+    return value
+
+
+def _require_result_optional_string(
+    value: Any,
+    *,
+    label: str,
+) -> str | None:
+    if value is None:
+        return None
+
+    return _require_result_string(
+        value,
+        label=label,
+    )
+
+
+def _require_result_datetime(
+    value: Any,
+    *,
+    label: str,
+) -> datetime:
+    if not isinstance(value, datetime):
+        raise ValueError(
+            f"{label} must be a canonical datetime"
+        )
+
+    return value
+
+
+def _require_result_finite_number(
+    value: Any,
+    *,
+    label: str,
+) -> int | float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(
+            value,
+            (int, float),
+        )
+        or not isfinite(value)
+    ):
+        raise ValueError(
+            f"{label} must be a finite numeric value"
+        )
+
+    return value
+
+
+def _require_result_integer(
+    value: Any,
+    *,
+    label: str,
+) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+    ):
+        raise ValueError(
+            f"{label} must be an integer"
+        )
+
+    return value
+
+
+def validate_stable_backtest_result_payload(
+    payload: Any,
+) -> dict[str, Any]:
+    """
+    Validate the exact stable Backtest-result contract emitted by
+    stable_backtest_result_payload.
+
+    This is structural/semantic validation only. It does not recompute
+    signals, fills, costs, positions, P&L or any Backtest economics.
+    """
+
+    result = _require_result_mapping(
+        payload,
+        expected_fields=_BACKTEST_RESULT_FIELDS,
+        label="Backtest result payload",
+    )
+
+    trades = result["trades"]
+    bar_records = result["bar_records"]
+    equity_curve = result["equity_curve"]
+
+    if not isinstance(trades, list):
+        raise ValueError(
+            "Backtest trades must be a list"
+        )
+
+    if not isinstance(bar_records, list):
+        raise ValueError(
+            "Backtest bar_records must be a list"
+        )
+
+    if not isinstance(equity_curve, list):
+        raise ValueError(
+            "Backtest equity_curve must be a list"
+        )
+
+    for index, raw_trade in enumerate(trades):
+        trade = _require_result_mapping(
+            raw_trade,
+            expected_fields=_BACKTEST_TRADE_FIELDS,
+            label=f"Backtest trade {index}",
+        )
+
+        _require_result_string(
+            trade["symbol"],
+            label=f"Backtest trade {index} symbol",
+        )
+
+        entry_time = _require_result_datetime(
+            trade["entry_time"],
+            label=f"Backtest trade {index} entry_time",
+        )
+
+        _require_result_finite_number(
+            trade["entry_price"],
+            label=f"Backtest trade {index} entry_price",
+        )
+
+        exit_time = trade["exit_time"]
+
+        if exit_time is not None:
+            exit_time = _require_result_datetime(
+                exit_time,
+                label=f"Backtest trade {index} exit_time",
+            )
+
+            if exit_time < entry_time:
+                raise ValueError(
+                    f"Backtest trade {index} exit_time "
+                    "cannot precede entry_time"
+                )
+
+        for field in (
+            "exit_price",
+            "stop_price",
+            "pnl",
+            "gross_pnl",
+            "transaction_cost",
+            "pnl_pct",
+        ):
+            _require_result_finite_number(
+                trade[field],
+                label=(
+                    f"Backtest trade {index} {field}"
+                ),
+            )
+
+        _require_result_integer(
+            trade["quantity"],
+            label=f"Backtest trade {index} quantity",
+        )
+
+        for field in (
+            "direction",
+            "exit_reason",
+        ):
+            _require_result_string(
+                trade[field],
+                label=(
+                    f"Backtest trade {index} {field}"
+                ),
+            )
+
+    bar_timestamps = []
+    bar_equities = []
+
+    previous_timestamp = None
+
+    for index, raw_record in enumerate(
+        bar_records
+    ):
+        record = _require_result_mapping(
+            raw_record,
+            expected_fields=_BACKTEST_BAR_RECORD_FIELDS,
+            label=f"Backtest bar record {index}",
+        )
+
+        timestamp = _require_result_datetime(
+            record["timestamp"],
+            label=(
+                f"Backtest bar record {index} timestamp"
+            ),
+        )
+
+        if (
+            previous_timestamp is not None
+            and timestamp <= previous_timestamp
+        ):
+            raise ValueError(
+                "Backtest bar timestamps must be "
+                "strictly chronological"
+            )
+
+        previous_timestamp = timestamp
+        bar_timestamps.append(timestamp)
+
+        for field in (
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "equity",
+            "cash",
+            "position_size",
+            "drawdown",
+        ):
+            _require_result_finite_number(
+                record[field],
+                label=(
+                    f"Backtest bar record {index} "
+                    f"{field}"
+                ),
+            )
+
+        _require_result_string(
+            record["strategy"],
+            label=(
+                f"Backtest bar record {index} strategy"
+            ),
+        )
+
+        for field in (
+            "state",
+            "signal",
+            "execution_event",
+        ):
+            _require_result_optional_string(
+                record[field],
+                label=(
+                    f"Backtest bar record {index} "
+                    f"{field}"
+                ),
+            )
+
+        if record["execution_price"] is not None:
+            _require_result_finite_number(
+                record["execution_price"],
+                label=(
+                    f"Backtest bar record {index} "
+                    "execution_price"
+                ),
+            )
+
+        if (
+            record["execution_quantity"]
+            is not None
+        ):
+            _require_result_integer(
+                record["execution_quantity"],
+                label=(
+                    f"Backtest bar record {index} "
+                    "execution_quantity"
+                ),
+            )
+
+        if not isinstance(
+            record["decision_snapshot"],
+            dict,
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "decision_snapshot must be a mapping"
+            )
+
+        bar_equities.append(
+            record["equity"]
+        )
+
+    if len(equity_curve) != len(
+        bar_records
+    ):
+        raise ValueError(
+            "Backtest equity_curve must correspond "
+            "one-for-one with bar_records"
+        )
+
+    for index, point in enumerate(
+        equity_curve
+    ):
+        if (
+            not isinstance(point, tuple)
+            or len(point) != 2
+        ):
+            raise ValueError(
+                f"Backtest equity curve point {index} "
+                "must be a canonical two-item tuple"
+            )
+
+        timestamp = _require_result_datetime(
+            point[0],
+            label=(
+                f"Backtest equity curve point {index} "
+                "timestamp"
+            ),
+        )
+
+        equity = _require_result_finite_number(
+            point[1],
+            label=(
+                f"Backtest equity curve point {index} "
+                "equity"
+            ),
+        )
+
+        if (
+            timestamp != bar_timestamps[index]
+            or equity != bar_equities[index]
+        ):
+            raise ValueError(
+                "Backtest equity_curve does not match "
+                "authoritative bar_records"
+            )
+
+    if not bar_records:
+        if trades:
+            raise ValueError(
+                "Backtest trades require authoritative "
+                "bar_records"
+            )
+
+        if equity_curve:
+            raise ValueError(
+                "Backtest equity_curve requires "
+                "authoritative bar_records"
+            )
+
+    return result
+
+
+def decode_stable_backtest_result_bytes(
+    payload: bytes,
+) -> dict[str, Any]:
+    """
+    Decode and strictly validate one canonical Backtest-result artifact.
+    """
+
+    decoded = decode_canonical_bytes(
+        payload,
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    return validate_stable_backtest_result_payload(
+        decoded
     )
 
 

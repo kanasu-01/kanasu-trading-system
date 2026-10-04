@@ -357,7 +357,7 @@ def test_execution_failure_creates_failed_evidence_and_failed_attempt(
     assert attempt.evidence_id == "evidence-failed"
     assert (
         attempt.failure_classification
-        == "backtest_execution_failed"
+        == "unknown_failure"
     )
     assert attempt.failure_message == "engine failed"
     assert attempt.result_artifact_id is None
@@ -973,7 +973,7 @@ def test_execute_prepared_terminalizes_supplied_attempt_on_failure(
     assert persisted.state is RunAttemptState.FAILED
     assert (
         persisted.failure_classification
-        == "backtest_execution_failed"
+        == "unknown_failure"
     )
 
 

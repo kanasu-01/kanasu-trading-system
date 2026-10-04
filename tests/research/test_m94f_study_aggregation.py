@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -13,9 +13,13 @@ from core.research.models.research_catalog import (
     ResearchArtifactKind,
     RunAttemptState,
 )
+from core.backtest.backtest_result import BacktestResult
+from core.backtest.bar_record import BarRecord
 from core.research.reproducibility import (
     BACKTEST_RESULT_SCHEMA,
     canonical_bytes,
+    decode_canonical_bytes,
+    stable_backtest_result_bytes,
 )
 from core.research.study_aggregation import (
     StudyAggregationError,
@@ -130,22 +134,58 @@ def _result_bytes(
     *,
     equities,
 ):
-    payload = {
-        "trades": [],
-        "bar_records": [
-            {
-                "equity": float(equity),
-            }
-            for equity in equities
-        ],
-        "equity_curve": [
-            (
-                NOW,
-                float(equity),
-            )
-            for equity in equities
-        ],
-    }
+    records = [
+        BarRecord(
+            timestamp=(
+                NOW
+                + timedelta(
+                    minutes=index,
+                )
+            ),
+            open=100.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+            volume=1000.0,
+            strategy="aggregation-fixture",
+            state=None,
+            signal=None,
+            execution_event=None,
+            execution_price=None,
+            execution_quantity=None,
+            decision_snapshot={},
+            equity=float(equity),
+            cash=float(equity),
+            position_size=0.0,
+            drawdown=0.0,
+        )
+        for index, equity in enumerate(
+            equities
+        )
+    ]
+
+    return stable_backtest_result_bytes(
+        BacktestResult(
+            trades=[],
+            bar_records=records,
+            session_id="aggregation-fixture",
+        )
+    )
+
+
+def _mutated_result_bytes(
+    mutate,
+    *,
+    equities=(100.0, 110.0),
+):
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=equities,
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    mutate(payload)
 
     return canonical_bytes(
         payload,
@@ -560,3 +600,192 @@ def test_zero_result_aggregation_preserves_all_excluded_denominators():
         assert distribution.positive_proportion is None
 
     assert result.result_artifact_ids == ()
+
+
+def _aggregate_with_executed_payload(
+    payload_bytes,
+):
+    catalog = CatalogStub()
+    store = ArtifactStoreStub()
+
+    store.payloads[
+        EXECUTED_ARTIFACT_ID
+    ] = payload_bytes
+
+    return StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=store,
+    ).aggregate_revision(
+        REVISION_ID
+    )
+
+
+def test_m94g3_real_canonical_serialized_backtest_result_is_accepted():
+    result = _aggregate_with_executed_payload(
+        _result_bytes(
+            equities=(100.0, 120.0, 108.0),
+        )
+    )
+
+    assert result.executed_trials == 1
+    assert result.result_bearing_trials == 2
+
+
+def test_m94g3_missing_required_bar_field_is_rejected():
+    def mutate(payload):
+        payload["bar_records"][0].pop(
+            "cash"
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )
+
+
+def test_m94g3_malformed_trade_shape_is_rejected():
+    def mutate(payload):
+        payload["trades"].append(
+            {
+                "symbol": "NSE:INVALID",
+            }
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )
+
+
+def test_m94g3_malformed_timestamp_is_rejected():
+    def mutate(payload):
+        payload["bar_records"][0][
+            "timestamp"
+        ] = "not-a-canonical-datetime"
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )
+
+
+def test_m94g3_curve_bar_timestamp_mismatch_is_rejected():
+    def mutate(payload):
+        timestamp, equity = (
+            payload["equity_curve"][0]
+        )
+
+        payload["equity_curve"][0] = (
+            timestamp
+            + timedelta(
+                seconds=1,
+            ),
+            equity,
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )
+
+
+def test_m94g3_invalid_financial_numeric_type_is_rejected():
+    def mutate(payload):
+        payload["bar_records"][0][
+            "equity"
+        ] = "100.0"
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_equity",
+    [
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_m94g3_nonfinite_financial_data_is_rejected(
+    invalid_equity,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["bar_records"][0][
+        "equity"
+    ] = invalid_equity
+
+    with pytest.raises(
+        ValueError,
+        match="finite numeric value",
+    ):
+        validate_stable_backtest_result_payload(
+            payload
+        )
+
+
+def test_m94g3_nonchronological_bar_records_are_rejected():
+    def mutate(payload):
+        first = payload[
+            "bar_records"
+        ][0]["timestamp"]
+
+        payload["bar_records"][1][
+            "timestamp"
+        ] = first
+
+        _, equity = (
+            payload["equity_curve"][1]
+        )
+
+        payload["equity_curve"][1] = (
+            first,
+            equity,
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result",
+    ):
+        _aggregate_with_executed_payload(
+            _mutated_result_bytes(
+                mutate
+            )
+        )

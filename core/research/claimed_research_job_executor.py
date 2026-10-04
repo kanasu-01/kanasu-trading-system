@@ -23,6 +23,7 @@ from core.research.backtest_research_orchestrator import (
 )
 from core.research.claimed_trial_execution_inputs import (
     ClaimedTrialExecutionInputs,
+    ClaimedTrialInputValidationError,
     TrialExecutionInputResolver,
     validate_claimed_trial_execution_inputs,
 )
@@ -438,12 +439,19 @@ class ClaimedResearchJobExecutor:
             inputs = self._resolve_inputs(
                 plan
             )
+        except ClaimedTrialInputValidationError as error:
+            return self._terminalize_preparation_failure(
+                job,
+                classification="invalid_input",
+                error=error,
+                trial_disposition=(
+                    TrialDisposition.INVALID
+                ),
+            )
         except Exception as error:
             return self._terminalize_preparation_failure(
                 job,
-                classification=(
-                    "execution_input_resolution_failed"
-                ),
+                classification="unknown_failure",
                 error=error,
             )
 
@@ -528,20 +536,26 @@ class ClaimedResearchJobExecutor:
                     ),
                 )
 
+            if isinstance(
+                error.original_error,
+                (ConnectionError, TimeoutError),
+            ):
+                classification = (
+                    "transient_operational_failure"
+                )
+            else:
+                classification = "unknown_failure"
+
             return self._terminalize_preparation_failure(
                 job,
-                classification=(
-                    "historical_data_retrieval_failed"
-                ),
+                classification=classification,
                 error=error.original_error,
             )
 
         except Exception as error:
             return self._terminalize_preparation_failure(
                 job,
-                classification=(
-                    "exact_specification_preparation_failed"
-                ),
+                classification="unknown_failure",
                 error=error,
             )
 

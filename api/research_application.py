@@ -69,6 +69,10 @@ class ResearchTrialNotFound(LookupError):
     """Requested Trial does not exist."""
 
 
+class ResearchIdentifierValidationError(ValueError):
+    """Semantic research identifier is empty or whitespace."""
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -103,7 +107,7 @@ def _require_nonempty(
         not isinstance(value, str)
         or not value.strip()
     ):
-        raise ValueError(
+        raise ResearchIdentifierValidationError(
             f"{field_name} must be a non-empty string"
         )
 
@@ -392,6 +396,11 @@ def register_research_revision(
     registered_at: datetime,
     app_config: AppConfig | None = None,
 ) -> ResearchRevisionRegistrationResponse:
+    _require_nonempty(
+        study_id,
+        "study_id",
+    )
+
     config = _resolved_config(
         app_config
     )

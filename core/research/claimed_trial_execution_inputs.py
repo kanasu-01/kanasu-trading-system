@@ -25,6 +25,10 @@ from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
 
 
+class ClaimedTrialInputValidationError(ValueError):
+    """Authoritative registered Trial inputs are invalid or inconsistent."""
+
+
 @dataclass(frozen=True)
 class ClaimedTrialExecutionInputs:
     strategy: BaseStrategy
@@ -153,13 +157,13 @@ def validate_claimed_trial_execution_inputs(
         inputs.strategy_procedure_id
         != plan.strategy_procedure_id
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved strategy procedure does not match "
             "the registered Trial plan"
         )
 
     if inputs.config.timeframe != plan.timeframe:
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved Backtest timeframe does not match "
             "the registered Trial plan"
         )
@@ -170,7 +174,7 @@ def validate_claimed_trial_execution_inputs(
         or inputs.config.end
         != plan.trial_range.end
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved Backtest range does not match "
             "the Trial membership episode"
         )
@@ -179,13 +183,13 @@ def validate_claimed_trial_execution_inputs(
         float(inputs.config.initial_capital)
         != float(plan.initial_capital)
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved initial capital does not match "
             "the registered Trial plan"
         )
 
     if inputs.config.timezone != plan.timezone:
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved Backtest timezone does not match "
             "the registered Trial plan"
         )
@@ -196,7 +200,7 @@ def validate_claimed_trial_execution_inputs(
         or inputs.dataset_context.timezone
         != plan.timezone
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved DatasetContext does not match "
             "the registered timeframe/timezone"
         )
@@ -205,7 +209,7 @@ def validate_claimed_trial_execution_inputs(
         inputs.config.symbol
         != inputs.dataset_context.symbol
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "BacktestConfig and DatasetContext symbols "
             "must agree"
         )
@@ -218,7 +222,7 @@ def validate_claimed_trial_execution_inputs(
         dict(inputs.config.strategy_params)
         != registered_parameters
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved Backtest strategy parameters do not "
             "match the registered Trial variant"
         )
@@ -227,7 +231,7 @@ def validate_claimed_trial_execution_inputs(
         inputs.strategy.research_parameters()
         != registered_parameters
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved strategy effective parameters do not "
             "match the registered Trial variant"
         )
@@ -242,7 +246,7 @@ def validate_claimed_trial_execution_inputs(
         )
         != registered_risk_economic
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved risk/economic declaration does not "
             "match the registered Trial plan"
         )
@@ -273,7 +277,7 @@ def validate_claimed_trial_execution_inputs(
         registered_risk_economic.items()
     ):
         if field_name not in executable_risk_economic:
-            raise ValueError(
+            raise ClaimedTrialInputValidationError(
                 "registered risk/economic declaration "
                 f"is unverifiable from executable inputs: {field_name}"
             )
@@ -282,7 +286,7 @@ def validate_claimed_trial_execution_inputs(
             executable_risk_economic[field_name]
             != registered_value
         ):
-            raise ValueError(
+            raise ClaimedTrialInputValidationError(
                 "resolved executable risk/economic setting "
                 "does not match the registered Trial plan: "
                 f"{field_name}"
@@ -298,7 +302,7 @@ def validate_claimed_trial_execution_inputs(
         )
         != registered_data_treatment
     ):
-        raise ValueError(
+        raise ClaimedTrialInputValidationError(
             "resolved data-treatment declaration does not "
             "match the registered Trial plan"
         )
@@ -313,7 +317,7 @@ def validate_claimed_trial_execution_inputs(
         registered_data_treatment.items()
     ):
         if field_name not in executable_data_treatment:
-            raise ValueError(
+            raise ClaimedTrialInputValidationError(
                 "registered data-treatment declaration "
                 f"is unverifiable from executable inputs: {field_name}"
             )
@@ -322,7 +326,7 @@ def validate_claimed_trial_execution_inputs(
             executable_data_treatment[field_name]
             != registered_value
         ):
-            raise ValueError(
+            raise ClaimedTrialInputValidationError(
                 "resolved executable data-treatment setting "
                 "does not match the registered Trial plan: "
                 f"{field_name}"

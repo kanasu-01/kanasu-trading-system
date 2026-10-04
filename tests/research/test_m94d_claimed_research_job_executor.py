@@ -70,6 +70,10 @@ from core.research.models.universe import (
     UniverseQuality,
     UniverseSnapshot,
 )
+from core.runtime.backtest_runtime import (
+    DeterministicBacktestComputationError,
+    TransientBacktestOperationalError,
+)
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.strategy_factory import create_strategy
@@ -624,7 +628,7 @@ def test_claimed_job_input_mismatch_fails_before_attempt_or_retrieval(
     assert terminal_job.attempt_id is None
     assert (
         terminal_job.failure_classification
-        == "execution_input_resolution_failed"
+        == "invalid_input"
     )
 
     assert _attempt_count(catalog) == 0
@@ -637,11 +641,11 @@ def test_claimed_job_input_mismatch_fails_before_attempt_or_retrieval(
     assert persisted_trial is not None
     assert (
         persisted_trial.disposition
-        is TrialDisposition.FAILED
+        is TrialDisposition.INVALID
     )
     assert (
         persisted_trial.failure_classification
-        == "execution_input_resolution_failed"
+        == "invalid_input"
     )
 
 
@@ -765,8 +769,12 @@ def test_claimed_job_financial_failure_is_durably_isolated(
         execution_input_resolver=(
             lambda plan: _inputs()
         ),
-        execution_error=RuntimeError(
-            "fixture financial computation failed"
+        execution_error=(
+            DeterministicBacktestComputationError(
+                RuntimeError(
+                    "fixture financial computation failed"
+                )
+            )
         ),
     )
 
@@ -784,7 +792,7 @@ def test_claimed_job_financial_failure_is_durably_isolated(
     )
     assert (
         terminal_job.failure_classification
-        == "backtest_execution_failed"
+        == "deterministic_compute_failure"
     )
     assert (
         terminal_job.failure_message
@@ -806,7 +814,7 @@ def test_claimed_job_financial_failure_is_durably_isolated(
     )
     assert (
         attempt.failure_classification
-        == "backtest_execution_failed"
+        == "deterministic_compute_failure"
     )
     assert (
         attempt.failure_message
@@ -825,7 +833,7 @@ def test_claimed_job_financial_failure_is_durably_isolated(
     )
     assert (
         persisted_trial.failure_classification
-        == "backtest_execution_failed"
+        == "deterministic_compute_failure"
     )
     assert (
         persisted_trial.failure_message
@@ -1075,7 +1083,7 @@ def test_provider_retrieval_failure_is_classified_before_attempt(
     assert terminal_job.attempt_id is None
     assert (
         terminal_job.failure_classification
-        == "historical_data_retrieval_failed"
+        == "unknown_failure"
     )
     assert (
         terminal_job.failure_message
@@ -2287,3 +2295,140 @@ def test_m94g2_manifest_persistence_failure_propagates_without_false_evidence(
     assert _attempt_count(catalog) == 0
     assert len(retrieval.calls) == 1
     assert execution_calls == []
+
+def test_m94g3_transient_operational_failure_is_durably_classified(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        execution_error=(
+            TransientBacktestOperationalError(
+                OSError(
+                    "temporary execution I/O failure"
+                )
+            )
+        ),
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.FAILED
+    )
+    assert (
+        terminal_job.failure_classification
+        == "transient_operational_failure"
+    )
+    assert (
+        terminal_job.failure_message
+        == "temporary execution I/O failure"
+    )
+
+    attempt = catalog.load_run_attempt(
+        terminal_job.attempt_id
+    )
+    assert attempt is not None
+    assert (
+        attempt.state
+        is RunAttemptState.FAILED
+    )
+    assert (
+        attempt.failure_classification
+        == "transient_operational_failure"
+    )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.FAILED
+    )
+    assert (
+        persisted_trial.failure_classification
+        == "transient_operational_failure"
+    )
+
+    assert len(retrieval.calls) == 1
+    assert len(execution_calls) == 1
+
+
+def test_m94g3_unknown_execution_failure_is_durably_classified(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        execution_error=RuntimeError(
+            "unclassified execution failure"
+        ),
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.FAILED
+    )
+    assert (
+        terminal_job.failure_classification
+        == "unknown_failure"
+    )
+    assert (
+        terminal_job.failure_message
+        == "unclassified execution failure"
+    )
+
+    attempt = catalog.load_run_attempt(
+        terminal_job.attempt_id
+    )
+    assert attempt is not None
+    assert (
+        attempt.state
+        is RunAttemptState.FAILED
+    )
+    assert (
+        attempt.failure_classification
+        == "unknown_failure"
+    )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.FAILED
+    )
+    assert (
+        persisted_trial.failure_classification
+        == "unknown_failure"
+    )
+
+    assert len(retrieval.calls) == 1
+    assert len(execution_calls) == 1

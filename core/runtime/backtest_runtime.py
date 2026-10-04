@@ -43,6 +43,28 @@ def retrieve_backtest_candles(
     )
 
 
+class DeterministicBacktestComputationError(RuntimeError):
+    """Authoritative deterministic Backtest computation failed."""
+
+    def __init__(self, original_error: Exception):
+        self.original_error = original_error
+        message = str(original_error).strip()
+        if not message:
+            message = type(original_error).__name__
+        super().__init__(message)
+
+
+class TransientBacktestOperationalError(RuntimeError):
+    """Typed operational failure occurred around Backtest execution."""
+
+    def __init__(self, original_error: Exception):
+        self.original_error = original_error
+        message = str(original_error).strip()
+        if not message:
+            message = type(original_error).__name__
+        super().__init__(message)
+
+
 def execute_backtest_candles(
     candles: List[Candle],
     strategy: BaseStrategy,
@@ -52,14 +74,27 @@ def execute_backtest_candles(
 ) -> BacktestResult:
     """Execute the authoritative engine over already-retrieved candles."""
 
-    engine = BacktestEngine(
-        strategy=strategy,
-        initial_capital=config.initial_capital,
-        runtime_context=runtime_context,
-        dataset_context=dataset_context,
-    )
+    try:
+        engine = BacktestEngine(
+            strategy=strategy,
+            initial_capital=config.initial_capital,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
 
-    return engine.run_stream(candles)
+        return engine.run_stream(candles)
+    except (ConnectionError, TimeoutError) as error:
+        raise TransientBacktestOperationalError(
+            error
+        ) from error
+    except OSError as error:
+        raise TransientBacktestOperationalError(
+            error
+        ) from error
+    except Exception as error:
+        raise DeterministicBacktestComputationError(
+            error
+        ) from error
 
 
 def execute_backtest(

@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from math import fsum, isfinite
 from statistics import median
 
@@ -17,7 +17,7 @@ from core.research.models.research_catalog import (
 )
 from core.research.reproducibility import (
     BACKTEST_RESULT_SCHEMA,
-    decode_canonical_bytes,
+    decode_stable_backtest_result_bytes,
 )
 
 
@@ -295,43 +295,14 @@ class StudyAggregationService:
                 artifact_id
             )
 
-            payload = decode_canonical_bytes(
-                raw,
-                schema=BACKTEST_RESULT_SCHEMA,
+            return decode_stable_backtest_result_bytes(
+                raw
             )
         except Exception as error:
             raise StudyAggregationError(
                 "canonical Backtest result artifact "
                 "could not be verified and decoded"
             ) from error
-
-        if (
-            not isinstance(payload, dict)
-            or set(payload)
-            != {
-                "trades",
-                "bar_records",
-                "equity_curve",
-            }
-            or not isinstance(
-                payload["trades"],
-                list,
-            )
-            or not isinstance(
-                payload["bar_records"],
-                list,
-            )
-            or not isinstance(
-                payload["equity_curve"],
-                list,
-            )
-        ):
-            raise StudyAggregationError(
-                "canonical Backtest result payload "
-                "has an invalid shape"
-            )
-
-        return payload
 
     @staticmethod
     def _financial_metrics(
