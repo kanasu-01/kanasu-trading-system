@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -10,6 +11,8 @@ from uuid import uuid4
 
 from core.research.models.dataset_reference import (
     DATASET_REFERENCE_SCHEMA_ID,
+    DatasetReference,
+    dataset_reference_bytes,
 )
 from core.research.models.research_catalog import (
     ComputationKind,
@@ -269,6 +272,141 @@ class SQLiteResearchCatalogStore:
                 ) from error
 
             return existing
+
+        return artifact
+
+    def save_dataset_reference_artifact(
+        self,
+        artifact: ResearchArtifact,
+        reference: DatasetReference,
+    ) -> ResearchArtifact:
+        """
+        Register DatasetReference metadata plus its canonical dataset ID.
+
+        The binding is accepted only when canonical DatasetReference
+        bytes produce the exact supplied content-addressed artifact
+        identity and immutable metadata.
+        """
+
+        if not isinstance(
+            artifact,
+            ResearchArtifact,
+        ):
+            raise TypeError(
+                "artifact must be a ResearchArtifact"
+            )
+
+        if not isinstance(
+            reference,
+            DatasetReference,
+        ):
+            raise TypeError(
+                "reference must be a DatasetReference"
+            )
+
+        if (
+            artifact.artifact_kind
+            is not ResearchArtifactKind.DATASET_REFERENCE
+            or artifact.schema_id
+            != DATASET_REFERENCE_SCHEMA_ID
+        ):
+            raise ValueError(
+                "DatasetReference registration requires "
+                "canonical DatasetReference artifact metadata"
+            )
+
+        payload = dataset_reference_bytes(
+            reference
+        )
+        digest = hashlib.sha256(
+            payload
+        ).hexdigest()
+
+        expected_artifact_id = (
+            f"sha256:{digest}"
+        )
+        expected_relative_path = (
+            f"sha256/{digest[:2]}/{digest}.json"
+        )
+
+        if (
+            artifact.artifact_id
+            != expected_artifact_id
+        ):
+            raise ValueError(
+                "DatasetReference artifact identity does not "
+                "match canonical DatasetReference bytes"
+            )
+
+        if artifact.byte_count != len(payload):
+            raise ValueError(
+                "DatasetReference artifact byte_count does not "
+                "match canonical DatasetReference bytes"
+            )
+
+        if (
+            artifact.relative_path
+            != expected_relative_path
+        ):
+            raise ValueError(
+                "DatasetReference artifact path does not match "
+                "its content-addressed identity"
+            )
+
+        artifact = self.save_artifact(
+            artifact
+        )
+
+        dataset_id = (
+            reference.identity.dataset_id
+        )
+
+        try:
+            with closing(
+                self._connect()
+            ) as connection:
+                with connection:
+                    connection.execute(
+                        """
+                        INSERT INTO
+                            research_dataset_reference_identities (
+                                artifact_id,
+                                dataset_id
+                            )
+                        VALUES (?, ?)
+                        """,
+                        (
+                            artifact.artifact_id,
+                            dataset_id,
+                        ),
+                    )
+
+        except sqlite3.IntegrityError as error:
+            with closing(
+                self._connect()
+            ) as connection:
+                row = connection.execute(
+                    """
+                    SELECT dataset_id
+                    FROM research_dataset_reference_identities
+                    WHERE artifact_id = ?
+                    """,
+                    (
+                        artifact.artifact_id,
+                    ),
+                ).fetchone()
+
+            if row is None:
+                raise ValueError(
+                    "DatasetReference identity binding could "
+                    "not be persisted"
+                ) from error
+
+            if row[0] != dataset_id:
+                raise ValueError(
+                    "DatasetReference artifact is already bound "
+                    "to a different canonical dataset identity"
+                ) from error
 
         return artifact
 
@@ -4348,24 +4486,6 @@ class SQLiteResearchCatalogStore:
         if not isinstance(terminal_at, datetime) or terminal_at.utcoffset() is None:
             raise ValueError("terminal_at must be a timezone-aware datetime")
 
-        dataset_lineage_supplied = (
-            requested_dataset_reference_artifact_id
-            is not None
-            or source_dataset_reference_artifact_id
-            is not None
-        )
-
-        if dataset_lineage_supplied and (
-            requested_dataset_reference_artifact_id
-            is None
-            or source_dataset_reference_artifact_id
-            is None
-        ):
-            raise ValueError(
-                "exact reuse DatasetReference lineage "
-                "requires both requested and source artifacts"
-            )
-
         with closing(self._connect()) as connection:
             try:
                 connection.execute("BEGIN IMMEDIATE")
@@ -4521,78 +4641,107 @@ class SQLiteResearchCatalogStore:
                         "the exact Backtest result artifact"
                     )
 
-                if dataset_lineage_supplied:
-                    requested_dataset_row = (
-                        connection.execute(
-                            """
-                            SELECT artifact_kind, schema_id
-                            FROM research_artifacts
-                            WHERE artifact_id = ?
-                            """,
-                            (
-                                requested_dataset_reference_artifact_id,
-                            ),
-                        ).fetchone()
+                if (
+                    requested_dataset_reference_artifact_id
+                    is None
+                    or source_dataset_reference_artifact_id
+                    is None
+                ):
+                    raise ValueError(
+                        "exact reuse requires requested and "
+                        "source DatasetReference lineage"
                     )
 
-                    source_dataset_row = (
-                        connection.execute(
-                            """
-                            SELECT artifact_kind, schema_id
-                            FROM research_artifacts
-                            WHERE artifact_id = ?
-                            """,
-                            (
-                                source_dataset_reference_artifact_id,
-                            ),
-                        ).fetchone()
-                    )
-
-                    for (
-                        label,
-                        artifact_row,
-                    ) in (
+                requested_dataset_row = (
+                    connection.execute(
+                        """
+                        SELECT
+                            a.artifact_kind,
+                            a.schema_id,
+                            d.dataset_id
+                        FROM research_artifacts a
+                        JOIN research_dataset_reference_identities d
+                            ON d.artifact_id = a.artifact_id
+                        WHERE a.artifact_id = ?
+                        """,
                         (
-                            "requested",
-                            requested_dataset_row,
+                            requested_dataset_reference_artifact_id,
                         ),
-                        (
-                            "source",
-                            source_dataset_row,
-                        ),
-                    ):
-                        if artifact_row is None:
-                            raise ValueError(
-                                "exact reuse "
-                                f"{label} DatasetReference "
-                                "artifact does not exist"
-                            )
+                    ).fetchone()
+                )
 
-                        if (
-                            artifact_row[0]
-                            != ResearchArtifactKind
-                            .DATASET_REFERENCE
-                            .value
-                            or artifact_row[1]
-                            != DATASET_REFERENCE_SCHEMA_ID
-                        ):
-                            raise ValueError(
-                                "exact reuse "
-                                f"{label} dataset lineage "
-                                "requires a canonical "
-                                "DatasetReference artifact"
-                            )
+                source_dataset_row = (
+                    connection.execute(
+                        """
+                        SELECT
+                            a.artifact_kind,
+                            a.schema_id,
+                            d.dataset_id
+                        FROM research_artifacts a
+                        JOIN research_dataset_reference_identities d
+                            ON d.artifact_id = a.artifact_id
+                        WHERE a.artifact_id = ?
+                        """,
+                        (
+                            source_dataset_reference_artifact_id,
+                        ),
+                    ).fetchone()
+                )
+
+                for (
+                    label,
+                    artifact_row,
+                ) in (
+                    (
+                        "requested",
+                        requested_dataset_row,
+                    ),
+                    (
+                        "source",
+                        source_dataset_row,
+                    ),
+                ):
+                    if artifact_row is None:
+                        raise ValueError(
+                            "exact reuse "
+                            f"{label} DatasetReference requires "
+                            "a canonical durable dataset "
+                            "identity binding"
+                        )
 
                     if (
-                        research_artifact_reference(
-                            source_dataset_reference_artifact_id
-                        )
-                        not in evidence_artifact_references
+                        artifact_row[0]
+                        != ResearchArtifactKind
+                        .DATASET_REFERENCE
+                        .value
+                        or artifact_row[1]
+                        != DATASET_REFERENCE_SCHEMA_ID
                     ):
                         raise ValueError(
-                            "reuse evidence must reference "
-                            "the exact source DatasetReference artifact"
+                            "exact reuse "
+                            f"{label} dataset lineage requires "
+                            "a canonical DatasetReference artifact"
                         )
+
+                if (
+                    requested_dataset_row[2]
+                    != source_dataset_row[2]
+                ):
+                    raise ValueError(
+                        "exact reuse requested/source "
+                        "DatasetReference identities are incompatible"
+                    )
+
+                if (
+                    research_artifact_reference(
+                        source_dataset_reference_artifact_id
+                    )
+                    not in evidence_artifact_references
+                ):
+                    raise ValueError(
+                        "reuse evidence must reference "
+                        "the exact source DatasetReference artifact"
+                    )
 
                 sequence_number = connection.execute(
                     """
@@ -4683,23 +4832,22 @@ class SQLiteResearchCatalogStore:
                         "exact reuse lost its RUNNING/uncompleted job precondition"
                     )
 
-                if dataset_lineage_supplied:
-                    connection.execute(
-                        """
-                        INSERT INTO
-                            research_job_reuse_dataset_lineage (
-                                job_id,
-                                requested_dataset_reference_artifact_id,
-                                source_dataset_reference_artifact_id
-                            )
-                        VALUES (?, ?, ?)
-                        """,
-                        (
+                connection.execute(
+                    """
+                    INSERT INTO
+                        research_job_reuse_dataset_lineage (
                             job_id,
                             requested_dataset_reference_artifact_id,
-                            source_dataset_reference_artifact_id,
-                        ),
-                    )
+                            source_dataset_reference_artifact_id
+                        )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        job_id,
+                        requested_dataset_reference_artifact_id,
+                        source_dataset_reference_artifact_id,
+                    ),
+                )
 
                 connection.commit()
 

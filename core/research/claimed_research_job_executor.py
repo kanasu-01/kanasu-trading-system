@@ -25,6 +25,7 @@ from core.research.claimed_trial_execution_inputs import (
     ClaimedTrialExecutionInputs,
     ClaimedTrialInputValidationError,
     TrialExecutionInputResolver,
+    snapshot_claimed_trial_execution_inputs,
     validate_claimed_trial_execution_inputs,
 )
 from core.research.models.dataset_reference import (
@@ -288,6 +289,12 @@ class ClaimedResearchJobExecutor:
                 "ClaimedTrialExecutionInputs"
             )
 
+        inputs = (
+            snapshot_claimed_trial_execution_inputs(
+                inputs
+            )
+        )
+
         validate_claimed_trial_execution_inputs(
             plan,
             inputs,
@@ -372,6 +379,16 @@ class ClaimedResearchJobExecutor:
         ):
             return None
 
+        try:
+            self.catalog_store.save_dataset_reference_artifact(
+                artifact,
+                reference,
+            )
+        except Exception as error:
+            raise AuthoritativeResearchStateError(
+                error
+            ) from error
+
         return (
             artifact_id,
             reference,
@@ -439,6 +456,8 @@ class ClaimedResearchJobExecutor:
             inputs = self._resolve_inputs(
                 plan
             )
+        except AuthoritativeResearchStateError:
+            raise
         except ClaimedTrialInputValidationError as error:
             return self._terminalize_preparation_failure(
                 job,
@@ -514,6 +533,29 @@ class ClaimedResearchJobExecutor:
                     "match the Trial membership episode"
                 )
 
+            # Retrieval/preparation may have received references to the
+            # first isolated binding. Create the final private binding
+            # only after that phase, then re-prove registered semantics.
+            inputs = (
+                snapshot_claimed_trial_execution_inputs(
+                    inputs
+                )
+            )
+
+            validate_claimed_trial_execution_inputs(
+                plan,
+                inputs,
+            )
+
+        except ClaimedTrialInputValidationError as error:
+            return self._terminalize_preparation_failure(
+                job,
+                classification="invalid_input",
+                error=error,
+                trial_disposition=(
+                    TrialDisposition.INVALID
+                ),
+            )
         except AuthoritativeResearchStateError:
             # D08: authoritative persistence/integrity failure is not
             # an independent Trial outcome. Leave the already-claimed

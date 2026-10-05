@@ -7,7 +7,16 @@ import sqlite3
 import pytest
 
 from core.config.app_config import AppConfig
+from core.entities.candle import Candle
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.dataset import (
+    DatasetIdentityV2,
+    DatasetProvenance,
+    PriceAdjustmentBasis,
+)
+from core.research.models.dataset_reference import (
+    DatasetReference,
+)
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
     ResearchJob,
@@ -1001,6 +1010,110 @@ def test_succeeded_attempt_lookup_is_exact_and_deterministic(
     )
 
 
+def _persist_reuse_dataset_reference(
+    catalog,
+    artifact_store,
+    *,
+    close=101.0,
+    source="fixture:m94h2-reuse",
+):
+    candle = Candle(
+        timestamp=JAN,
+        open=100.0,
+        high=max(102.0, close),
+        low=99.0,
+        close=close,
+        volume=1000.0,
+    )
+
+    identity = DatasetIdentityV2(
+        instrument_id="NSE:A",
+        requested_range=TimeRange(
+            JAN,
+            FEB,
+        ),
+        timeframe="1d",
+        timezone="UTC",
+        price_adjustment_basis=(
+            PriceAdjustmentBasis.RAW
+        ),
+        candles=(candle,),
+    )
+
+    reference = DatasetReference(
+        identity=identity,
+        provenance=DatasetProvenance(
+            dataset_id=identity.dataset_id,
+            instrument_id="NSE:A",
+            requested_range=TimeRange(
+                JAN,
+                FEB,
+            ),
+            timeframe="1d",
+            timezone="UTC",
+            price_adjustment_basis=(
+                PriceAdjustmentBasis.RAW
+            ),
+            source=source,
+            coverage=(
+                TimeRange(
+                    JAN,
+                    FEB,
+                ),
+            ),
+            retrieved_at=APR,
+        ),
+    )
+
+    artifact = (
+        artifact_store
+        .persist_dataset_reference(
+            reference,
+            created_at=APR,
+        )
+    )
+
+    return (
+        catalog
+        .save_dataset_reference_artifact(
+            artifact,
+            reference,
+        )
+    )
+
+
+def _dataset_reference_artifact_id(
+    catalog,
+    evidence,
+):
+    matches = []
+
+    for reference in evidence.artifact_references:
+        if not reference.startswith(
+            "artifact:"
+        ):
+            continue
+
+        artifact_id = reference.removeprefix(
+            "artifact:"
+        )
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.DATASET_REFERENCE
+        ):
+            matches.append(
+                artifact_id
+            )
+
+    assert len(matches) == 1
+    return matches[0]
+
+
 def _create_reuse_source(
     tmp_path,
     catalog,
@@ -1008,6 +1121,13 @@ def _create_reuse_source(
 ):
     artifact_store = ContentAddressedResearchArtifactStore(
         tmp_path / "artifacts"
+    )
+
+    dataset_artifact = (
+        _persist_reuse_dataset_reference(
+            catalog,
+            artifact_store,
+        )
     )
 
     result_artifact = artifact_store.persist_bytes(
@@ -1047,6 +1167,9 @@ def _create_reuse_source(
             research_artifact_reference(
                 result_artifact.artifact_id
             ),
+            research_artifact_reference(
+                dataset_artifact.artifact_id
+            ),
         ),
     )
 
@@ -1079,6 +1202,13 @@ def test_complete_running_job_with_exact_reuse_is_atomic(
         spec,
     )
 
+    dataset_artifact_id = (
+        _dataset_reference_artifact_id(
+            catalog,
+            evidence,
+        )
+    )
+
     before_attempts = _attempt_count(catalog)
 
     updated_trial, updated_job, event = (
@@ -1087,6 +1217,12 @@ def test_complete_running_job_with_exact_reuse_is_atomic(
             experiment_spec_id=spec.experiment_spec_id,
             reused_attempt_id=source.attempt_id,
             terminal_at=JUN,
+            requested_dataset_reference_artifact_id=(
+                dataset_artifact_id
+            ),
+            source_dataset_reference_artifact_id=(
+                dataset_artifact_id
+            ),
         )
     )
 
@@ -1123,6 +1259,137 @@ def test_complete_running_job_with_exact_reuse_is_atomic(
     assert len(events) == 2
 
 
+
+
+def test_m94h2_exact_reuse_rejects_missing_dataset_lineage(
+    tmp_path,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path,
+        attempt_id_factory=(
+            lambda: "attempt-h2-missing-lineage"
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    source, _, _ = _create_reuse_source(
+        tmp_path,
+        catalog,
+        spec,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "requires requested and source "
+            "DatasetReference lineage"
+        ),
+    ):
+        catalog.complete_running_job_with_exact_reuse(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            reused_attempt_id=(
+                source.attempt_id
+            ),
+            terminal_at=JUN,
+        )
+
+    assert (
+        catalog.load_trial(
+            trial.trial_id
+        ).disposition
+        is TrialDisposition.PENDING
+    )
+
+    assert (
+        catalog.load_research_job(
+            job.job_id
+        ).state
+        is ResearchJobState.RUNNING
+    )
+
+
+def test_m94h2_exact_reuse_rejects_incompatible_dataset_lineage(
+    tmp_path,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path,
+        attempt_id_factory=(
+            lambda: "attempt-h2-incompatible-lineage"
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    source, evidence, _ = _create_reuse_source(
+        tmp_path,
+        catalog,
+        spec,
+    )
+
+    source_dataset_artifact_id = (
+        _dataset_reference_artifact_id(
+            catalog,
+            evidence,
+        )
+    )
+
+    artifact_store = (
+        ContentAddressedResearchArtifactStore(
+            tmp_path / "artifacts"
+        )
+    )
+
+    requested_artifact = (
+        _persist_reuse_dataset_reference(
+            catalog,
+            artifact_store,
+            close=103.0,
+            source="fixture:m94h2-incompatible",
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "DatasetReference identities are incompatible"
+        ),
+    ):
+        catalog.complete_running_job_with_exact_reuse(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            reused_attempt_id=(
+                source.attempt_id
+            ),
+            terminal_at=JUN,
+            requested_dataset_reference_artifact_id=(
+                requested_artifact.artifact_id
+            ),
+            source_dataset_reference_artifact_id=(
+                source_dataset_artifact_id
+            ),
+        )
+
+    assert (
+        catalog.load_trial(
+            trial.trial_id
+        ).disposition
+        is TrialDisposition.PENDING
+    )
+
+    assert (
+        catalog.load_research_job(
+            job.job_id
+        ).state
+        is ResearchJobState.RUNNING
+    )
 
 
 def test_m94e_cancel_request_blocks_exact_reuse_terminalization(
@@ -2361,10 +2628,17 @@ def test_m94g2_trial_denominator_stays_fixed_across_failure_retry_and_reuse(
     assert claimed_retry is not None
     assert claimed_retry.job_id == retry_job.job_id
 
-    source, _, _ = _create_reuse_source(
+    source, reuse_evidence, _ = _create_reuse_source(
         tmp_path,
         catalog,
         spec,
+    )
+
+    dataset_artifact_id = (
+        _dataset_reference_artifact_id(
+            catalog,
+            reuse_evidence,
+        )
     )
 
     reused_trial, reused_job, _ = (
@@ -2377,6 +2651,12 @@ def test_m94g2_trial_denominator_stays_fixed_across_failure_retry_and_reuse(
                 source.attempt_id
             ),
             terminal_at=JUN,
+            requested_dataset_reference_artifact_id=(
+                dataset_artifact_id
+            ),
+            source_dataset_reference_artifact_id=(
+                dataset_artifact_id
+            ),
         )
     )
 

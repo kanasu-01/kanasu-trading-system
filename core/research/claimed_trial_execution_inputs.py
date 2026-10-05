@@ -11,6 +11,7 @@ verifies every registered field that can be checked independently.
 """
 
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
@@ -23,6 +24,10 @@ from core.research.registered_trial_execution_plan import (
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
+from core.strategies.strategy_factory import (
+    get_research_procedure_strategy_class,
+    get_strategy_class,
+)
 
 
 class ClaimedTrialInputValidationError(ValueError):
@@ -131,6 +136,50 @@ TrialExecutionInputResolver = Callable[
 ]
 
 
+def snapshot_claimed_trial_execution_inputs(
+    inputs: ClaimedTrialExecutionInputs,
+) -> ClaimedTrialExecutionInputs:
+    """Return an isolated registered-execution value set."""
+
+    if not isinstance(
+        inputs,
+        ClaimedTrialExecutionInputs,
+    ):
+        raise TypeError(
+            "inputs must be ClaimedTrialExecutionInputs"
+        )
+
+    try:
+        return ClaimedTrialExecutionInputs(
+            strategy=deepcopy(inputs.strategy),
+            config=deepcopy(inputs.config),
+            runtime_context=deepcopy(
+                inputs.runtime_context
+            ),
+            dataset_context=deepcopy(
+                inputs.dataset_context
+            ),
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+            strategy_procedure_id=(
+                inputs.strategy_procedure_id
+            ),
+            risk_economic_configuration=dict(
+                inputs.risk_economic_configuration
+            ),
+            data_treatment_basis=dict(
+                inputs.data_treatment_basis
+            ),
+        )
+    except Exception as error:
+        raise ClaimedTrialInputValidationError(
+            "resolved registered Trial inputs cannot be "
+            "isolated for authoritative execution"
+        ) from error
+
+
 def validate_claimed_trial_execution_inputs(
     plan: RegisteredTrialExecutionPlan,
     inputs: ClaimedTrialExecutionInputs,
@@ -160,6 +209,51 @@ def validate_claimed_trial_execution_inputs(
         raise ClaimedTrialInputValidationError(
             "resolved strategy procedure does not match "
             "the registered Trial plan"
+        )
+
+    try:
+        expected_strategy_class = (
+            get_research_procedure_strategy_class(
+                plan.strategy_procedure_id
+            )
+        )
+    except (TypeError, ValueError) as error:
+        raise ClaimedTrialInputValidationError(
+            "registered strategy procedure identity "
+            "is invalid"
+        ) from error
+
+    if expected_strategy_class is None:
+        raise ClaimedTrialInputValidationError(
+            "registered strategy procedure is unverifiable "
+            "from canonical executable authority"
+        )
+
+    try:
+        configured_strategy_class = (
+            get_strategy_class(
+                inputs.config
+            )
+        )
+    except (TypeError, ValueError) as error:
+        raise ClaimedTrialInputValidationError(
+            "Backtest strategy configuration cannot prove "
+            "the registered procedure"
+        ) from error
+
+    if (
+        configured_strategy_class
+        is not expected_strategy_class
+    ):
+        raise ClaimedTrialInputValidationError(
+            "Backtest strategy configuration does not match "
+            "the registered procedure"
+        )
+
+    if type(inputs.strategy) is not expected_strategy_class:
+        raise ClaimedTrialInputValidationError(
+            "executable strategy implementation does not match "
+            "the registered procedure"
         )
 
     if inputs.config.timeframe != plan.timeframe:

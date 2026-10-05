@@ -925,7 +925,8 @@ def test_legacy_orchestrator_execution_still_uses_original_retrieval_path(
     )
 
     assert captured["retrieval_count"] == 1
-    assert captured["executed"] is values
+    assert captured["executed"] is not values
+    assert captured["executed"] == values
 
     evidence = evidence_store.load(
         execution.evidence_id

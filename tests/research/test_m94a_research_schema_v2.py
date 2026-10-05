@@ -29,6 +29,11 @@ V3_TABLES = V2_TABLES | {
 }
 
 
+V4_TABLES = V3_TABLES | {
+    "research_dataset_reference_identities",
+}
+
+
 def user_version(path) -> int:
     with sqlite3.connect(path) as connection:
         return int(
@@ -105,16 +110,16 @@ def create_v1_database(path) -> None:
         connection.execute("PRAGMA user_version = 1")
 
 
-def test_new_database_initializes_additive_schema_v3(
+def test_new_database_initializes_additive_schema_v4(
     tmp_path,
 ):
     path = tmp_path / "research.sqlite3"
 
     SQLiteResearchEvidenceStore(path)
 
-    assert RESEARCH_SCHEMA_VERSION == 3
-    assert user_version(path) == 3
-    assert table_names(path) == V3_TABLES
+    assert RESEARCH_SCHEMA_VERSION == 4
+    assert user_version(path) == 4
+    assert table_names(path) == V4_TABLES
 
 
 def test_v1_migration_preserves_existing_rows_and_adds_tables(
@@ -144,8 +149,8 @@ def test_v1_migration_preserves_existing_rows_and_adds_tables(
         ).fetchone()
 
     assert before == after
-    assert user_version(path) == 3
-    assert table_names(path) == V3_TABLES
+    assert user_version(path) == 4
+    assert table_names(path) == V4_TABLES
 
 
 
@@ -187,8 +192,8 @@ def test_v2_migration_adds_reuse_dataset_lineage_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 3
-    assert table_names(path) == V3_TABLES
+    assert user_version(path) == 4
+    assert table_names(path) == V4_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -206,6 +211,84 @@ def test_v2_migration_adds_reuse_dataset_lineage_table(
         "job_id",
         "requested_dataset_reference_artifact_id",
         "source_dataset_reference_artifact_id",
+    )
+
+
+def create_v3_database(path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            research_schema._CREATE_RESEARCH_EVIDENCE_TABLE
+        )
+
+        for statement in (
+            research_schema._CREATE_V1_CATALOG_TABLES
+        ):
+            connection.execute(statement)
+
+        for statement in (
+            research_schema._CREATE_V2_TABLES
+        ):
+            connection.execute(statement)
+
+        for statement in (
+            research_schema._CREATE_V3_TABLES
+        ):
+            connection.execute(statement)
+
+        for statement in (
+            research_schema._CREATE_V2_INDEXES
+        ):
+            connection.execute(statement)
+
+        connection.execute(
+            "PRAGMA user_version = 3"
+        )
+
+
+def test_v3_migration_adds_dataset_reference_identity_table(
+    tmp_path,
+):
+    path = tmp_path / "research-v3.sqlite3"
+    create_v3_database(path)
+
+    assert user_version(path) == 3
+    assert table_names(path) == V3_TABLES
+
+    SQLiteResearchEvidenceStore(path)
+
+    assert user_version(path) == 4
+    assert table_names(path) == V4_TABLES
+
+    with sqlite3.connect(path) as connection:
+        columns = tuple(
+            row[1]
+            for row in connection.execute(
+                """
+                PRAGMA table_info(
+                    research_dataset_reference_identities
+                )
+                """
+            )
+        )
+
+        foreign_keys = connection.execute(
+            """
+            PRAGMA foreign_key_list(
+                research_dataset_reference_identities
+            )
+            """
+        ).fetchall()
+
+    assert columns == (
+        "artifact_id",
+        "dataset_id",
+    )
+
+    assert any(
+        row[2] == "research_artifacts"
+        and row[3] == "artifact_id"
+        and row[4] == "artifact_id"
+        for row in foreign_keys
     )
 
 

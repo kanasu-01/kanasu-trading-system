@@ -650,6 +650,68 @@ def test_claimed_job_input_mismatch_fails_before_attempt_or_retrieval(
 
 
 
+def test_m94h1_retrieval_mutation_cannot_change_registered_capital(
+    tmp_path,
+):
+    resolved_inputs = _inputs()
+    registered_capital = (
+        resolved_inputs.config.initial_capital
+    )
+    mutated_capital = registered_capital * 2
+
+    def mutate_resolver_owned_inputs(*args, **kwargs):
+        resolved_inputs.config.initial_capital = (
+            mutated_capital
+        )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: resolved_inputs
+        ),
+        retrieval_hook=(
+            mutate_resolver_owned_inputs
+        ),
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+    original_execute = orchestrator._execute_candles
+    executed_capitals = []
+
+    def capture_execute(**kwargs):
+        executed_capitals.append(
+            kwargs["config"].initial_capital
+        )
+        return original_execute(**kwargs)
+
+    orchestrator._execute_candles = capture_execute
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        resolved_inputs.config.initial_capital
+        == mutated_capital
+    )
+    assert (
+        terminal_job.state
+        is ResearchJobState.SUCCEEDED
+    )
+    assert executed_capitals == [
+        registered_capital
+    ]
+
+
 def test_claimed_job_reuses_exact_accepted_execution_without_new_attempt(
     tmp_path,
 ):
@@ -1100,6 +1162,69 @@ def test_provider_retrieval_failure_is_classified_before_attempt(
     )
     assert _attempt_count(catalog) == 0
     assert len(retrieval.calls) == 1
+    assert execution_calls == []
+
+
+def test_m94h2_authoritative_input_resolution_failure_propagates_fail_closed(
+    tmp_path,
+):
+    def fail_authoritative_resolution(plan):
+        raise AuthoritativeResearchStateError(
+            RuntimeError(
+                "authoritative execution input resolution failed"
+            )
+        )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            fail_authoritative_resolution
+        ),
+    )
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "authoritative execution input "
+            "resolution failed"
+        ),
+    ):
+        executor.execute(
+            claimed
+        )
+
+    persisted_job = catalog.load_research_job(
+        claimed.job_id
+    )
+
+    assert persisted_job is not None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.failure_classification is None
+    assert persisted_job.failure_message is None
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+    assert _attempt_count(catalog) == 0
+    assert retrieval.calls == []
     assert execution_calls == []
 
 
@@ -2164,6 +2289,193 @@ def test_m94g2_worker_pool_stops_after_authoritative_artifact_persistence_failur
     assert len(retrieval.calls) == 1
     assert _attempt_count(catalog) == 0
     assert execution_calls == []
+
+
+def test_m94h2_worker_pool_stops_after_authoritative_retrieval_failure(
+    tmp_path,
+):
+    (
+        catalog,
+        first_trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        retrieval_error=(
+            AuthoritativeResearchStateError(
+                RuntimeError(
+                    "authoritative retrieval integrity failed"
+                )
+            )
+        ),
+        members=(
+            INSTRUMENT_ID,
+            "NSE-EQ-XYZ",
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    revision_id = first_trial.study_revision_id
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match="authoritative retrieval integrity failed",
+    ):
+        queue.run_worker_pool(
+            revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-h2-retrieval-{slot}"
+            ),
+            claimed_at_factory=lambda: CLAIMED_AT,
+            execute_claimed_job=executor.execute,
+        )
+
+    snapshot = queue.snapshot(
+        revision_id
+    )
+
+    assert snapshot.total_registered_trials == 2
+    assert snapshot.running_jobs == 1
+    assert snapshot.queued_jobs == 1
+    assert snapshot.failed_jobs == 0
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 0
+    assert execution_calls == []
+
+
+def test_m94h2_worker_pool_stops_after_corrupt_prepared_manifest(
+    tmp_path,
+):
+    (
+        catalog,
+        first_trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        members=(
+            INSTRUMENT_ID,
+            "NSE-EQ-XYZ",
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    revision_id = first_trial.study_revision_id
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+    original_load = (
+        orchestrator.artifact_store.load_bytes
+    )
+    manifest_failures = 0
+
+    def fail_manifest_load(artifact_id):
+        nonlocal manifest_failures
+
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+        ):
+            manifest_failures += 1
+            raise RuntimeError(
+                "authoritative prepared manifest corrupt"
+            )
+
+        return original_load(
+            artifact_id
+        )
+
+    orchestrator.artifact_store.load_bytes = (
+        fail_manifest_load
+    )
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "manifest artifact is unavailable or corrupt"
+        ),
+    ):
+        queue.run_worker_pool(
+            revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-h2-manifest-{slot}"
+            ),
+            claimed_at_factory=lambda: CLAIMED_AT,
+            execute_claimed_job=executor.execute,
+        )
+
+    snapshot = queue.snapshot(
+        revision_id
+    )
+
+    assert snapshot.total_registered_trials == 2
+    assert snapshot.running_jobs == 1
+    assert snapshot.queued_jobs == 1
+    assert snapshot.failed_jobs == 0
+    assert manifest_failures == 1
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 1
+    assert execution_calls == []
+
+    running_jobs = [
+        job
+        for trial in catalog.list_trials_for_revision(
+            revision_id
+        )
+        for job in catalog.list_research_jobs_for_trial(
+            trial.trial_id
+        )
+        if job.state is ResearchJobState.RUNNING
+    ]
+
+    assert len(running_jobs) == 1
+    assert running_jobs[0].attempt_id is not None
+
+    attempt = catalog.load_run_attempt(
+        running_jobs[0].attempt_id
+    )
+
+    assert attempt is not None
+    assert (
+        attempt.state
+        is RunAttemptState.RUNNING
+    )
+    assert attempt.failure_classification is None
+    assert attempt.failure_message is None
 
 
 def test_m94g2_worker_pool_continues_after_ordinary_trial_failure(

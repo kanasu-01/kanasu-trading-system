@@ -6,6 +6,7 @@ from core.config.backtest_config import BacktestConfig
 from core.market_data.historical_coverage import TimeRange
 from core.research.claimed_trial_execution_inputs import (
     ClaimedTrialExecutionInputs,
+    ClaimedTrialInputValidationError,
     validate_claimed_trial_execution_inputs,
 )
 from core.research.models.dataset import PriceAdjustmentBasis
@@ -18,6 +19,7 @@ from core.research.registered_trial_execution_plan import (
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
+from core.strategies.strategy_factory import create_strategy
 
 
 UTC = timezone.utc
@@ -48,7 +50,7 @@ def _plan(
         trial_id="trial-fixture",
         study_revision_id="revision-fixture",
         instrument_id="NSE:A",
-        strategy_procedure_id="fixture-procedure-v1",
+        strategy_procedure_id="sma-crossover-v1",
         timeframe="1d",
         research_range=TimeRange(JAN, FEB),
         trial_range=TimeRange(JAN, FEB),
@@ -62,8 +64,8 @@ def _plan(
             }
         ),
         parameter_configuration={
-            "fast": 5,
-            "slow": 20,
+            "fast_period": 5,
+            "slow_period": 20,
         },
         data_treatment_basis=(
             data_treatment
@@ -91,15 +93,15 @@ def _inputs(
         params
         if params is not None
         else {
-            "fast": 5,
-            "slow": 20,
+            "fast_period": 5,
+            "slow_period": 20,
         }
     )
 
     config = BacktestConfig(
         symbol="A",
         timeframe="1d",
-        strategy_name="fixture_strategy",
+        strategy_name="sma_crossover",
         start=JAN,
         end=FEB,
         initial_capital=1_000_000.0,
@@ -113,8 +115,8 @@ def _inputs(
     )
 
     return ClaimedTrialExecutionInputs(
-        strategy=FixtureStrategy(
-            dict(resolved_params)
+        strategy=create_strategy(
+            config
         ),
         config=config,
         runtime_context=RuntimeContext(
@@ -130,7 +132,7 @@ def _inputs(
             price_basis
         ),
         strategy_procedure_id=(
-            "fixture-procedure-v1"
+            "sma-crossover-v1"
         ),
         risk_economic_configuration=(
             risk
@@ -156,6 +158,43 @@ def test_valid_explicit_execution_inputs_match_registered_plan():
     )
 
 
+def test_m94h1_rejects_unrelated_strategy_using_same_procedure_label():
+    inputs = _inputs()
+
+    unrelated = FixtureStrategy(
+        dict(inputs.config.strategy_params)
+    )
+
+    inputs = ClaimedTrialExecutionInputs(
+        strategy=unrelated,
+        config=inputs.config,
+        runtime_context=inputs.runtime_context,
+        dataset_context=inputs.dataset_context,
+        provider=inputs.provider,
+        price_adjustment_basis=(
+            inputs.price_adjustment_basis
+        ),
+        strategy_procedure_id=(
+            "sma-crossover-v1"
+        ),
+        risk_economic_configuration=(
+            inputs.risk_economic_configuration
+        ),
+        data_treatment_basis=(
+            inputs.data_treatment_basis
+        ),
+    )
+
+    with pytest.raises(
+        ClaimedTrialInputValidationError,
+        match="executable strategy implementation",
+    ):
+        validate_claimed_trial_execution_inputs(
+            _plan(),
+            inputs,
+        )
+
+
 def test_rejects_parameter_drift_from_registered_trial_variant():
     with pytest.raises(
         ValueError,
@@ -165,8 +204,8 @@ def test_rejects_parameter_drift_from_registered_trial_variant():
             _plan(),
             _inputs(
                 params={
-                    "fast": 10,
-                    "slow": 40,
+                    "fast_period": 10,
+                    "slow_period": 40,
                 }
             ),
         )

@@ -101,6 +101,8 @@ class SuccessorBacktestResearchCoordinator:
                         price_adjustment_basis
                     ),
                 )
+            except AuthoritativeResearchStateError:
+                raise
             except Exception as error:
                 raise SuccessorHistoricalRetrievalError(
                     error
@@ -171,8 +173,9 @@ class SuccessorBacktestResearchCoordinator:
                     artifact = (
                         self.orchestrator
                         .catalog_store
-                        .save_artifact(
-                            artifact
+                        .save_dataset_reference_artifact(
+                            artifact,
+                            reference,
                         )
                     )
                 except Exception as error:

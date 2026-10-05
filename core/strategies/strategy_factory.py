@@ -11,6 +11,31 @@ from core.config.backtest_config import (
 )
 
 
+_RESEARCH_PROCEDURE_STRATEGY_CLASSES = {
+    "sma-crossover-v1": SMACrossOverStrategy,
+}
+
+
+def get_research_procedure_strategy_class(
+    procedure_id: str,
+) -> type[BaseStrategy] | None:
+    """Resolve one explicitly accepted registered procedure implementation."""
+
+    if not isinstance(procedure_id, str):
+        raise TypeError(
+            "procedure_id must be a string"
+        )
+
+    if not procedure_id:
+        raise ValueError(
+            "procedure_id must be non-empty"
+        )
+
+    return _RESEARCH_PROCEDURE_STRATEGY_CLASSES.get(
+        procedure_id
+    )
+
+
 def create_strategy(
     config: BacktestConfig,
 ) -> BaseStrategy:

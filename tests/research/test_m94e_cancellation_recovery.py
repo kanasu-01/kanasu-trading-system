@@ -5,7 +5,16 @@ import sqlite3
 import pytest
 
 from core.config.app_config import AppConfig
+from core.entities.candle import Candle
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.dataset import (
+    DatasetIdentityV2,
+    DatasetProvenance,
+    PriceAdjustmentBasis,
+)
+from core.research.models.dataset_reference import (
+    DatasetReference,
+)
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
     ResearchJobCompletionKind,
@@ -57,6 +66,78 @@ APR = datetime(2020, 4, 1, tzinfo=UTC)
 MAY = datetime(2020, 5, 1, tzinfo=UTC)
 JUN = datetime(2020, 6, 1, tzinfo=UTC)
 JUL = datetime(2020, 7, 1, tzinfo=UTC)
+
+
+def _persist_m94h2_dataset_reference(
+    catalog,
+    artifact_store,
+    *,
+    source,
+    created_at,
+):
+    candle = Candle(
+        timestamp=JAN,
+        open=100.0,
+        high=102.0,
+        low=99.0,
+        close=101.0,
+        volume=1000.0,
+    )
+
+    identity = DatasetIdentityV2(
+        instrument_id="NSE:A",
+        requested_range=TimeRange(
+            JAN,
+            FEB,
+        ),
+        timeframe="1d",
+        timezone="UTC",
+        price_adjustment_basis=(
+            PriceAdjustmentBasis.RAW
+        ),
+        candles=(candle,),
+    )
+
+    reference = DatasetReference(
+        identity=identity,
+        provenance=DatasetProvenance(
+            dataset_id=identity.dataset_id,
+            instrument_id="NSE:A",
+            requested_range=TimeRange(
+                JAN,
+                FEB,
+            ),
+            timeframe="1d",
+            timezone="UTC",
+            price_adjustment_basis=(
+                PriceAdjustmentBasis.RAW
+            ),
+            source=source,
+            coverage=(
+                TimeRange(
+                    JAN,
+                    FEB,
+                ),
+            ),
+            retrieved_at=created_at,
+        ),
+    )
+
+    artifact = (
+        artifact_store
+        .persist_dataset_reference(
+            reference,
+            created_at=created_at,
+        )
+    )
+
+    return (
+        catalog
+        .save_dataset_reference_artifact(
+            artifact,
+            reference,
+        )
+    )
 
 
 def _environment(
@@ -1437,6 +1518,17 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
             + '"}'
         ).encode("ascii")
 
+        dataset_artifact = (
+            _persist_m94h2_dataset_reference(
+                catalog,
+                artifact_store,
+                source=(
+                    "fixture:m94g4-mixed-" + label
+                ),
+                created_at=created_at,
+            )
+        )
+
         result_artifact = artifact_store.persist_bytes(
             payload,
             artifact_kind=(
@@ -1490,6 +1582,9 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
                 ),
                 research_artifact_reference(
                     result_artifact.artifact_id
+                ),
+                research_artifact_reference(
+                    dataset_artifact.artifact_id
                 ),
             ),
         )
@@ -1558,6 +1653,32 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
         MAY + timedelta(seconds=8),
     )
 
+    reuse_dataset_artifact_id = None
+
+    for reference in reuse_evidence.artifact_references:
+        if not reference.startswith(
+            "artifact:"
+        ):
+            continue
+
+        artifact_id = reference.removeprefix(
+            "artifact:"
+        )
+
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.DATASET_REFERENCE
+        ):
+            reuse_dataset_artifact_id = artifact_id
+            break
+
+    assert reuse_dataset_artifact_id is not None
+
     reuse_source = catalog.terminalize_attempt_with_evidence(
         reuse_source_attempt.attempt_id,
         state=RunAttemptState.SUCCEEDED,
@@ -1576,6 +1697,12 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
             reuse_source.attempt_id
         ),
         terminal_at=MAY + timedelta(seconds=9),
+        requested_dataset_reference_artifact_id=(
+            reuse_dataset_artifact_id
+        ),
+        source_dataset_reference_artifact_id=(
+            reuse_dataset_artifact_id
+        ),
     )
 
     running_job = claim(

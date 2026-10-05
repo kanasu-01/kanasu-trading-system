@@ -297,9 +297,33 @@ def test_application_projects_authoritative_result(
 
     execution = captured["execution"]
 
-    assert execution["candles"] is candles
-    assert execution["strategy"] is captured["strategy"]
-    assert execution["config"] is config
+    assert execution["candles"] is not candles
+    assert execution["candles"] == candles
+    assert execution["strategy"] is not captured["strategy"]
+    assert (
+        type(execution["strategy"])
+        is type(captured["strategy"])
+    )
+    assert (
+        execution["strategy"].research_parameters()
+        == captured["strategy"].research_parameters()
+    )
+
+    assert execution["config"] is not config
+    assert execution["config"].start == config.start
+    assert execution["config"].end == config.end
+    assert (
+        execution["config"].initial_capital
+        == config.initial_capital
+    )
+    assert (
+        execution["config"].strategy_name
+        == config.strategy_name
+    )
+    assert (
+        execution["config"].strategy_params
+        == config.strategy_params
+    )
 
     assert (
         execution["runtime_context"].risk_per_trade_pct
@@ -426,7 +450,8 @@ def test_application_propagates_backtest_execution_failure(
     )
 
     def fail_execution(**kwargs):
-        assert kwargs["candles"] is candles
+        assert kwargs["candles"] is not candles
+        assert kwargs["candles"] == candles
         raise RuntimeError("backtest execution failed")
 
     monkeypatch.setattr(

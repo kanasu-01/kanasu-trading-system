@@ -193,8 +193,18 @@ def test_clean_execution_uses_one_exact_candle_sequence_and_accepts_evidence(
     )
 
     assert captured["retrieval_count"] == 1
-    assert captured["fingerprinted"] is exact_candles
-    assert captured["executed"] is exact_candles
+    assert (
+        captured["fingerprinted"]
+        is captured["executed"]
+    )
+    assert (
+        captured["fingerprinted"]
+        is not exact_candles
+    )
+    assert (
+        captured["fingerprinted"]
+        == exact_candles
+    )
 
     assert execution.attempt_id == "attempt-001"
     assert execution.evidence_id == "evidence-001"
@@ -320,7 +330,8 @@ def test_execution_failure_creates_failed_evidence_and_failed_attempt(
     values = candles()
 
     def fail_execution(**kwargs):
-        assert kwargs["candles"] is values
+        assert kwargs["candles"] is not values
+        assert kwargs["candles"] == values
         raise RuntimeError("engine failed")
 
     service, catalog, evidence_store, _ = make_orchestrator(
@@ -1019,6 +1030,99 @@ def _m94g1_prepared_environment(tmp_path):
         runtime_context,
         dataset_context,
         execution_calls,
+    )
+
+
+def test_m94h1_manifest_io_race_executes_verified_private_snapshot(
+    tmp_path,
+    monkeypatch,
+):
+    from threading import Event, Thread
+
+    (
+        service,
+        prepared,
+        strategy,
+        cfg,
+        runtime_context,
+        dataset_context,
+        execution_calls,
+    ) = _m94g1_prepared_environment(
+        tmp_path
+    )
+
+    original_capital = cfg.initial_capital
+    started = Event()
+    release = Event()
+    original_load = (
+        service.artifact_store.load_bytes
+    )
+    blocked_once = {
+        "value": False,
+    }
+
+    def blocking_load(artifact_id):
+        if (
+            artifact_id
+            == prepared.manifest_artifact_id
+            and not blocked_once["value"]
+        ):
+            blocked_once["value"] = True
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError(
+                    "test manifest barrier timed out"
+                )
+
+        return original_load(
+            artifact_id
+        )
+
+    monkeypatch.setattr(
+        service.artifact_store,
+        "load_bytes",
+        blocking_load,
+    )
+
+    errors = []
+
+    def run_execution():
+        try:
+            service.execute_prepared(
+                prepared=prepared,
+                strategy=strategy,
+                config=cfg,
+                runtime_context=runtime_context,
+                dataset_context=dataset_context,
+            )
+        except Exception as error:
+            errors.append(error)
+
+    thread = Thread(
+        target=run_execution,
+        daemon=True,
+    )
+    thread.start()
+
+    assert started.wait(5)
+
+    cfg.initial_capital = (
+        original_capital * 2
+    )
+
+    release.set()
+    thread.join(5)
+
+    assert not thread.is_alive()
+    assert errors == []
+    assert len(execution_calls) == 1
+    assert (
+        execution_calls[0]["config"]
+        is not cfg
+    )
+    assert (
+        execution_calls[0]["config"].initial_capital
+        == original_capital
     )
 
 

@@ -12,7 +12,8 @@ behavior.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -212,8 +213,10 @@ class PreparedBacktestResearchSpecification:
     """
     Exact material prepared before a physical RunAttempt is created.
 
-    The same candle list object is deliberately retained so preparation
-    and financial execution continue to operate on one exact sequence.
+    Preparation retains the retrieved candle values used for canonical
+    identity. Immediately before final identity validation,
+    execute_prepared() creates a private value-identical candle snapshot;
+    that exact private sequence is then consumed by financial execution.
     """
 
     candles: list[Candle]
@@ -954,9 +957,11 @@ class BacktestResearchOrchestrator:
             FileNotFoundError,
             RuntimeError,
         ) as error:
-            raise ValueError(
-                "prepared execution identity mismatch: "
-                "manifest artifact is unavailable or corrupt"
+            raise AuthoritativeResearchStateError(
+                RuntimeError(
+                    "prepared execution identity mismatch: "
+                    "manifest artifact is unavailable or corrupt"
+                )
             ) from error
 
         execution_manifest_bytes = (
@@ -1050,22 +1055,54 @@ class BacktestResearchOrchestrator:
         )
 
         try:
+            # M9.4h N01: final identity verification and financial
+            # execution consume one private snapshot. Caller-owned
+            # mutable objects are not consulted after this point.
+            execution_prepared = replace(
+                prepared,
+                candles=deepcopy(
+                    prepared.candles
+                ),
+            )
+            execution_strategy = deepcopy(
+                strategy
+            )
+            execution_config = deepcopy(
+                config
+            )
+            execution_runtime_context = deepcopy(
+                runtime_context
+            )
+            execution_dataset_context = deepcopy(
+                dataset_context
+            )
+
             self._validate_prepared_execution_identity(
-                prepared=prepared,
-                strategy=strategy,
-                config=config,
-                runtime_context=runtime_context,
-                dataset_context=dataset_context,
+                prepared=execution_prepared,
+                strategy=execution_strategy,
+                config=execution_config,
+                runtime_context=(
+                    execution_runtime_context
+                ),
+                dataset_context=(
+                    execution_dataset_context
+                ),
             )
 
             result = self._execute_candles(
-                candles=prepared.candles,
-                strategy=strategy,
-                config=config,
-                runtime_context=runtime_context,
-                dataset_context=dataset_context,
+                candles=execution_prepared.candles,
+                strategy=execution_strategy,
+                config=execution_config,
+                runtime_context=(
+                    execution_runtime_context
+                ),
+                dataset_context=(
+                    execution_dataset_context
+                ),
             )
 
+        except AuthoritativeResearchStateError:
+            raise
         except Exception as error:
             evidence = self._evidence(
                 status=(
