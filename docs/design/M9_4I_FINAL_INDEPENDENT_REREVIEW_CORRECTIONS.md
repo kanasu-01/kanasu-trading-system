@@ -2,7 +2,7 @@
 
 ## Status
 
-WORKING DESIGN - local corrective design baseline; implementation not yet complete.
+PUBLISHED CORRECTIVE CANDIDATE; POST-PUSH VERIFIED; INDEPENDENT RE-REVIEW PENDING.
 
 M9.5 remains BLOCKED.
 
@@ -33,6 +33,13 @@ Branch:
 M9.4i starting HEAD:
 
 `306c156a5b58edb8a4dd6331409d473bc08af98b`
+
+Published M9.4i corrective HEAD:
+
+`eab3c742ca5fbe0d7e058bb4cc8db758803848ab`
+
+Post-push verification confirmed the local and remote
+`m9-v1-research-platform` branch heads both equal that exact commit.
 
 Relevant earlier correction heads:
 
@@ -440,7 +447,7 @@ A PASS does not authorize M9.5 production implementation.
 
 ## Local M9.4i implementation and validation evidence
 
-Status: LOCAL CORRECTIVE CANDIDATE VALIDATED; NOT STAGED; NOT COMMITTED; NOT PUBLISHED; INDEPENDENT RE-REVIEW PENDING.
+Status: PUBLISHED CORRECTIVE CANDIDATE VALIDATED; POST-PUSH VERIFIED; INDEPENDENT RE-REVIEW PENDING.
 
 Parent HEAD:
 
@@ -469,4 +476,4 @@ Reproduced local evidence on 2026-10-05:
 
 The broad validation command itself completed all test and diff checks successfully. Its final shell status was non-zero only because a post-validation single-item untracked-file guard was brittle; that guard did not change repository content and does not invalidate the completed test evidence.
 
-This section is pre-publication evidence only. It does not close the independent audit. `M95_GATE=BLOCKED` remains authoritative until this corrective candidate is staged, committed and published under separate human approvals and the independent re-review returns `M95_GATE=PASS`.
+This section records the validated and published corrective candidate at `eab3c742ca5fbe0d7e058bb4cc8db758803848ab`. Protected staging, commit and push were separately human-approved, and post-push verification confirmed the exact local/remote HEAD and committed 17-file manifest. This publication does not close the independent audit. `M95_GATE=BLOCKED` remains authoritative until an independent re-review of `eab3c742ca5fbe0d7e058bb4cc8db758803848ab` returns `M95_GATE=PASS`.

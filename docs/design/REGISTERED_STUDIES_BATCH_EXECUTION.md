@@ -2,11 +2,11 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; IMPLEMENTED / VALIDATED THROUGH M9.4i LOCAL CORRECTIVE CANDIDATE; INDEPENDENT RE-REVIEW PENDING**
+**ACCEPTED DESIGN BASELINE; M9.4i CORRECTIVE CANDIDATE PUBLISHED / POST-PUSH VERIFIED; INDEPENDENT RE-REVIEW PENDING**
 
 `M94_DESIGN_ACCEPTED=True`
 
-The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was historically published at `b93ae6a`. M9.4g later corrected the first independent-audit findings and was historically re-closed at `68df76b`. M9.4h preserved the 24 accepted design decisions while correcting residual N01-N07 defects and was published through h4 at `306c156a5b58edb8a4dd6331409d473bc08af98b`. The independent re-review of that exact head returned `M95_GATE=BLOCKED` with H01-H05. The current local M9.4i corrective candidate addresses H01-H04 and synchronizes H05 evidence without changing the accepted architecture. Its reproduced pre-publication evidence is 153 H01-H04 focused tests, 245 repository-wide `test_m94*.py` tests, 251 semantic `-k m94` tests with 1098 deselected, 1349 complete Python tests, and clean `git diff --check`. It is not staged, committed or published, and independent re-review remains pending.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was historically published at `b93ae6a`. M9.4g later corrected the first independent-audit findings and was historically re-closed at `68df76b`. M9.4h preserved the 24 accepted design decisions while correcting residual N01-N07 defects and was published through h4 at `306c156a5b58edb8a4dd6331409d473bc08af98b`. The independent re-review of that exact head returned `M95_GATE=BLOCKED` with H01-H05. M9.4i addresses H01-H04 and synchronizes H05 evidence without changing the accepted architecture. The corrective candidate is published at `eab3c742ca5fbe0d7e058bb4cc8db758803848ab` and post-push verification confirmed the exact local/remote branch head and 17-file commit manifest. Its reproduced validation evidence is 153 H01-H04 focused tests, 245 repository-wide `test_m94*.py` tests, 251 semantic `-k m94` tests with 1098 deselected, 1349 complete Python tests, and clean `git diff --check`. Independent re-review of the published head remains pending.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
