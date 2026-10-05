@@ -1710,12 +1710,35 @@ class SQLiteResearchCatalogStore:
         initial_events: tuple[TrialDispositionEvent, ...],
     ) -> tuple[StudyRevision, tuple[Trial, ...]]:
         """
-        Atomically register one immutable StudyRevision population.
+        Reject supported direct population-proof minting.
 
-        M9.4b registration owns one BEGIN IMMEDIATE transaction covering
-        the revision, every Trial and every initial disposition event.
-        Artifact bytes/metadata may already exist content-addressably,
-        but no partial Trial denominator becomes authoritative.
+        Complete population authority belongs to
+        RegisteredStudyRegistrationService canonical plan expansion.
+        """
+        raise ValueError(
+            "direct complete-population proof minting is unsupported; "
+            "use RegisteredStudyRegistrationService"
+        )
+
+    def _save_registered_revision_population(
+        self,
+        *,
+        study_id: str,
+        study_revision_id: str,
+        plan_artifact_id: str,
+        repository_revision: str,
+        evidence_reuse_policy: EvidenceReusePolicy,
+        registered_at: datetime,
+        trials: tuple[Trial, ...],
+        initial_events: tuple[TrialDispositionEvent, ...],
+    ) -> tuple[StudyRevision, tuple[Trial, ...]]:
+        """
+        Internal atomic persistence primitive for a canonically expanded
+        complete StudyRevision population.
+
+        RegisteredStudyRegistrationService owns plan resolution,
+        membership/variant expansion, Trial construction, and the backend
+        population limit before invoking this transaction.
         """
 
         if (
@@ -4679,7 +4702,7 @@ class SQLiteResearchCatalogStore:
 
         return terminal
 
-    def complete_running_job_with_exact_reuse(
+    def _complete_running_job_with_exact_reuse(
         self,
         *,
         job_id: str,
@@ -4693,7 +4716,12 @@ class SQLiteResearchCatalogStore:
             str | None
         ) = None,
     ) -> tuple[Trial, ResearchJob, TrialDispositionEvent]:
-        """Atomically complete one RUNNING job by exact accepted reuse."""
+        """
+        Internal atomic persistence primitive for already-verified exact reuse.
+
+        Supported workflow authority must verify immutable requested/source
+        DatasetReference artifacts before invoking this transaction.
+        """
 
         if not isinstance(terminal_at, datetime) or terminal_at.utcoffset() is None:
             raise ValueError("terminal_at must be a timezone-aware datetime")

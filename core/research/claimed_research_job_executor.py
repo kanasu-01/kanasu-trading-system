@@ -28,6 +28,9 @@ from core.research.claimed_trial_execution_inputs import (
     snapshot_claimed_trial_execution_inputs,
     validate_claimed_trial_execution_inputs,
 )
+from core.strategies.strategy_factory import (
+    create_registered_research_strategy,
+)
 from core.research.models.dataset_reference import (
     DATASET_REFERENCE_SCHEMA_ID,
     DatasetReference,
@@ -341,7 +344,12 @@ class ClaimedResearchJobExecutor:
                 artifact.schema_id
                 != DATASET_REFERENCE_SCHEMA_ID
             ):
-                return None
+                raise AuthoritativeResearchStateError(
+                    RuntimeError(
+                        "DatasetReference artifact metadata "
+                        "is incompatible with canonical lineage"
+                    )
+                )
 
             matches.append(
                 (artifact_id, artifact)
@@ -363,7 +371,10 @@ class ClaimedResearchJobExecutor:
             )
 
             if len(payload) != artifact.byte_count:
-                return None
+                raise RuntimeError(
+                    "DatasetReference artifact byte count "
+                    "does not match durable metadata"
+                )
 
             reference = (
                 decode_dataset_reference_bytes(
@@ -372,12 +383,17 @@ class ClaimedResearchJobExecutor:
             )
 
         except (
-            FileNotFoundError,
+            OSError,
             RuntimeError,
             TypeError,
             ValueError,
-        ):
-            return None
+        ) as error:
+            raise AuthoritativeResearchStateError(
+                RuntimeError(
+                    "DatasetReference artifact is unavailable "
+                    "or corrupt"
+                )
+            ) from error
 
         try:
             self.catalog_store.save_dataset_reference_artifact(
@@ -484,10 +500,17 @@ class ClaimedResearchJobExecutor:
             return cancelled
 
         try:
+            preparation_strategy = (
+                create_registered_research_strategy(
+                    plan.strategy_procedure_id,
+                    inputs.config,
+                )
+            )
+
             prepared = (
                 self.successor_coordinator
                 .prepare_specification(
-                    strategy=inputs.strategy,
+                    strategy=preparation_strategy,
                     config=inputs.config,
                     runtime_context=(
                         inputs.runtime_context
@@ -547,7 +570,14 @@ class ClaimedResearchJobExecutor:
                 inputs,
             )
 
-        except ClaimedTrialInputValidationError as error:
+            execution_strategy = (
+                create_registered_research_strategy(
+                    plan.strategy_procedure_id,
+                    inputs.config,
+                )
+            )
+
+        except (ClaimedTrialInputValidationError, ValueError) as error:
             return self._terminalize_preparation_failure(
                 job,
                 classification="invalid_input",
@@ -652,7 +682,7 @@ class ClaimedResearchJobExecutor:
                 try:
                     _, terminal_job, _ = (
                         self.catalog_store
-                        .complete_running_job_with_exact_reuse(
+                        ._complete_running_job_with_exact_reuse(
                             job_id=job.job_id,
                             experiment_spec_id=(
                                 experiment_spec_id
@@ -757,7 +787,7 @@ class ClaimedResearchJobExecutor:
                 .orchestrator
                 .execute_prepared(
                     prepared=prepared,
-                    strategy=inputs.strategy,
+                    strategy=execution_strategy,
                     config=inputs.config,
                     runtime_context=(
                         inputs.runtime_context

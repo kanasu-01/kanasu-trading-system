@@ -2,6 +2,7 @@ from contextlib import closing
 import json
 from datetime import datetime, timedelta, timezone
 import sqlite3
+from types import MethodType
 
 import pytest
 
@@ -73,6 +74,7 @@ from core.research.models.universe import (
 from core.runtime.backtest_runtime import (
     DeterministicBacktestComputationError,
     TransientBacktestOperationalError,
+    execute_backtest_candles,
 )
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
@@ -1679,7 +1681,7 @@ def test_m94e_cancellation_wins_exact_reuse_terminalization_race(
 
     original_complete = (
         catalog
-        .complete_running_job_with_exact_reuse
+        ._complete_running_job_with_exact_reuse
     )
 
     injected = False
@@ -1702,7 +1704,7 @@ def test_m94e_cancellation_wins_exact_reuse_terminalization_race(
 
     monkeypatch.setattr(
         catalog,
-        "complete_running_job_with_exact_reuse",
+        "_complete_running_job_with_exact_reuse",
         cancel_then_complete,
     )
 
@@ -2184,18 +2186,43 @@ def test_m94g1_reuse_rejects_corrupt_source_dataset_lineage(
         b"corrupt-dataset-reference"
     )
 
-    terminal_job = executor.execute(
-        claimed
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "DatasetReference artifact is unavailable "
+            "or corrupt"
+        ),
+    ):
+        executor.execute(
+            claimed
+        )
+
+    persisted_job = catalog.load_research_job(
+        claimed.job_id
     )
 
+    assert persisted_job is not None
     assert (
-        terminal_job.completion_kind
-        is ResearchJobCompletionKind.EXECUTED
+        persisted_job.state
+        is ResearchJobState.RUNNING
     )
-    assert terminal_job.reused_attempt_id is None
-    assert terminal_job.attempt_id != prior.attempt_id
-    assert _attempt_count(catalog) == 2
-    assert len(execution_calls) == 2
+    assert persisted_job.attempt_id is None
+    assert persisted_job.reused_attempt_id is None
+
+    persisted_trial = catalog.load_trial(
+        claimed.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+    assert persisted_trial.reused_attempt_id is None
+
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+    assert len(retrieval.calls) == 2
 
 
 def test_m94g2_worker_pool_stops_after_authoritative_artifact_persistence_failure(
@@ -2849,3 +2876,421 @@ def test_m94g4_cancellation_requested_during_financial_execution_preserves_truth
 
     assert len(retrieval.calls) == 1
     assert len(execution_calls) == 1
+
+def test_m94i1_registered_execution_ignores_mutated_resolver_strategy_alias(
+    tmp_path,
+):
+    resolved_inputs = _inputs()
+    mutable_alias = {
+        "suppress": False,
+    }
+
+    def resolver_owned_on_new_candle(self, series):
+        if mutable_alias["suppress"]:
+            return None
+
+        return type(self).on_new_candle(
+            self,
+            series,
+        )
+
+    resolved_inputs.strategy.on_new_candle = MethodType(
+        resolver_owned_on_new_candle,
+        resolved_inputs.strategy,
+    )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: resolved_inputs
+        ),
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+
+    original_load = (
+        orchestrator.artifact_store.load_bytes
+    )
+
+    manifest_mutations = []
+
+    def mutate_alias_during_manifest_verification(
+        artifact_id,
+    ):
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+        ):
+            mutable_alias["suppress"] = True
+            manifest_mutations.append(
+                artifact_id
+            )
+
+        return original_load(
+            artifact_id
+        )
+
+    orchestrator.artifact_store.load_bytes = (
+        mutate_alias_during_manifest_verification
+    )
+
+    observed = {}
+
+    def execute_real_engine(**kwargs):
+        strategy = kwargs["strategy"]
+
+        observed["strategy"] = strategy
+
+        result = execute_backtest_candles(
+            **kwargs
+        )
+
+        observed["signals"] = [
+            record.signal
+            for record in result.bar_records
+        ]
+
+        return result
+
+    orchestrator._execute_candles = (
+        execute_real_engine
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert mutable_alias["suppress"] is True
+    assert manifest_mutations
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.SUCCEEDED
+    )
+    assert (
+        terminal_job.completion_kind
+        is ResearchJobCompletionKind.EXECUTED
+    )
+
+    executed_strategy = observed["strategy"]
+
+    assert executed_strategy is not resolved_inputs.strategy
+    assert type(executed_strategy) is type(
+        resolved_inputs.strategy
+    )
+    assert "on_new_candle" not in vars(
+        executed_strategy
+    )
+
+    assert observed["signals"] == [
+        None,
+        "BUY",
+        None,
+    ]
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.EXECUTED
+    )
+
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 1
+
+def test_m94i2_corrupt_dataset_reference_blocks_supported_exact_reuse(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    inputs = _inputs()
+
+    prior = (
+        executor
+        .successor_coordinator
+        .execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=(
+                inputs.runtime_context
+            ),
+            dataset_context=(
+                inputs.dataset_context
+            ),
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+
+    evidence = orchestrator.evidence_store.load(
+        prior.evidence_id
+    )
+
+    dataset_artifact_ids = []
+
+    for reference in evidence.artifact_references:
+        if not reference.startswith(
+            "artifact:sha256:"
+        ):
+            continue
+
+        artifact_id = reference.removeprefix(
+            "artifact:"
+        )
+
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.DATASET_REFERENCE
+        ):
+            dataset_artifact_ids.append(
+                artifact_id
+            )
+
+    assert len(dataset_artifact_ids) == 1
+
+    dataset_path = (
+        orchestrator.artifact_store._absolute_path(
+            dataset_artifact_ids[0]
+        )
+    )
+
+    original_find = (
+        orchestrator.find_exact_reusable_execution
+    )
+
+    corruptions = []
+
+    def corrupt_after_preparation(
+        experiment_spec_id,
+    ):
+        reusable = original_find(
+            experiment_spec_id
+        )
+
+        assert reusable is not None
+
+        dataset_path.write_bytes(
+            b'{"corrupt":"m94i2"}'
+        )
+        corruptions.append(
+            dataset_artifact_ids[0]
+        )
+
+        return reusable
+
+    orchestrator.find_exact_reusable_execution = (
+        corrupt_after_preparation
+    )
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "DatasetReference artifact is unavailable "
+            "or corrupt"
+        ),
+    ):
+        executor.execute(
+            claimed
+        )
+
+    assert corruptions == [
+        dataset_artifact_ids[0]
+    ]
+
+    persisted_job = catalog.load_research_job(
+        claimed.job_id
+    )
+
+    assert persisted_job is not None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.reused_attempt_id is None
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_trial is not None
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+    assert persisted_trial.reused_attempt_id is None
+
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "manifest_error",
+    (
+        PermissionError(
+            "m94i2 manifest permission denied"
+        ),
+        OSError(
+            "m94i2 manifest filesystem read failed"
+        ),
+    ),
+    ids=(
+        "permission-error",
+        "os-error",
+    ),
+)
+def test_m94i2_worker_pool_stops_after_unreadable_authoritative_manifest(
+    tmp_path,
+    manifest_error,
+):
+    (
+        catalog,
+        first_trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: _inputs()
+        ),
+        members=(
+            INSTRUMENT_ID,
+            "NSE-EQ-XYZ",
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    revision_id = first_trial.study_revision_id
+
+    queue = ResearchJobQueueService(
+        catalog_store=catalog,
+        app_config=AppConfig(
+            research_max_workers=1
+        ),
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+
+    original_load = (
+        orchestrator.artifact_store.load_bytes
+    )
+
+    manifest_failures = []
+
+    def fail_manifest_load(
+        artifact_id,
+    ):
+        artifact = catalog.load_artifact(
+            artifact_id
+        )
+
+        if (
+            artifact is not None
+            and artifact.artifact_kind
+            is ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+        ):
+            manifest_failures.append(
+                artifact_id
+            )
+            raise manifest_error
+
+        return original_load(
+            artifact_id
+        )
+
+    orchestrator.artifact_store.load_bytes = (
+        fail_manifest_load
+    )
+
+    with pytest.raises(
+        AuthoritativeResearchStateError,
+        match=(
+            "manifest artifact is unavailable or corrupt"
+        ),
+    ):
+        queue.run_worker_pool(
+            revision_id,
+            worker_id_factory=(
+                lambda slot: f"worker-i2-{slot}"
+            ),
+            claimed_at_factory=lambda: CLAIMED_AT,
+            execute_claimed_job=executor.execute,
+        )
+
+    snapshot = queue.snapshot(
+        revision_id
+    )
+
+    assert snapshot.total_registered_trials == 2
+    assert snapshot.running_jobs == 1
+    assert snapshot.queued_jobs == 1
+    assert snapshot.failed_jobs == 0
+    assert len(manifest_failures) == 1
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 1
+    assert execution_calls == []
+
+    trials = catalog.list_trials_for_revision(
+        revision_id
+    )
+
+    dispositions = sorted(
+        trial.disposition
+        for trial in trials
+        if trial.disposition is not None
+    )
+
+    assert dispositions == [
+        TrialDisposition.PENDING,
+        TrialDisposition.PENDING,
+    ]

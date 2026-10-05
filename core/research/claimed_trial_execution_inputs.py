@@ -25,6 +25,7 @@ from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
 from core.strategies.strategy_factory import (
+    create_registered_research_strategy,
     get_research_procedure_strategy_class,
     get_strategy_class,
 )
@@ -321,12 +322,25 @@ def validate_claimed_trial_execution_inputs(
             "match the registered Trial variant"
         )
 
+    try:
+        canonical_strategy = (
+            create_registered_research_strategy(
+                plan.strategy_procedure_id,
+                inputs.config,
+            )
+        )
+    except (TypeError, ValueError, RuntimeError) as error:
+        raise ClaimedTrialInputValidationError(
+            "canonical registered strategy cannot be "
+            "constructed from executable authority"
+        ) from error
+
     if (
-        inputs.strategy.research_parameters()
+        canonical_strategy.research_parameters()
         != registered_parameters
     ):
         raise ClaimedTrialInputValidationError(
-            "resolved strategy effective parameters do not "
+            "canonical executable strategy parameters do not "
             "match the registered Trial variant"
         )
 

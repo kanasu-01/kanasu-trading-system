@@ -216,7 +216,7 @@ def test_whole_revision_transaction_rolls_back_partial_population(
         ValueError,
         match="no partial Trial population",
     ):
-        catalog.save_registered_revision_population(
+        catalog._save_registered_revision_population(
             study_id="study-atomic",
             study_revision_id=(
                 plan.artifact_id
@@ -270,7 +270,7 @@ def test_population_registration_requires_plan_content_identity(
         ValueError,
         match="must equal",
     ):
-        catalog.save_registered_revision_population(
+        catalog._save_registered_revision_population(
             study_id="study",
             study_revision_id=(
                 "sha256:" + "1" * 64

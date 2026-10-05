@@ -670,7 +670,7 @@ def _m94g2_complete_registered_store(tmp_path):
     )
 
     persisted_revision, persisted_trials = (
-        store.save_registered_revision_population(
+        store._save_registered_revision_population(
             study_id=registered_revision.study_id,
             study_revision_id=(
                 authoritative_revision_id
@@ -831,7 +831,7 @@ def test_m94h3_authoritative_zero_population_is_not_startable(
     )
 
     registered_revision, registered_trials = (
-        store.save_registered_revision_population(
+        store._save_registered_revision_population(
             study_id="study-001",
             study_revision_id=plan.artifact_id,
             plan_artifact_id=plan.artifact_id,
@@ -959,3 +959,88 @@ def test_m94g2_public_trial_append_rejected_after_start_without_mutation(
         )
         == jobs_before
     )
+
+def test_m94i3_public_population_writer_cannot_mint_subset_proof(
+    tmp_path,
+):
+    store = SQLiteResearchCatalogStore(
+        tmp_path / "research.sqlite3"
+    )
+
+    store.save_study(
+        study()
+    )
+
+    fixture_plan = plan_artifact()
+
+    plan = ResearchArtifact(
+        artifact_id=fixture_plan.artifact_id,
+        artifact_kind=fixture_plan.artifact_kind,
+        schema_id=STUDY_REVISION_SCHEMA_ID,
+        relative_path=fixture_plan.relative_path,
+        byte_count=fixture_plan.byte_count,
+        created_at=fixture_plan.created_at,
+    )
+
+    store.save_artifact(
+        plan
+    )
+    store.save_artifact(
+        membership_evidence_artifact()
+    )
+
+    registered = trial(
+        study_revision_id=plan.artifact_id,
+    )
+    event = initial_event(
+        event_id="event-m94i3-subset",
+        trial_id=registered.trial_id,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "direct complete-population proof minting "
+            "is unsupported"
+        ),
+    ):
+        store.save_registered_revision_population(
+            study_id="study-001",
+            study_revision_id=plan.artifact_id,
+            plan_artifact_id=plan.artifact_id,
+            repository_revision=(
+                "199ec3492a5af682482d0bee40c669420833563c"
+            ),
+            evidence_reuse_policy=(
+                EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            ),
+            registered_at=CREATED_AT,
+            trials=(registered,),
+            initial_events=(event,),
+        )
+
+    assert (
+        store.load_study_revision(
+            plan.artifact_id
+        )
+        is None
+    )
+
+    assert (
+        store.load_trial(
+            registered.trial_id
+        )
+        is None
+    )
+
+    with sqlite3.connect(
+        store.database_path
+    ) as connection:
+        proof_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM study_revision_population_registrations
+            """
+        ).fetchone()[0]
+
+    assert proof_count == 0

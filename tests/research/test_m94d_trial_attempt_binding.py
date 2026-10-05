@@ -1212,7 +1212,7 @@ def test_complete_running_job_with_exact_reuse_is_atomic(
     before_attempts = _attempt_count(catalog)
 
     updated_trial, updated_job, event = (
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             reused_attempt_id=source.attempt_id,
@@ -1287,7 +1287,7 @@ def test_m94h2_exact_reuse_rejects_missing_dataset_lineage(
             "DatasetReference lineage"
         ),
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1360,7 +1360,7 @@ def test_m94h2_exact_reuse_rejects_incompatible_dataset_lineage(
             "DatasetReference identities are incompatible"
         ),
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1425,7 +1425,7 @@ def test_m94e_cancel_request_blocks_exact_reuse_terminalization(
         ValueError,
         match="cancellation",
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1500,7 +1500,7 @@ def test_exact_reuse_rejects_evidence_missing_manifest_reference(
         ValueError,
         match="must reference the exact Backtest manifest artifact",
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             reused_attempt_id=source.attempt_id,
@@ -1543,7 +1543,7 @@ def test_exact_reuse_respects_force_new_execution_policy(
         ValueError,
         match="forbids evidence reuse",
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             reused_attempt_id=source.attempt_id,
@@ -1590,7 +1590,7 @@ def test_exact_reuse_rejects_attempt_from_different_spec(
         ValueError,
         match="successful exact ExperimentSpec",
     ):
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             reused_attempt_id=source.attempt_id,
@@ -2642,7 +2642,7 @@ def test_m94g2_trial_denominator_stays_fixed_across_failure_retry_and_reuse(
     )
 
     reused_trial, reused_job, _ = (
-        catalog.complete_running_job_with_exact_reuse(
+        catalog._complete_running_job_with_exact_reuse(
             job_id=claimed_retry.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -2691,3 +2691,18 @@ def test_m94g2_trial_denominator_stays_fixed_across_failure_retry_and_reuse(
         initial_job.job_id,
         retry_job.job_id,
     }
+
+def test_m94i2_raw_exact_reuse_terminalizer_is_not_public_catalog_authority(
+    tmp_path,
+):
+    catalog = SQLiteResearchCatalogStore(
+        tmp_path / "research.sqlite3"
+    )
+
+    assert not hasattr(
+        catalog,
+        "complete_running_job_with_exact_reuse",
+    )
+    assert callable(
+        catalog._complete_running_job_with_exact_reuse
+    )

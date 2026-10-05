@@ -797,7 +797,7 @@ class RegisteredStudyRegistrationService:
 
         revision, persisted_trials = (
             self.catalog_store
-            .save_registered_revision_population(
+            ._save_registered_revision_population(
                 study_id=study_id,
                 study_revision_id=(
                     study_revision_id

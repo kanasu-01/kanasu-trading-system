@@ -64,3 +64,49 @@ def get_strategy_class(
         return PivotBossSwingStrategy
 
     raise ValueError(f"Unsupported strategy: " f"{config.strategy_name}")
+
+
+def create_registered_research_strategy(
+    procedure_id: str,
+    config: BacktestConfig,
+) -> BaseStrategy:
+    """Construct one canonical strategy for registered research execution."""
+
+    expected_strategy_class = (
+        get_research_procedure_strategy_class(
+            procedure_id
+        )
+    )
+
+    if expected_strategy_class is None:
+        raise ValueError(
+            "registered strategy procedure is unverifiable "
+            "from canonical executable authority"
+        )
+
+    configured_strategy_class = (
+        get_strategy_class(
+            config
+        )
+    )
+
+    if (
+        configured_strategy_class
+        is not expected_strategy_class
+    ):
+        raise ValueError(
+            "Backtest strategy configuration does not match "
+            "the registered procedure"
+        )
+
+    strategy = create_strategy(
+        config
+    )
+
+    if type(strategy) is not expected_strategy_class:
+        raise RuntimeError(
+            "canonical registered strategy construction "
+            "returned an unexpected implementation"
+        )
+
+    return strategy

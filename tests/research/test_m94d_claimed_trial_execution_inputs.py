@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import MethodType
 
 import pytest
 
@@ -19,7 +20,10 @@ from core.research.registered_trial_execution_plan import (
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
-from core.strategies.strategy_factory import create_strategy
+from core.strategies.strategy_factory import (
+    create_registered_research_strategy,
+    create_strategy,
+)
 
 
 UTC = timezone.utc
@@ -307,3 +311,32 @@ def test_m94g1_rejects_unverifiable_data_treatment_semantics():
                 data_treatment=declaration,
             ),
         )
+
+def test_m94i1_canonical_registered_strategy_ignores_instance_override():
+    inputs = _inputs()
+
+    def suppress_all_signals(self, series):
+        return None
+
+    inputs.strategy.on_new_candle = MethodType(
+        suppress_all_signals,
+        inputs.strategy,
+    )
+
+    canonical = create_registered_research_strategy(
+        "sma-crossover-v1",
+        inputs.config,
+    )
+
+    assert canonical is not inputs.strategy
+    assert type(canonical) is type(inputs.strategy)
+    assert "on_new_candle" not in vars(canonical)
+    assert canonical.research_parameters() == {
+        "fast_period": 5,
+        "slow_period": 20,
+    }
+
+    validate_claimed_trial_execution_inputs(
+        _plan(),
+        inputs,
+    )

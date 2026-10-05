@@ -1688,7 +1688,7 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
         evidence=reuse_evidence,
     )
 
-    catalog.complete_running_job_with_exact_reuse(
+    catalog._complete_running_job_with_exact_reuse(
         job_id=reused_job.job_id,
         experiment_spec_id=(
             reused_spec.experiment_spec_id

@@ -954,7 +954,7 @@ class BacktestResearchOrchestrator:
                 )
             )
         except (
-            FileNotFoundError,
+            OSError,
             RuntimeError,
         ) as error:
             raise AuthoritativeResearchStateError(
