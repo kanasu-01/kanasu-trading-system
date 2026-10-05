@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -62,12 +62,69 @@ _TRIAL_DISPOSITION_EVENT_SCHEMA_ID = (
     "kanasu.trial-disposition-event.v1"
 )
 
+_STUDY_REVISION_POPULATION_SCHEMA_ID = (
+    "kanasu.study-revision-population.v1"
+)
+
 
 _M92C_TERMINAL_STATES = {
     RunAttemptState.SUCCEEDED,
     RunAttemptState.FAILED,
     RunAttemptState.INTERRUPTED,
 }
+
+
+_UTC_EPOCH = datetime(
+    1970,
+    1,
+    1,
+    tzinfo=timezone.utc,
+)
+
+
+def _research_timestamp_utc_microseconds(
+    value: str,
+) -> int:
+    """
+    Return an exact absolute-time ordering key for stored timestamps.
+
+    SQLite's built-in date functions do not retain Python datetime
+    microsecond precision on all supported versions, so research FIFO
+    chronology is normalized by this deterministic Python function.
+    """
+
+    if (
+        not isinstance(value, str)
+        or not value
+    ):
+        raise ValueError(
+            "research timestamp must be a non-empty ISO string"
+        )
+
+    parsed = datetime.fromisoformat(
+        value
+    )
+
+    if parsed.utcoffset() is None:
+        raise ValueError(
+            "research timestamp must be timezone-aware"
+        )
+
+    delta = (
+        parsed.astimezone(
+            timezone.utc
+        )
+        - _UTC_EPOCH
+    )
+
+    return (
+        (
+            delta.days * 86400
+            + delta.seconds
+        )
+        * 1_000_000
+        + delta.microseconds
+    )
 
 
 def _default_attempt_id() -> str:
@@ -108,6 +165,29 @@ def _retry_research_job_id(
     )
 
 
+def _registered_trial_population_fingerprint(
+    study_revision_id: str,
+    trial_ids: tuple[str, ...],
+) -> str:
+    """Fingerprint one immutable registered Trial denominator."""
+
+    return canonical_fingerprint(
+        {
+            "study_revision_id": (
+                study_revision_id
+            ),
+            "trial_ids": tuple(
+                sorted(
+                    trial_ids
+                )
+            ),
+        },
+        schema=(
+            _STUDY_REVISION_POPULATION_SCHEMA_ID
+        ),
+    )
+
+
 class SQLiteResearchCatalogStore:
     """Persist immutable Specs and physical execution attempts."""
 
@@ -129,6 +209,14 @@ class SQLiteResearchCatalogStore:
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
+
+        connection.create_function(
+            "kanasu_utc_microseconds",
+            1,
+            _research_timestamp_utc_microseconds,
+            deterministic=True,
+        )
+
         connection.execute("PRAGMA foreign_keys = ON")
 
         row = connection.execute(
@@ -1451,7 +1539,13 @@ class SQLiteResearchCatalogStore:
         self,
         revision: StudyRevision,
     ) -> StudyRevision:
-        """Persist one immutable registered plan record."""
+        """
+        Persist a revision shell without population authority.
+
+        This lower-level record is deliberately non-operational until
+        authoritative whole-population registration atomically proves
+        its immutable Trial denominator.
+        """
 
         if not isinstance(revision, StudyRevision):
             raise TypeError(
@@ -1785,6 +1879,16 @@ class SQLiteResearchCatalogStore:
             for trial in ordered_trials
         )
 
+        proposed_population_fingerprint = (
+            _registered_trial_population_fingerprint(
+                study_revision_id,
+                tuple(
+                    trial.trial_id
+                    for trial in ordered_trials
+                ),
+            )
+        )
+
         with closing(self._connect()) as connection:
             try:
                 connection.execute(
@@ -1943,7 +2047,49 @@ class SQLiteResearchCatalogStore:
                             "must preserve the exact Trial population"
                         )
 
-                    connection.rollback()
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO
+                            study_revision_population_registrations (
+                                study_revision_id,
+                                trial_count,
+                                population_fingerprint
+                            )
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            study_revision_id,
+                            len(existing_trials),
+                            proposed_population_fingerprint,
+                        ),
+                    )
+
+                    proof_row = connection.execute(
+                        """
+                        SELECT
+                            trial_count,
+                            population_fingerprint
+                        FROM study_revision_population_registrations
+                        WHERE study_revision_id = ?
+                        """,
+                        (
+                            study_revision_id,
+                        ),
+                    ).fetchone()
+
+                    if (
+                        proof_row is None
+                        or proof_row[0]
+                        != len(existing_trials)
+                        or proof_row[1]
+                        != proposed_population_fingerprint
+                    ):
+                        raise ValueError(
+                            "existing StudyRevision population proof "
+                            "conflicts with authoritative registration"
+                        )
+
+                    connection.commit()
 
                     return (
                         existing_revision,
@@ -2122,6 +2268,23 @@ class SQLiteResearchCatalogStore:
                             event.reason_message,
                         ),
                     )
+
+                connection.execute(
+                    """
+                    INSERT INTO
+                        study_revision_population_registrations (
+                            study_revision_id,
+                            trial_count,
+                            population_fingerprint
+                        )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        study_revision_id,
+                        len(ordered_trials),
+                        proposed_population_fingerprint,
+                    ),
+                )
 
                 connection.commit()
 
@@ -2532,6 +2695,32 @@ class SQLiteResearchCatalogStore:
                         "started_at cannot precede registered_at"
                     )
 
+                proof_row = connection.execute(
+                    """
+                    SELECT
+                        trial_count,
+                        population_fingerprint
+                    FROM study_revision_population_registrations
+                    WHERE study_revision_id = ?
+                    """,
+                    (
+                        study_revision_id,
+                    ),
+                ).fetchone()
+
+                if proof_row is None:
+                    raise ValueError(
+                        "StudyRevision complete registered Trial "
+                        "population has not been authoritatively "
+                        "established"
+                    )
+
+                if proof_row[0] <= 0:
+                    raise ValueError(
+                        "StudyRevision complete registered Trial "
+                        "population contains no Trials"
+                    )
+
                 trial_rows = connection.execute(
                     """
                     SELECT
@@ -2543,6 +2732,27 @@ class SQLiteResearchCatalogStore:
                     """,
                     (study_revision_id,),
                 ).fetchall()
+
+                actual_population_fingerprint = (
+                    _registered_trial_population_fingerprint(
+                        study_revision_id,
+                        tuple(
+                            row[0]
+                            for row in trial_rows
+                        ),
+                    )
+                )
+
+                if (
+                    proof_row[0] != len(trial_rows)
+                    or proof_row[1]
+                    != actual_population_fingerprint
+                ):
+                    raise ValueError(
+                        "StudyRevision complete-population proof "
+                        "does not match its persisted Trial "
+                        "denominator"
+                    )
 
                 expected_initial_jobs = tuple(
                     (
@@ -2989,7 +3199,9 @@ class SQLiteResearchCatalogStore:
                         t.study_revision_id = ?
                         AND j.state = ?
                     ORDER BY
-                        j.created_at ASC,
+                        kanasu_utc_microseconds(
+                            j.created_at
+                        ) ASC,
                         j.job_id ASC
                     LIMIT 1
                     """,
@@ -6835,7 +7047,11 @@ class SQLiteResearchCatalogStore:
                     failure_message
                 FROM research_jobs
                 WHERE trial_id = ?
-                ORDER BY created_at, job_id
+                ORDER BY
+                    kanasu_utc_microseconds(
+                        created_at
+                    ),
+                    job_id
                 """,
                 (trial_id,),
             ).fetchall()

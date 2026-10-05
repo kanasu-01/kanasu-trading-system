@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sqlite3
 from threading import Event, Lock, get_ident
 
@@ -591,6 +591,299 @@ def test_claim_is_fifo_bounded_and_creates_no_attempt(
         ).fetchone()[0] == 0
 
 
+def _m94h3_drain_initial_queue(
+    catalog,
+    queue,
+    population,
+):
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    drained = []
+
+    while True:
+        job = _claim_direct(
+            catalog,
+            queue,
+            revision_id,
+            worker_id=(
+                f"m94h3-drain-{len(drained)}"
+            ),
+            claimed_at=MAY,
+        )
+
+        if job is None:
+            break
+
+        drained.append(
+            job
+        )
+
+        _terminalize_running_job(
+            catalog,
+            job,
+        )
+
+    return tuple(
+        drained
+    )
+
+
+def test_m94h3_fifo_uses_exact_chronology_across_offsets_and_microseconds(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="exact semantic FIFO chronology",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    queue.start_revision(
+        revision_id,
+        started_at=APR,
+    )
+
+    drained = _m94h3_drain_initial_queue(
+        catalog,
+        queue,
+        population,
+    )
+
+    assert len(drained) == 3
+
+    trial_id = (
+        population.trials[0].trial_id
+    )
+
+    plus_zero = timezone.utc
+    minus_five = timezone(
+        -timedelta(hours=5)
+    )
+
+    # Absolute chronology differs by exactly one microsecond:
+    #
+    # earlier == 2020-04-02 00:00:00.000001 UTC
+    # later   == 2020-04-02 00:00:00.000002 UTC
+    #
+    # But lexical ISO text puts `later` first because its local
+    # calendar date is 2020-04-01. SQLite julianday()/unixepoch()
+    # on the supported build also collapse this one-microsecond
+    # distinction. job_id deliberately favors the later job too.
+    earlier = datetime(
+        2020,
+        4,
+        2,
+        0,
+        0,
+        0,
+        1,
+        tzinfo=plus_zero,
+    )
+
+    later = datetime(
+        2020,
+        4,
+        1,
+        19,
+        0,
+        0,
+        2,
+        tzinfo=minus_five,
+    )
+
+    assert earlier < later
+
+    lexical_earlier = earlier.isoformat(
+        timespec="microseconds"
+    )
+
+    lexical_later = later.isoformat(
+        timespec="microseconds"
+    )
+
+    assert lexical_later < lexical_earlier
+
+    later_job = ResearchJob(
+        job_id="job-a-m94h3-later",
+        trial_id=trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=later,
+    )
+
+    earlier_job = ResearchJob(
+        job_id="job-z-m94h3-earlier",
+        trial_id=trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=earlier,
+    )
+
+    catalog._save_queued_research_job(
+        later_job
+    )
+
+    catalog._save_queued_research_job(
+        earlier_job
+    )
+
+    first = _claim_direct(
+        catalog,
+        queue,
+        revision_id,
+        worker_id="worker-m94h3-first",
+        claimed_at=JUN,
+    )
+
+    assert first is not None
+    assert first.job_id == earlier_job.job_id
+
+    _terminalize_running_job(
+        catalog,
+        first,
+    )
+
+    second = _claim_direct(
+        catalog,
+        queue,
+        revision_id,
+        worker_id="worker-m94h3-second",
+        claimed_at=JUN,
+    )
+
+    assert second is not None
+    assert second.job_id == later_job.job_id
+
+
+def test_m94h3_fifo_equivalent_instants_use_stable_job_id_tiebreaker(
+    tmp_path,
+):
+    (
+        catalog,
+        registration,
+        queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path,
+        max_workers=1,
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent="equivalent instant FIFO tie",
+        registered_at=MAR,
+        variants=(
+            {"variant": 1},
+        ),
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    queue.start_revision(
+        revision_id,
+        started_at=APR,
+    )
+
+    _m94h3_drain_initial_queue(
+        catalog,
+        queue,
+        population,
+    )
+
+    trial_id = (
+        population.trials[0].trial_id
+    )
+
+    plus_fourteen = timezone(
+        timedelta(hours=14)
+    )
+
+    minus_ten = timezone(
+        -timedelta(hours=10)
+    )
+
+    first_representation = datetime(
+        2020,
+        4,
+        2,
+        14,
+        0,
+        tzinfo=plus_fourteen,
+    )
+
+    second_representation = datetime(
+        2020,
+        4,
+        1,
+        14,
+        0,
+        tzinfo=minus_ten,
+    )
+
+    assert (
+        first_representation
+        == second_representation
+    )
+
+    job_b = ResearchJob(
+        job_id="job-b-m94h3-tie",
+        trial_id=trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=first_representation,
+    )
+
+    job_a = ResearchJob(
+        job_id="job-a-m94h3-tie",
+        trial_id=trial_id,
+        state=ResearchJobState.QUEUED,
+        created_at=second_representation,
+    )
+
+    # Persist in reverse deterministic order.
+    catalog._save_queued_research_job(
+        job_b
+    )
+
+    catalog._save_queued_research_job(
+        job_a
+    )
+
+    claimed = _claim_direct(
+        catalog,
+        queue,
+        revision_id,
+        worker_id="worker-m94h3-tie",
+        claimed_at=JUN,
+    )
+
+    assert claimed is not None
+    assert claimed.job_id == job_a.job_id
+
+
 def test_start_replay_after_claim_does_not_duplicate_jobs(
     tmp_path,
 ):
@@ -863,7 +1156,7 @@ def test_existing_current_schema_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 4
+            == 5
         )
 
         for name in names:
@@ -882,7 +1175,7 @@ def test_existing_current_schema_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 4
+            == 5
         )
 
         state_columns = tuple(

@@ -3,7 +3,7 @@
 import sqlite3
 
 
-RESEARCH_SCHEMA_VERSION = 4
+RESEARCH_SCHEMA_VERSION = 5
 
 
 _CREATE_RESEARCH_EVIDENCE_TABLE = """
@@ -363,6 +363,22 @@ _CREATE_V4_TABLES = (
 )
 
 
+_CREATE_STUDY_REVISION_POPULATION_REGISTRATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS study_revision_population_registrations (
+    study_revision_id TEXT PRIMARY KEY,
+    trial_count INTEGER NOT NULL CHECK (trial_count >= 0),
+    population_fingerprint TEXT NOT NULL,
+    FOREIGN KEY (study_revision_id)
+        REFERENCES study_revisions (study_revision_id)
+)
+"""
+
+
+_CREATE_V5_TABLES = (
+    _CREATE_STUDY_REVISION_POPULATION_REGISTRATIONS_TABLE,
+)
+
+
 _V1_EXPECTED_TABLE_COLUMNS = {
     "research_evidence": (
         ("evidence_id", "TEXT", 0, 1),
@@ -503,11 +519,21 @@ _V3_EXPECTED_TABLE_COLUMNS = {
 }
 
 
-_EXPECTED_TABLE_COLUMNS = {
+_V4_EXPECTED_TABLE_COLUMNS = {
     **_V3_EXPECTED_TABLE_COLUMNS,
     "research_dataset_reference_identities": (
         ("artifact_id", "TEXT", 0, 1),
         ("dataset_id", "TEXT", 1, 0),
+    ),
+}
+
+
+_EXPECTED_TABLE_COLUMNS = {
+    **_V4_EXPECTED_TABLE_COLUMNS,
+    "study_revision_population_registrations": (
+        ("study_revision_id", "TEXT", 0, 1),
+        ("trial_count", "INTEGER", 1, 0),
+        ("population_fingerprint", "TEXT", 1, 0),
     ),
 }
 
@@ -651,7 +677,7 @@ def _create_and_validate_v2_indexes(
     )
 
 
-def _migrate_v1_to_v4(
+def _migrate_v1_to_v5(
     connection: sqlite3.Connection,
 ) -> None:
     _validate_required_schema(
@@ -672,6 +698,9 @@ def _migrate_v1_to_v4(
         for statement in _CREATE_V4_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V5_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -688,7 +717,7 @@ def _migrate_v1_to_v4(
         connection.commit()
 
 
-def _migrate_v2_to_v4(
+def _migrate_v2_to_v5(
     connection: sqlite3.Connection,
 ) -> None:
     _validate_required_schema(
@@ -706,6 +735,9 @@ def _migrate_v2_to_v4(
         for statement in _CREATE_V4_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V5_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -722,7 +754,7 @@ def _migrate_v2_to_v4(
         connection.commit()
 
 
-def _migrate_v3_to_v4(
+def _migrate_v3_to_v5(
     connection: sqlite3.Connection,
 ) -> None:
     _validate_required_schema(
@@ -735,6 +767,9 @@ def _migrate_v3_to_v4(
         connection.execute("BEGIN IMMEDIATE")
 
         for statement in _CREATE_V4_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V5_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(
@@ -751,6 +786,43 @@ def _migrate_v3_to_v4(
     except Exception:
         connection.rollback()
         raise
+    else:
+        connection.commit()
+
+
+def _migrate_v4_to_v5(
+    connection: sqlite3.Connection,
+) -> None:
+    _validate_required_schema(
+        connection,
+        _V4_EXPECTED_TABLE_COLUMNS,
+        4,
+    )
+
+    try:
+        connection.execute(
+            "BEGIN IMMEDIATE"
+        )
+
+        for statement in _CREATE_V5_TABLES:
+            connection.execute(statement)
+
+        _create_and_validate_v2_indexes(
+            connection
+        )
+
+        _validate_current_schema(
+            connection
+        )
+
+        connection.execute(
+            f"PRAGMA user_version = {RESEARCH_SCHEMA_VERSION}"
+        )
+
+    except Exception:
+        connection.rollback()
+        raise
+
     else:
         connection.commit()
 
@@ -797,16 +869,20 @@ def initialize_research_schema(
 
         return
 
+    if current_version == 4:
+        _migrate_v4_to_v5(connection)
+        return
+
     if current_version == 3:
-        _migrate_v3_to_v4(connection)
+        _migrate_v3_to_v5(connection)
         return
 
     if current_version == 2:
-        _migrate_v2_to_v4(connection)
+        _migrate_v2_to_v5(connection)
         return
 
     if current_version == 1:
-        _migrate_v1_to_v4(connection)
+        _migrate_v1_to_v5(connection)
         return
 
     if current_version != 0:
@@ -852,6 +928,9 @@ def initialize_research_schema(
             connection.execute(statement)
 
         for statement in _CREATE_V4_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V5_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(

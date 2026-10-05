@@ -250,6 +250,14 @@ def test_whole_revision_transaction_rolls_back_partial_population(
         "study-atomic"
     ) == ()
 
+    with catalog._connect() as connection:
+        assert connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM study_revision_population_registrations
+            """
+        ).fetchone()[0] == 0
+
 
 def test_population_registration_requires_plan_content_identity(
     tmp_path,

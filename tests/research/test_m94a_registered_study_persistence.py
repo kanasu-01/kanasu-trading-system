@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import sqlite3
 
 import pytest
 
@@ -294,6 +295,54 @@ def test_new_revision_persistence_does_not_accept_started_state(
         match="Start owns",
     ):
         store.save_study_revision(started)
+
+
+def test_m94h3_standalone_revision_without_population_proof_cannot_start(
+    tmp_path,
+):
+    store = prepared_store(
+        tmp_path
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="complete registered Trial population",
+    ):
+        store.start_study_revision_batch(
+            revision().study_revision_id,
+            CREATED_AT + timedelta(minutes=1),
+        )
+
+    persisted = store.load_study_revision(
+        revision().study_revision_id
+    )
+
+    assert persisted is not None
+    assert persisted.initial_batch_started_at is None
+
+
+def test_m94h3_partial_private_population_without_proof_cannot_start(
+    tmp_path,
+):
+    store, registered, _ = prepared_trial_store(
+        tmp_path
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="complete registered Trial population",
+    ):
+        store.start_study_revision_batch(
+            registered.study_revision_id,
+            CREATED_AT + timedelta(minutes=1),
+        )
+
+    assert (
+        store.list_research_jobs_for_trial(
+            registered.trial_id
+        )
+        == ()
+    )
 
 
 def test_trial_and_initial_event_commit_atomically(
@@ -650,6 +699,164 @@ def _m94g2_complete_registered_store(tmp_path):
         persisted_revision,
         persisted_trials[0],
     )
+
+
+def test_m94h3_authoritative_registration_persists_population_proof(
+    tmp_path,
+):
+    (
+        store,
+        registered_revision,
+        registered_trial,
+    ) = _m94g2_complete_registered_store(
+        tmp_path
+    )
+
+    with sqlite3.connect(
+        store.database_path
+    ) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                trial_count,
+                population_fingerprint
+            FROM study_revision_population_registrations
+            WHERE study_revision_id = ?
+            """,
+            (
+                registered_revision.study_revision_id,
+            ),
+        ).fetchone()
+
+    assert row is not None
+    assert row[0] == 1
+    assert isinstance(
+        row[1],
+        str,
+    )
+    assert row[1].startswith(
+        "sha256:"
+    )
+    assert len(row[1]) == 71
+
+    started_at = (
+        CREATED_AT
+        + timedelta(days=1)
+    )
+
+    started = store.start_study_revision_batch(
+        registered_revision.study_revision_id,
+        started_at,
+    )
+
+    assert (
+        started.initial_batch_started_at
+        == started_at
+    )
+
+    assert len(
+        store.list_research_jobs_for_trial(
+            registered_trial.trial_id
+        )
+    ) == 1
+
+
+def test_m94h3_corrupt_population_proof_fails_closed_before_start(
+    tmp_path,
+):
+    (
+        store,
+        registered_revision,
+        registered_trial,
+    ) = _m94g2_complete_registered_store(
+        tmp_path
+    )
+
+    with sqlite3.connect(
+        store.database_path
+    ) as connection:
+        connection.execute(
+            """
+            UPDATE study_revision_population_registrations
+            SET trial_count = trial_count + 1
+            WHERE study_revision_id = ?
+            """,
+            (
+                registered_revision.study_revision_id,
+            ),
+        )
+        connection.commit()
+
+    with pytest.raises(
+        ValueError,
+        match="does not match its persisted Trial denominator",
+    ):
+        store.start_study_revision_batch(
+            registered_revision.study_revision_id,
+            CREATED_AT + timedelta(days=1),
+        )
+
+    assert (
+        store.list_research_jobs_for_trial(
+            registered_trial.trial_id
+        )
+        == ()
+    )
+
+
+def test_m94h3_authoritative_zero_population_is_not_startable(
+    tmp_path,
+):
+    store = SQLiteResearchCatalogStore(
+        tmp_path / "research.sqlite3"
+    )
+
+    store.save_study(
+        study()
+    )
+
+    fixture_plan = plan_artifact()
+
+    plan = ResearchArtifact(
+        artifact_id=fixture_plan.artifact_id,
+        artifact_kind=fixture_plan.artifact_kind,
+        schema_id=STUDY_REVISION_SCHEMA_ID,
+        relative_path=fixture_plan.relative_path,
+        byte_count=fixture_plan.byte_count,
+        created_at=fixture_plan.created_at,
+    )
+
+    store.save_artifact(
+        plan
+    )
+
+    registered_revision, registered_trials = (
+        store.save_registered_revision_population(
+            study_id="study-001",
+            study_revision_id=plan.artifact_id,
+            plan_artifact_id=plan.artifact_id,
+            repository_revision=(
+                "199ec3492a5af682482d0bee40c669420833563c"
+            ),
+            evidence_reuse_policy=(
+                EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            ),
+            registered_at=CREATED_AT,
+            trials=(),
+            initial_events=(),
+        )
+    )
+
+    assert registered_trials == ()
+
+    with pytest.raises(
+        ValueError,
+        match="contains no Trials",
+    ):
+        store.start_study_revision_batch(
+            registered_revision.study_revision_id,
+            CREATED_AT + timedelta(minutes=1),
+        )
 
 
 def test_m94g2_public_trial_append_rejected_after_complete_registration(

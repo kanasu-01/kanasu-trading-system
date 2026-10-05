@@ -34,6 +34,11 @@ V4_TABLES = V3_TABLES | {
 }
 
 
+V5_TABLES = V4_TABLES | {
+    "study_revision_population_registrations",
+}
+
+
 def user_version(path) -> int:
     with sqlite3.connect(path) as connection:
         return int(
@@ -110,16 +115,16 @@ def create_v1_database(path) -> None:
         connection.execute("PRAGMA user_version = 1")
 
 
-def test_new_database_initializes_additive_schema_v4(
+def test_new_database_initializes_additive_schema_v5(
     tmp_path,
 ):
     path = tmp_path / "research.sqlite3"
 
     SQLiteResearchEvidenceStore(path)
 
-    assert RESEARCH_SCHEMA_VERSION == 4
-    assert user_version(path) == 4
-    assert table_names(path) == V4_TABLES
+    assert RESEARCH_SCHEMA_VERSION == 5
+    assert user_version(path) == 5
+    assert table_names(path) == V5_TABLES
 
 
 def test_v1_migration_preserves_existing_rows_and_adds_tables(
@@ -149,8 +154,8 @@ def test_v1_migration_preserves_existing_rows_and_adds_tables(
         ).fetchone()
 
     assert before == after
-    assert user_version(path) == 4
-    assert table_names(path) == V4_TABLES
+    assert user_version(path) == 5
+    assert table_names(path) == V5_TABLES
 
 
 
@@ -192,8 +197,8 @@ def test_v2_migration_adds_reuse_dataset_lineage_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 4
-    assert table_names(path) == V4_TABLES
+    assert user_version(path) == 5
+    assert table_names(path) == V5_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -256,8 +261,8 @@ def test_v3_migration_adds_dataset_reference_identity_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 4
-    assert table_names(path) == V4_TABLES
+    assert user_version(path) == 5
+    assert table_names(path) == V5_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -290,6 +295,85 @@ def test_v3_migration_adds_dataset_reference_identity_table(
         and row[4] == "artifact_id"
         for row in foreign_keys
     )
+
+
+def create_v4_database(path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            research_schema._CREATE_RESEARCH_EVIDENCE_TABLE
+        )
+
+        for statements in (
+            research_schema._CREATE_V1_CATALOG_TABLES,
+            research_schema._CREATE_V2_TABLES,
+            research_schema._CREATE_V3_TABLES,
+            research_schema._CREATE_V4_TABLES,
+        ):
+            for statement in statements:
+                connection.execute(
+                    statement
+                )
+
+        for statement in (
+            research_schema._CREATE_V2_INDEXES
+        ):
+            connection.execute(
+                statement
+            )
+
+        connection.execute(
+            "PRAGMA user_version = 4"
+        )
+
+
+def test_v4_migration_adds_population_proof_table_fail_closed(
+    tmp_path,
+):
+    path = tmp_path / "research-v4.sqlite3"
+
+    create_v4_database(
+        path
+    )
+
+    assert user_version(path) == 4
+    assert table_names(path) == V4_TABLES
+
+    SQLiteResearchEvidenceStore(
+        path
+    )
+
+    assert user_version(path) == 5
+    assert table_names(path) == V5_TABLES
+
+    with sqlite3.connect(path) as connection:
+        columns = tuple(
+            row[1]
+            for row in connection.execute(
+                """
+                PRAGMA table_info(
+                    study_revision_population_registrations
+                )
+                """
+            )
+        )
+
+        count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM study_revision_population_registrations
+            """
+        ).fetchone()[0]
+
+    assert columns == (
+        "study_revision_id",
+        "trial_count",
+        "population_fingerprint",
+    )
+
+    # Old schema cannot prove which revisions came through the
+    # authoritative population transaction. Migration therefore
+    # fails closed rather than guessing historical authority.
+    assert count == 0
 
 
 def test_v1_migration_failure_rolls_back_new_tables(
