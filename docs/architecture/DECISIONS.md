@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED; IMPLEMENTED / VALIDATED / DONE/CLOSED THROUGH M9.4g
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED; M9.4h CORRECTIVE RE-CLOSURE CANDIDATE; INDEPENDENT RE-REVIEW PENDING
 
 **Target:** M9.4
 
@@ -598,7 +598,28 @@ The M9.4 backend application boundary supports Study creation/reopen, StudyRevis
 
 Historical implementation evidence: accepted design baseline `9b7ab42`; documentation synchronization `199ec34`; M9.4a `6a68d0a`; M9.4b `d3abbfc`; M9.4c `8d2e572`; M9.4d chain `610916a`, `0de1ab8`, `28f60e8`, `6116863`; M9.4e `878e929`; M9.4f `b93ae6a`. The then-current validation was 154 M9.4 tests, 682 cross-milestone preservation tests and 1250 complete Python tests with `git diff --check` clean and completed human review/stage/commit/push. Those remain historical facts, not current proof of re-closure.
 
-A subsequent independent post-closure audit established bounded implementation and closure-evidence defects. M9.4g repairs those defects while preserving this decision. The repaired recovery/cancellation/retry semantics are covered by dedicated negative and mixed-state regressions; real ASGI persistence is exercised; and the reviewed `research_max_trials_per_revision=5000` bound now has representative local measurement evidence (5,000 registered/persisted Trials; 10.837931 seconds; 11.857 MiB traced peak Python memory; 6.855 MiB SQLite; 1.104 MiB artifacts on Windows 10 AMD64 / Python 3.11.9 / SQLite 3.45.1). The measurement is a safety-envelope observation, not a throughput SLA. AD-025 remains accepted. M9.4g D20 subsequently passed 64 focused, 222 M9.4-wide, 757 cross-milestone preservation and 1325 complete Python tests with `git diff --check` clean; final human review, controlled stage/commit/push and post-push verification passed, and the remediation was published at `68df76b`. M9.4 is therefore DONE/CLOSED. The planned independent post-remediation M9.4 audit remains mandatory before M9.5 implementation.
+A subsequent independent post-closure audit established bounded
+implementation and closure-evidence defects. M9.4g repaired those findings and
+was historically re-closed at `68df76b`; that remains historical evidence.
+
+A later independent post-remediation audit then returned `M95_GATE=BLOCKED`
+with residual findings N01-N07. M9.4h preserves AD-025 while tightening its
+authority boundaries. N01-N04 are published at `d1efd238`: final execution
+uses stable private snapshots, registered procedure identity is verified from
+executable strategy authority, exact reuse requires successor DatasetReference
+lineage, and authoritative integrity failures propagate fail-closed through
+the worker pool. N05-N06 are published at `524b9dda`: Start requires durable
+atomic proof of the complete registered Trial denominator and FIFO ordering is
+semantic across timezone offsets with exact microsecond chronology and stable
+`job_id` tie-breaking.
+
+Current corrective evidence includes 144 focused h1+h2 tests, 66 focused h3
+tests, 172 M9.4-wide tests, 1342 cross-milestone preservation tests and 1342
+complete Python tests, with `git diff --check` clean. AD-025 remains accepted,
+but the historical M9.4g closure claim is not current M9.5 gate evidence.
+M9.4h is a corrective re-closure candidate and the independent re-review must
+return `M95_GATE=PASS` before fresh M9.5 design begins.
+
 ## Decision workflow
 
 Create or update an AD when a choice changes module ownership, a durable contract, persistence identity/schema, accounting semantics, runtime boundaries, or a cross-cutting non-functional rule. Record context, alternatives, consequences, scope and evidence. Accepted decisions may be superseded but are never erased or renumbered.

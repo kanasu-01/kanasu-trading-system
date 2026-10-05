@@ -2,13 +2,22 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE - M9.4g1-M9.4g4 IMPLEMENTED / VALIDATED / PUBLISHED; M9.4 RECLOSED**
+**HISTORICAL ACCEPTED REMEDIATION RECORD - M9.4g1-M9.4g4 IMPLEMENTED / VALIDATED / PUBLISHED; LATER RECLOSURE CHALLENGED BY M9.4h AUDIT**
 
 `M94G_DESIGN_ACCEPTED=True`
 
 `M94G_PRODUCTION_MUTATION_AUTHORIZED=True`
 
 `M94G_RECLOSURE_COMPLETE=True`
+
+
+Current-status note (2026-10-05): `M94G_RECLOSURE_COMPLETE=True` records
+the historical M9.4g D20 outcome. A later independent post-remediation
+audit returned `M95_GATE=BLOCKED` and established residual findings
+N01-N07. Current closure status is therefore governed by
+`M9_4H_POST_REMEDIATION_AUDIT_CORRECTIONS.md`; this document remains the
+historical M9.4g design/evidence record and is not rewritten as though
+that later audit passed.
 
 Human acceptance recorded: 2026-10-03.
 

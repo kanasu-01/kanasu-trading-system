@@ -2,7 +2,7 @@
 
 ## Status
 
-WORKING DESIGN - implementation authorized locally, not staged or committed.
+CORRECTIVE IMPLEMENTATION VALIDATED THROUGH M9.4h3; M9.4h4 RE-CLOSURE CANDIDATE; INDEPENDENT RE-REVIEW PENDING.
 
 M9.5 remains BLOCKED.
 
@@ -23,9 +23,14 @@ Branch:
 
 `m9-v1-research-platform`
 
-Current corrective baseline HEAD:
+Original corrective baseline HEAD:
 
 `c3bcfa148a851d48f61d29f9ee1c4431139cc353`
+
+Published corrective implementation heads:
+
+- `d1efd238c3ee0762de7a31647c3c919f98dbcab6` - N01-N04;
+- `524b9dda8ab40ac5da9de44a284310fa163e21e9` - N05-N06.
 
 The independent post-remediation audit returned:
 
@@ -424,6 +429,36 @@ Before M9.4 can be re-closed again, evidence must include:
 The previously passing 1325-test suite is regression evidence but is not
 proof against the new adversarial reproductions.
 
+### Current corrective evidence through M9.4h3
+
+Published behavior corrections:
+
+- N01/N02: stable private execution snapshots, final registered-semantics
+  revalidation and executable-code procedure authority;
+- N03: mandatory requested/source DatasetReference lineage for registered
+  exact reuse;
+- N04: authoritative state/integrity failures retain fail-closed semantics
+  and stop new worker-pool claims;
+- N05: schema-v5 durable complete-population proof written by authoritative
+  registration and required by Start;
+- N06: FIFO compares exact timezone-aware UTC microsecond instants with stable
+  `job_id` tie-breaking.
+
+Validation evidence:
+
+- M9.4h1+h2 focused: 144 passed;
+- M9.4h3 focused: 66 passed;
+- current-head M9.4-wide: 172 passed;
+- current-head expanded cross-milestone preservation: 1342 passed;
+- current-head complete Python: 1342 passed;
+- `git diff --check`: passed;
+- h1+h2 published at `d1efd238`;
+- h3 published at `524b9dda`.
+
+N07 documentation synchronization and protected publication/post-push
+verification remain part of h4. None of this evidence claims the independent
+re-review passed; `M95_GATE` remains `BLOCKED`.
+
 ## 12. Re-review gate
 
 After implementation and local re-closure evidence, perform a bounded
@@ -444,12 +479,12 @@ M9.5 may begin design only after:
 A passing re-review authorizes M9.5 design, not automatic M9.5
 production implementation.
 
-## 13. Commit boundary
+## 13. Protected publication boundary
 
-Current user authorization permits SAFE local design, implementation and
-testing work until the next protected Git step.
+M9.4h4 documentation synchronization is not itself permission to mutate Git
+history or remote state.
 
-This authorization does not itself stage or commit anything.
-
-Before staging, committing or pushing, stop and obtain the separately
-required human approval under the Kanasu Runner protocol.
+Staging, commit and push remain three separately approved protected operations
+under the Kanasu Runner protocol. Final M9.4h re-closure evidence must include
+clean post-commit and post-push verification before the independent re-review
+is requested.

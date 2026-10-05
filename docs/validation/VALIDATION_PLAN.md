@@ -1125,18 +1125,18 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9.4 - Registered Studies and bounded local batch execution
 
-**Status:** DONE/CLOSED AFTER M9.4g REMEDIATION AND D20 POST-PUSH VERIFICATION
+**Status:** M9.4h CORRECTIVE RE-CLOSURE CANDIDATE; INDEPENDENT RE-REVIEW PENDING; M9.5 BLOCKED
 
 M9.4 closure evidence establishes the following accepted boundaries:
 
 1. `Study`, immutable `StudyRevision`, registered `Trial`, append-only disposition history and durable `ResearchJob` state persist in the additive research schema;
-2. a complete deterministic finite Trial population is registered atomically before execution and remains the fixed research denominator;
+2. a complete deterministic finite Trial population is registered atomically before execution, an atomic durable completeness proof gates Start, and the population remains the fixed research denominator;
 3. identical registration and repeated Start are duplicate-safe and idempotent, while material research-plan changes create new revision lineage;
 4. continuous universe membership remains one Trial/account episode and genuine membership gaps create separate episodes;
 5. backend-controlled Trial and worker bounds fail closed rather than silently sampling, truncating or over-claiming work;
-6. queue claiming is atomic, FIFO, bounded by actual worker slots and creates no RunAttempt merely by claiming;
+6. queue claiming is atomic, semantic FIFO by actual timezone-aware instant with stable `job_id` tie-breaking, bounded by actual worker slots and creates no RunAttempt merely by claiming;
 7. fresh registered execution reuses the authoritative Backtest/research path rather than duplicating financial computation;
-8. exact prior evidence reuse requires exact compatible ExperimentSpec/evidence/result lineage, creates no fake new attempt and preserves the historical timing of pre-M9.4 execution;
+8. exact prior evidence reuse requires exact compatible ExperimentSpec/evidence/result lineage plus requested/source successor DatasetReference lineage, creates no fake new attempt and preserves the historical timing of pre-M9.4 execution;
 9. explicit retry preserves the Trial and bound computation identity while appending new ResearchJob/RunAttempt/disposition lineage;
 10. queued and running cancellation semantics remain truthful and cooperative rather than retrospectively rewriting terminal outcomes;
 11. startup recovery reconciles stale RUNNING ResearchJobs/RunAttempts to truthful interruption state and does not automatically invent retries or resume work;
@@ -1148,7 +1148,7 @@ M9.4 closure evidence establishes the following accepted boundaries:
 17. canonical instrument/dataset/provider truth remains governed by M9.3; the M9.4 backend does not invent default provider mappings or data assumptions;
 18. complete research-workspace/frontend integration remains M9.8 scope.
 
-Published implementation evidence:
+Historical implementation evidence through M9.4g:
 
 - accepted design baseline: `9b7ab42`;
 - accepted-design documentation synchronization: `199ec34`;
@@ -1169,7 +1169,9 @@ The detailed normative baseline and closure evidence record is `docs/design/REGI
 
 Additional M9.4g4 closure evidence now covers the required mixed-state restart, cancellation-during-financial-computation, recovery-persistence rollback/fail-closed startup, retry-after-recovery, and real ASGI persistence scenarios. The 5,000-Trial registration ceiling also has representative one-off local measurement evidence using production registration code: 5,000 registered/persisted Trials in 10.837931 seconds, 11.857 MiB traced peak Python memory, 6.855 MiB SQLite storage and 1.104 MiB artifacts on Windows 10 AMD64 / Python 3.11.9 / SQLite 3.45.1. This is safety-envelope evidence rather than a performance SLA.
 
-D20 closure validation passed: 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests, with `git diff --check` clean. Human final diff review, separately approved stage/commit/push and post-push repository verification also passed. The exact remediation candidate was published at `68df76b`; M9.4 is DONE/CLOSED. The independent post-remediation M9.4 audit remains mandatory before M9.5 implementation.
+Historical M9.4g D20 validation passed 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests with `git diff --check` clean; the remediation was published at `68df76b`. A later independent post-remediation audit nevertheless returned `M95_GATE=BLOCKED` and reproduced residual findings N01-N07, so the M9.4g closure statement is historical rather than current gate evidence.
+
+M9.4h corrective evidence is now published through `d1efd238` (N01-N04) and `524b9dda` (N05-N06). H1+h2 focused validation passed 144 tests; h3 focused validation passed 66 tests. At current corrective HEAD `524b9dda8ab40ac5da9de44a284310fa163e21e9`, all 172 M9.4-named tests passed, the expanded cross-milestone preservation matrix passed 1342 tests, the complete Python suite passed 1342 tests, and `git diff --check` was clean. N07 documentation synchronization is the h4 re-closure candidate. These results do not assert that the independent re-review passed. M9.5 remains blocked until that review returns `M95_GATE=PASS`.
 ### M9 implementation validation principle
 
 From M9.2 onward, every behavior-changing implementation slice must provide:

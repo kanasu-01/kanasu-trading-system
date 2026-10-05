@@ -6,7 +6,7 @@
 
 `M94_DESIGN_ACCEPTED=True`
 
-The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was historically published at `b93ae6a` after final human diff review, controlled staging, commit and push. A later independent post-closure audit reproduced bounded correctness defects and missing closure evidence. M9.4g corrected those findings without replacing the accepted 24-decision baseline. The remediation was published at `68df76b` and D20 post-push verification completed successfully; M9.4 is re-closed.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. The M9.4f implementation/closure slice was historically published at `b93ae6a`. M9.4g later corrected the first independent-audit findings and was historically re-closed at `68df76b`. A subsequent independent post-remediation audit returned `M95_GATE=BLOCKED` with residual findings N01-N07. M9.4h preserves the 24 accepted design decisions while correcting those residual defects; current correction heads are `d1efd238` for N01-N04 and `524b9dda` for N05-N06. Current status is a corrective re-closure candidate pending h4 protected publication/post-push verification and independent re-review.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
@@ -1658,7 +1658,7 @@ Published implementation chain:
 - M9.4e cancellation and restart recovery: `878e929`;
 - M9.4f published at `b93ae6a`: truthful progress/read models, independent-account Study aggregation, backend workflow/API integration and closure synchronization.
 
-Current closure validation:
+Historical M9.4f closure validation:
 
 - M9.4-wide regression: 154 passed;
 - M4 financial + accepted M9.2 + accepted M9.3 + M9.4 + startup-recovery preservation matrix: 682 passed;
@@ -1672,7 +1672,7 @@ Independent-account aggregation reports result-bearing/excluded denominators and
 
 M9.4 remains an execution, lineage and descriptive-evidence layer. It does not qualify strategies, promote Candidates, launch qualified Paper campaigns or place real broker orders.
 
-Historical M9.4f closure status: DONE/CLOSED. Human review of the complete candidate diff, controlled staging, commit and push completed successfully for M9.4f at `b93ae6a`; that historical status is now subject to the active M9.4g remediation/re-closure described below.
+Historical M9.4f closure status: DONE/CLOSED. Human review of the complete candidate diff, controlled staging, commit and push completed successfully for M9.4f at `b93ae6a`. M9.4g later superseded that closure evidence, and M9.4h now governs current corrective status after the post-remediation audit challenged the M9.4g re-closure.
 
 ## M9.4g independent-audit remediation and re-closure evidence
 
@@ -1708,10 +1708,12 @@ current single-user local implementation. This evidence is not a throughput
 SLA, latency guarantee or distributed-capacity claim. Changing the limit still
 requires explicit review and does not change StudyRevision or Trial identity.
 
-D20 automated validation has passed: 64 focused tests, 222 M9.4-wide tests,
-757 cross-milestone preservation tests and 1325 complete Python tests,
-with `git diff --check` clean. Final human diff review, separately approved
-staging, commit and push, and post-push repository verification also passed.
-The exact remediation candidate was published at `68df76b`; M9.4 is DONE/CLOSED.
+Historical M9.4g D20 automated validation passed 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests with `git diff --check` clean. Final human review, separately approved stage/commit/push and post-push verification also passed, and the candidate was published at `68df76b`. A subsequent independent post-remediation audit nevertheless returned `M95_GATE=BLOCKED`; therefore that re-closure remains a historical fact rather than current gate proof.
+
+## M9.4h post-remediation corrective evidence
+
+M9.4h preserves the accepted 24-decision design baseline and corrects the residual N01-N07 findings. N01-N04 are published at `d1efd238`: stable execution snapshots/final semantic binding, executable procedure authority, mandatory successor reuse dataset lineage and fail-closed authoritative error propagation. N05-N06 are published at `524b9dda`: durable atomic complete-population proof required by Start and semantic FIFO chronology across timezone offsets with exact microsecond ordering and stable job-ID tie-breaking.
+
+Current corrective validation consists of 144 focused h1+h2 tests, 66 focused h3 tests, 172 M9.4-wide tests, 1342 cross-milestone preservation tests and 1342 complete Python tests, with `git diff --check` clean. N07 synchronizes authoritative closure/traceability documentation. M9.4h is a corrective re-closure candidate; the independent re-review has not yet returned PASS and M9.5 remains blocked.
 The independent post-remediation M9.4 audit remains required before M9.5
 implementation.

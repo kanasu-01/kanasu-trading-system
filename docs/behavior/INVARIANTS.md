@@ -109,7 +109,7 @@ WFA derives from an exact CandidateRevision. Research-qualified Paper may begin 
 
 ### RESEARCH-RULE-006 ? Current constituents projected backward are not survivorship-free evidence
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Universe quality, provenance and effective-dated membership constrain the research claims that may be made from a Study. Current constituents projected backward are not survivorship-free. A point-in-time claim cannot silently apply a future membership state to an earlier research time.
 
@@ -138,15 +138,25 @@ A failed or incomplete reproducibility record cannot be labelled `ResearchEviden
 Automatic evidence may be `ACCEPTED` only when the executable software revision is exactly identifiable. If executable software identity is dirty or unknown, an exact ExperimentSpec cannot be established and no RunAttempt may be fabricated. The financial computation may still produce a result and may persist incomplete evidence when possible. A `SUCCEEDED` RunAttempt with incomplete evidence is valid only when the exact ExperimentSpec had already been established and another evidence requirement later became incomplete.
 ### RESEARCH-RULE-011 - Instrument lineage is not ticker or provider identity
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 Canonical instrument lineage uses a Kanasu-owned immutable `instrument_id`. Effective-dated symbol or provider-token changes do not silently create, merge or rewrite canonical instrument identity.
 
 ### RESEARCH-RULE-012 - Point-in-time universe membership does not use future membership state
 
-**Status:** DESIGNED
+**Status:** VERIFIED
 
 When research is represented as point-in-time universe evidence, the membership applied at each research time corresponds to that time rather than a future membership state. Joins, departures and quality/provenance changes remain explicit. Retrospective `CURRENT_SNAPSHOT` and `CUSTOM_FIXED` use is permitted with its explicitly limited non-PIT semantics.
+
+### RESEARCH-RULE-013 - Retrieval failure is distinct from post-retrieval preparation failure
+
+**Status:** VERIFIED
+
+A genuine successor historical-retrieval failure is distinct from a
+post-retrieval DatasetReference preparation, persistence or integrity failure.
+Authoritative preparation/integrity failures retain fail-closed state semantics
+and are not silently rewritten as provider-retrieval failures or ordinary
+independent Trial outcomes.
 
 ### RESEARCH-RULE-014 - Registered Trial truth precedes registered execution
 
