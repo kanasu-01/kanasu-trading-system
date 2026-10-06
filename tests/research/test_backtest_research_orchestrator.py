@@ -1288,3 +1288,161 @@ def test_m94g1_execute_prepared_rejects_candle_content_drift(
         )
 
     assert execution_calls == []
+
+
+def test_execute_prepared_supplied_attempt_requires_terminalizer(
+    tmp_path,
+):
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id=(
+                "runtime-m94j-missing-terminalizer"
+            ),
+        )
+
+    service, catalog, _, database = (
+        make_orchestrator(
+            tmp_path,
+            SoftwareIdentity(
+                REVISION,
+                True,
+            ),
+            retrieve=lambda **kwargs: candles(),
+            execute=execute,
+        )
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert prepared.experiment_spec_id is not None
+
+    attempt = catalog.create_running_attempt(
+        experiment_spec_id=(
+            prepared.experiment_spec_id
+        ),
+        created_at=CREATED_AT,
+    )
+
+    before = row_count(
+        database,
+        "run_attempts",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "supplied RunAttempt requires "
+            "attempt_terminalizer"
+        ),
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=create_strategy(config()),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+            attempt=attempt,
+        )
+
+    assert execution_calls == []
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == before
+    )
+
+    persisted = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+
+    assert persisted is not None
+    assert (
+        persisted.state
+        is RunAttemptState.RUNNING
+    )
+
+
+
+def test_exact_reuse_resolver_rejects_malformed_canonical_result(
+    tmp_path,
+    monkeypatch,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-m94j-r03-source",
+        ),
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        execution.attempt_id
+    )
+
+    assert source_attempt is not None
+    assert source_attempt.result_artifact_id is not None
+
+    validation_calls = []
+
+    def reject_malformed(payload):
+        validation_calls.append(payload)
+        raise ValueError(
+            "malformed canonical Backtest result"
+        )
+
+    monkeypatch.setattr(
+        orchestration,
+        "decode_stable_backtest_result_bytes",
+        reject_malformed,
+    )
+
+    before = row_count(
+        database,
+        "run_attempts",
+    )
+
+    assert (
+        service.find_exact_reusable_execution(
+            source_attempt.experiment_spec_id
+        )
+        is None
+    )
+
+    assert len(validation_calls) == 1
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == before
+    )

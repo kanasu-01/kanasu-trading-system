@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -186,6 +187,33 @@ def _registered_trial_population_fingerprint(
             _STUDY_REVISION_POPULATION_SCHEMA_ID
         ),
     )
+
+
+
+
+@dataclass(frozen=True)
+class ResearchTrialDetailSnapshot:
+    """
+    One immutable Trial-detail read assembled from one SQLite snapshot.
+    """
+
+    trial: Trial
+    disposition_events: tuple[
+        TrialDispositionEvent,
+        ...,
+    ]
+    jobs: tuple[
+        ResearchJob,
+        ...,
+    ]
+    owned_attempts: tuple[
+        tuple[str, RunAttempt],
+        ...,
+    ]
+    reused_attempts: tuple[
+        tuple[str, RunAttempt],
+        ...,
+    ]
 
 
 class SQLiteResearchCatalogStore:
@@ -845,6 +873,22 @@ class SQLiteResearchCatalogStore:
 
                 current = self._attempt_from_row(row)
 
+                owner_row = connection.execute(
+                    """
+                    SELECT job_id
+                    FROM research_jobs
+                    WHERE attempt_id = ?
+                    LIMIT 1
+                    """,
+                    (attempt_id,),
+                ).fetchone()
+
+                if owner_row is not None:
+                    raise ValueError(
+                        "ResearchJob-owned RunAttempt must be terminalized "
+                        "through the ResearchJob lifecycle"
+                    )
+
                 if current.state is not RunAttemptState.RUNNING:
                     raise ValueError(
                         "terminal RunAttempt cannot be reopened "
@@ -1016,9 +1060,15 @@ class SQLiteResearchCatalogStore:
                         evidence_id,
                         failure_classification,
                         failure_message
-                    FROM run_attempts
-                    WHERE state = 'RUNNING'
-                    ORDER BY created_at, attempt_id
+                    FROM run_attempts AS a
+                    WHERE
+                        a.state = 'RUNNING'
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM research_jobs AS j
+                            WHERE j.attempt_id = a.attempt_id
+                        )
+                    ORDER BY a.created_at, a.attempt_id
                     """
                 ).fetchall()
 
@@ -1135,6 +1185,22 @@ class SQLiteResearchCatalogStore:
                     )
 
                 current = self._attempt_from_row(row)
+
+                owner_row = connection.execute(
+                    """
+                    SELECT job_id
+                    FROM research_jobs
+                    WHERE attempt_id = ?
+                    LIMIT 1
+                    """,
+                    (attempt_id,),
+                ).fetchone()
+
+                if owner_row is not None:
+                    raise ValueError(
+                        "ResearchJob-owned RunAttempt must be terminalized "
+                        "through the ResearchJob lifecycle"
+                    )
 
                 if current.state is not RunAttemptState.RUNNING:
                     raise ValueError(
@@ -2550,6 +2616,187 @@ class SQLiteResearchCatalogStore:
                 raise
 
         return trial
+
+    def load_research_trial_detail_snapshot(
+        self,
+        trial_id: str,
+    ) -> ResearchTrialDetailSnapshot | None:
+        """
+        Load all durable Trial-detail lineage from one SQLite read snapshot.
+
+        The explicit deferred read transaction ensures Trial, disposition
+        events, ResearchJobs, owned attempts and reused attempts are all
+        observed from one consistent committed database view.
+        """
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+
+                trial_row = connection.execute(
+                    """
+                    SELECT
+                        trial_id,
+                        identity_schema,
+                        study_revision_id,
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        membership_evidence_fingerprint,
+                        membership_evidence_artifact_id,
+                        parameter_configuration_fingerprint,
+                        registered_at,
+                        experiment_spec_id,
+                        disposition,
+                        disposition_at,
+                        reused_attempt_id,
+                        failure_classification,
+                        failure_message
+                    FROM trials
+                    WHERE trial_id = ?
+                    """,
+                    (trial_id,),
+                ).fetchone()
+
+                if trial_row is None:
+                    connection.commit()
+                    return None
+
+                event_rows = connection.execute(
+                    """
+                    SELECT
+                        event_id,
+                        trial_id,
+                        sequence_number,
+                        previous_disposition,
+                        new_disposition,
+                        occurred_at,
+                        causing_job_id,
+                        reason_classification,
+                        reason_message
+                    FROM trial_disposition_events
+                    WHERE trial_id = ?
+                    ORDER BY sequence_number, event_id
+                    """,
+                    (trial_id,),
+                ).fetchall()
+
+                job_rows = connection.execute(
+                    """
+                    SELECT
+                        job_id,
+                        trial_id,
+                        state,
+                        created_at,
+                        claimed_at,
+                        terminal_at,
+                        worker_id,
+                        cancel_requested_at,
+                        attempt_id,
+                        completion_kind,
+                        reused_attempt_id,
+                        reused_evidence_id,
+                        reused_result_artifact_id,
+                        failure_classification,
+                        failure_message
+                    FROM research_jobs
+                    WHERE trial_id = ?
+                    ORDER BY
+                        kanasu_utc_microseconds(
+                            created_at
+                        ),
+                        job_id
+                    """,
+                    (trial_id,),
+                ).fetchall()
+
+                trial = self._trial_from_row(
+                    trial_row
+                )
+                events = tuple(
+                    self._trial_event_from_row(row)
+                    for row in event_rows
+                )
+                jobs = tuple(
+                    self._research_job_from_row(row)
+                    for row in job_rows
+                )
+
+                owned_attempt_ids = tuple(
+                    dict.fromkeys(
+                        job.attempt_id
+                        for job in jobs
+                        if job.attempt_id is not None
+                    )
+                )
+                reused_attempt_ids = tuple(
+                    dict.fromkeys(
+                        job.reused_attempt_id
+                        for job in jobs
+                        if job.reused_attempt_id is not None
+                    )
+                )
+
+                def load_attempts(
+                    attempt_ids: tuple[str, ...],
+                ) -> tuple[
+                    tuple[str, RunAttempt],
+                    ...,
+                ]:
+                    loaded = []
+
+                    for attempt_id in attempt_ids:
+                        row = connection.execute(
+                            """
+                            SELECT
+                                attempt_id,
+                                experiment_spec_id,
+                                state,
+                                created_at,
+                                terminal_at,
+                                runtime_session_id,
+                                result_artifact_id,
+                                evidence_id,
+                                failure_classification,
+                                failure_message
+                            FROM run_attempts
+                            WHERE attempt_id = ?
+                            """,
+                            (attempt_id,),
+                        ).fetchone()
+
+                        if row is not None:
+                            loaded.append(
+                                (
+                                    attempt_id,
+                                    self._attempt_from_row(
+                                        row
+                                    ),
+                                )
+                            )
+
+                    return tuple(loaded)
+
+                owned_attempts = load_attempts(
+                    owned_attempt_ids
+                )
+                reused_attempts = load_attempts(
+                    reused_attempt_ids
+                )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return ResearchTrialDetailSnapshot(
+            trial=trial,
+            disposition_events=events,
+            jobs=jobs,
+            owned_attempts=owned_attempts,
+            reused_attempts=reused_attempts,
+        )
 
     def load_trial(
         self,

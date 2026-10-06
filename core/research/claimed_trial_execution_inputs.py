@@ -17,6 +17,9 @@ from types import MappingProxyType
 from typing import Any
 
 from core.config.backtest_config import BacktestConfig
+from core.research.backtest_financial_configuration import (
+    effective_backtest_financial_configuration,
+)
 from core.research.models.dataset import PriceAdjustmentBasis
 from core.research.registered_trial_execution_plan import (
     RegisteredTrialExecutionPlan,
@@ -359,46 +362,33 @@ def validate_claimed_trial_execution_inputs(
             "match the registered Trial plan"
         )
 
-    executable_risk_economic = {
-        "risk_per_trade_pct": (
-            inputs.runtime_context.risk_per_trade_pct
-        ),
-        "slippage_pct": (
+    executable_risk_economic = (
+        effective_backtest_financial_configuration(
             inputs.runtime_context
-            .execution_config
-            .slippage_pct
-        ),
-        "slippage_enabled": (
-            inputs.runtime_context
-            .execution_config
-            .slippage_enabled
-        ),
-        "brokerage_enabled": (
-            inputs.runtime_context
-            .execution_config
-            .brokerage_enabled
-        ),
-        **inputs.runtime_context.economic_policy.to_payload(),
-    }
+        )
+    )
 
-    for field_name, registered_value in (
-        registered_risk_economic.items()
-    ):
-        if field_name not in executable_risk_economic:
-            raise ClaimedTrialInputValidationError(
-                "registered risk/economic declaration "
-                f"is unverifiable from executable inputs: {field_name}"
-            )
+    unknown_risk_economic_fields = (
+        set(registered_risk_economic)
+        - set(executable_risk_economic)
+    )
 
-        if (
-            executable_risk_economic[field_name]
-            != registered_value
-        ):
-            raise ClaimedTrialInputValidationError(
-                "resolved executable risk/economic setting "
-                "does not match the registered Trial plan: "
-                f"{field_name}"
+    if unknown_risk_economic_fields:
+        raise ClaimedTrialInputValidationError(
+            "registered risk/economic declaration "
+            "is unverifiable from executable inputs: "
+            + ", ".join(
+                sorted(
+                    unknown_risk_economic_fields
+                )
             )
+        )
+
+    if executable_risk_economic != registered_risk_economic:
+        raise ClaimedTrialInputValidationError(
+            "resolved executable risk/economic configuration "
+            "does not match the complete registered Trial plan"
+        )
 
     registered_data_treatment = dict(
         plan.data_treatment_basis

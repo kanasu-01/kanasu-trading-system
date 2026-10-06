@@ -78,6 +78,9 @@ from core.runtime.backtest_runtime import (
 )
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
+from core.research.backtest_financial_configuration import (
+    default_backtest_financial_configuration,
+)
 from core.strategies.strategy_factory import create_strategy
 
 
@@ -133,9 +136,7 @@ REVISION = (
     "de64101eb7d4ed653f5e8eaabd3ec125e7f81d32"
 )
 INSTRUMENT_ID = "NSE-EQ-ABC"
-RISK_DECLARATION = {
-    "risk_per_trade_pct": 1.0,
-}
+RISK_DECLARATION = default_backtest_financial_configuration()
 
 
 class StaticIdentityProvider:

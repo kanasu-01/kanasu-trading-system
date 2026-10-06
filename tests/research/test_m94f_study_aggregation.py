@@ -789,3 +789,99 @@ def test_m94g3_nonchronological_bar_records_are_rejected():
                 mutate
             )
         )
+
+
+
+def test_m94j_validator_rejects_impossible_financial_states():
+    from copy import deepcopy
+
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    baseline = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    cases = []
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["high"] = (
+        invalid["bar_records"][0]["open"] - 1.0
+    )
+    cases.append(
+        (
+            invalid,
+            "OHLC envelope",
+        )
+    )
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["volume"] = -1.0
+    cases.append(
+        (
+            invalid,
+            "volume cannot be negative",
+        )
+    )
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["open"] = 0.0
+    cases.append(
+        (
+            invalid,
+            "open must be positive",
+        )
+    )
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["position_size"] = -1.0
+    cases.append(
+        (
+            invalid,
+            "position_size cannot be negative",
+        )
+    )
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["position_size"] = 0.0
+    invalid["bar_records"][0]["cash"] = (
+        invalid["bar_records"][0]["equity"] - 1.0
+    )
+    cases.append(
+        (
+            invalid,
+            "zero position requires equity to equal cash",
+        )
+    )
+
+    invalid = deepcopy(baseline)
+    invalid["bar_records"][0]["execution_price"] = 0.0
+    cases.append(
+        (
+            invalid,
+            "execution_price must be positive",
+        )
+    )
+
+    if baseline["trades"]:
+        invalid = deepcopy(baseline)
+        invalid["trades"][0]["entry_price"] = 0.0
+        cases.append(
+            (
+                invalid,
+                "entry_price must be positive",
+            )
+        )
+
+    for payload, message in cases:
+        with pytest.raises(
+            ValueError,
+            match=message,
+        ):
+            validate_stable_backtest_result_payload(
+                payload
+            )

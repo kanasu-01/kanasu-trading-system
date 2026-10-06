@@ -2706,3 +2706,286 @@ def test_m94i2_raw_exact_reuse_terminalizer_is_not_public_catalog_authority(
     assert callable(
         catalog._complete_running_job_with_exact_reuse
     )
+
+
+
+@pytest.mark.parametrize(
+    "terminal_state",
+    (
+        RunAttemptState.SUCCEEDED,
+        RunAttemptState.FAILED,
+        RunAttemptState.INTERRUPTED,
+    ),
+)
+def test_m94j_standalone_terminalizer_rejects_job_owned_attempt(
+    tmp_path,
+    terminal_state,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path
+    )
+
+    (
+        _,
+        _,
+        attempt,
+    ) = (
+        catalog
+        .bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=spec.experiment_spec_id,
+            attempt_created_at=JUN,
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="ResearchJob-owned RunAttempt",
+    ):
+        catalog.terminalize_attempt(
+            attempt.attempt_id,
+            state=terminal_state,
+            terminal_at=JUN,
+            failure_classification=(
+                "m94j_forbidden_standalone"
+                if terminal_state
+                is not RunAttemptState.SUCCEEDED
+                else None
+            ),
+        )
+
+    persisted_attempt = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    persisted_job = catalog.load_research_job(
+        job.job_id
+    )
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_attempt is not None
+    assert persisted_job is not None
+    assert persisted_trial is not None
+
+    assert (
+        persisted_attempt.state
+        is RunAttemptState.RUNNING
+    )
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+
+def test_m94j_atomic_evidence_terminalizer_rejects_job_owned_attempt(
+    tmp_path,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path
+    )
+
+    (
+        _,
+        _,
+        attempt,
+    ) = (
+        catalog
+        .bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=spec.experiment_spec_id,
+            attempt_created_at=JUN,
+        )
+    )
+
+    result_artifact = ResearchArtifact(
+        artifact_id=_fingerprint(
+            "m94j-owned-result",
+            schema=BACKTEST_RESULT_SCHEMA,
+        ),
+        artifact_kind=(
+            ResearchArtifactKind.BACKTEST_RESULT
+        ),
+        schema_id=BACKTEST_RESULT_SCHEMA,
+        relative_path=(
+            "m94j/"
+            + _fingerprint(
+                "m94j-owned-result",
+                schema=BACKTEST_RESULT_SCHEMA,
+            ).split(":", 1)[1]
+            + ".json"
+        ),
+        byte_count=2,
+        created_at=JUN,
+    )
+
+    evidence = ResearchEvidence(
+        evidence_id="evidence-m94j-owned-attempt",
+        created_at=JUN,
+        status=ResearchEvidenceStatus.ACCEPTED,
+        dataset_context=DatasetContext(
+            symbol="NSE:A",
+            timeframe="1d",
+            timezone="UTC",
+        ),
+        requested_range=TimeRange(JAN, FEB),
+        dataset_fingerprint=spec.dataset_fingerprint,
+        configuration_fingerprint=(
+            spec.configuration_fingerprint
+        ),
+        result_fingerprint=(
+            result_artifact.artifact_id
+        ),
+        provenance=(
+            ("fixture", "m94j-owned-attempt"),
+        ),
+        repository_revision=(
+            spec.repository_revision
+        ),
+        summary=(
+            "M9.4j ownership exclusion fixture."
+        ),
+        artifact_references=(
+            research_artifact_reference(
+                spec.manifest_artifact_id
+            ),
+            research_artifact_reference(
+                result_artifact.artifact_id
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="ResearchJob-owned RunAttempt",
+    ):
+        catalog.terminalize_attempt_with_evidence(
+            attempt.attempt_id,
+            state=RunAttemptState.SUCCEEDED,
+            terminal_at=JUN,
+            runtime_session_id="runtime-m94j-owned",
+            result_artifact=result_artifact,
+            evidence=evidence,
+        )
+
+    persisted_attempt = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    persisted_job = catalog.load_research_job(
+        job.job_id
+    )
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert persisted_attempt is not None
+    assert persisted_job is not None
+    assert persisted_trial is not None
+
+    assert (
+        persisted_attempt.state
+        is RunAttemptState.RUNNING
+    )
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+    assert (
+        catalog.load_artifact(
+            result_artifact.artifact_id
+        )
+        is None
+    )
+
+
+
+def test_m94j_trial_detail_snapshot_uses_one_read_transaction(
+    tmp_path,
+):
+    catalog, trial, job, spec = _environment(
+        tmp_path
+    )
+
+    (
+        _,
+        _,
+        attempt,
+    ) = (
+        catalog
+        .bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            attempt_created_at=JUN,
+        )
+    )
+
+    original_connect = catalog._connect
+    connection_count = []
+    traced_sql = []
+
+    def traced_connect():
+        connection_count.append(1)
+        connection = original_connect()
+        connection.set_trace_callback(
+            traced_sql.append
+        )
+        return connection
+
+    catalog._connect = traced_connect
+
+    snapshot = (
+        catalog.load_research_trial_detail_snapshot(
+            trial.trial_id
+        )
+    )
+
+    assert snapshot is not None
+    assert connection_count == [1]
+
+    normalized_sql = [
+        statement.strip().upper()
+        for statement in traced_sql
+    ]
+
+    assert "BEGIN" in normalized_sql
+    assert "COMMIT" in normalized_sql
+
+    assert (
+        snapshot.trial.trial_id
+        == trial.trial_id
+    )
+    assert snapshot.jobs
+    assert (
+        snapshot.jobs[0].job_id
+        == job.job_id
+    )
+    assert (
+        snapshot.jobs[0].attempt_id
+        == attempt.attempt_id
+    )
+
+    assert snapshot.owned_attempts == (
+        (
+            attempt.attempt_id,
+            attempt,
+        ),
+    )
+
+    assert snapshot.reused_attempts == ()
+
+    assert (
+        snapshot.disposition_events[-1]
+        .new_disposition
+        is TrialDisposition.PENDING
+    )

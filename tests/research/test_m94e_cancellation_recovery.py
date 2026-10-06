@@ -1938,3 +1938,177 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
     assert catalog.recover_running_research_jobs(
         terminal_at=JUL,
     ) == ()
+
+
+
+def test_m94j_mixed_restart_recovery_preserves_attempt_ownership(
+    tmp_path,
+):
+    catalog, trial, job = _environment(
+        tmp_path,
+        claim_job=True,
+    )
+
+    manifest_id = "sha256:" + ("7" * 64)
+
+    catalog.save_artifact(
+        ResearchArtifact(
+            artifact_id=manifest_id,
+            artifact_kind=(
+                ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+            ),
+            schema_id=BACKTEST_RUN_MANIFEST_SCHEMA,
+            relative_path=(
+                "m94j/"
+                + ("7" * 64)
+                + ".json"
+            ),
+            byte_count=2,
+            created_at=APR,
+        )
+    )
+
+    spec = catalog.resolve_experiment_spec(
+        computation_kind=ComputationKind.BACKTEST,
+        manifest_artifact_id=manifest_id,
+        dataset_fingerprint=(
+            "sha256:" + ("8" * 64)
+        ),
+        configuration_fingerprint=(
+            "sha256:" + ("9" * 64)
+        ),
+        repository_revision="repo-m94j-r02",
+        created_at=APR,
+    )
+
+    (
+        _,
+        bound_job,
+        owned_attempt,
+    ) = (
+        catalog
+        .bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            attempt_created_at=JUN,
+        )
+    )
+
+    standalone_attempt = (
+        catalog.create_running_attempt(
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            created_at=JUN,
+            runtime_session_id=(
+                "runtime-m94j-standalone"
+            ),
+        )
+    )
+
+    assert (
+        bound_job.attempt_id
+        == owned_attempt.attempt_id
+    )
+
+    standalone_recovered = (
+        catalog.recover_running_attempts(
+            terminal_at=JUL,
+        )
+    )
+
+    assert tuple(
+        attempt.attempt_id
+        for attempt in standalone_recovered
+    ) == (
+        standalone_attempt.attempt_id,
+    )
+
+    persisted_standalone = (
+        catalog.load_run_attempt(
+            standalone_attempt.attempt_id
+        )
+    )
+    persisted_owned = (
+        catalog.load_run_attempt(
+            owned_attempt.attempt_id
+        )
+    )
+    persisted_job = (
+        catalog.load_research_job(
+            job.job_id
+        )
+    )
+    persisted_trial = (
+        catalog.load_trial(
+            trial.trial_id
+        )
+    )
+
+    assert persisted_standalone is not None
+    assert persisted_owned is not None
+    assert persisted_job is not None
+    assert persisted_trial is not None
+
+    assert (
+        persisted_standalone.state
+        is RunAttemptState.INTERRUPTED
+    )
+    assert (
+        persisted_owned.state
+        is RunAttemptState.RUNNING
+    )
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert (
+        persisted_trial.disposition
+        is TrialDisposition.PENDING
+    )
+
+    job_recovered = (
+        catalog.recover_running_research_jobs(
+            terminal_at=JUL
+            + timedelta(seconds=1),
+        )
+    )
+
+    assert len(job_recovered) == 1
+    assert (
+        job_recovered[0].job_id
+        == job.job_id
+    )
+    assert (
+        job_recovered[0].state
+        is ResearchJobState.INTERRUPTED
+    )
+
+    final_owned = catalog.load_run_attempt(
+        owned_attempt.attempt_id
+    )
+    final_standalone = catalog.load_run_attempt(
+        standalone_attempt.attempt_id
+    )
+    final_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert final_owned is not None
+    assert final_standalone is not None
+    assert final_trial is not None
+
+    assert (
+        final_owned.state
+        is RunAttemptState.INTERRUPTED
+    )
+    assert (
+        final_standalone.state
+        is RunAttemptState.INTERRUPTED
+    )
+    assert (
+        final_trial.disposition
+        is TrialDisposition.INTERRUPTED
+    )

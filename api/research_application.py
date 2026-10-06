@@ -570,25 +570,26 @@ def get_research_trial_detail(
         config
     )
 
-    trial = store.load_trial(
-        trial_id
+    snapshot = (
+        store.load_research_trial_detail_snapshot(
+            trial_id
+        )
     )
 
-    if trial is None:
+    if snapshot is None:
         raise ResearchTrialNotFound(
             trial_id
         )
 
-    events = tuple(
-        store.load_trial_disposition_events(
-            trial_id
-        )
-    )
+    trial = snapshot.trial
+    events = snapshot.disposition_events
+    jobs = snapshot.jobs
 
-    jobs = tuple(
-        store.list_research_jobs_for_trial(
-            trial_id
-        )
+    owned_attempts = dict(
+        snapshot.owned_attempts
+    )
+    reused_attempts = dict(
+        snapshot.reused_attempts
     )
 
     event_responses = [
@@ -629,7 +630,7 @@ def get_research_trial_detail(
         reused_attempt = None
 
         if job.attempt_id is not None:
-            attempt = store.load_run_attempt(
+            attempt = owned_attempts.get(
                 job.attempt_id
             )
 
@@ -641,7 +642,7 @@ def get_research_trial_detail(
 
         if job.reused_attempt_id is not None:
             reused_attempt = (
-                store.load_run_attempt(
+                reused_attempts.get(
                     job.reused_attempt_id
                 )
             )

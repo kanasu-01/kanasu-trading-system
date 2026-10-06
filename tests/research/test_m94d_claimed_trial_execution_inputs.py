@@ -19,6 +19,9 @@ from core.research.registered_trial_execution_plan import (
 )
 from core.runtime.dataset_context import DatasetContext
 from core.runtime.runtime_context import RuntimeContext
+from core.research.backtest_financial_configuration import (
+    default_backtest_financial_configuration,
+)
 from core.strategies.base_strategy import BaseStrategy
 from core.strategies.strategy_factory import (
     create_registered_research_strategy,
@@ -63,9 +66,7 @@ def _plan(
         risk_economic_configuration=(
             risk
             if risk is not None
-            else {
-                "risk_per_trade_pct": 1.0,
-            }
+            else default_backtest_financial_configuration()
         ),
         parameter_configuration={
             "fast_period": 5,
@@ -141,9 +142,7 @@ def _inputs(
         risk_economic_configuration=(
             risk
             if risk is not None
-            else {
-                "risk_per_trade_pct": 1.0,
-            }
+            else default_backtest_financial_configuration()
         ),
         data_treatment_basis=(
             data_treatment

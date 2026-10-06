@@ -167,6 +167,7 @@ class RecordingStore:
         )
 
         self.revision_requests = []
+        self.snapshot_requests = []
         self.trial_requests = []
         self.event_requests = []
         self.job_requests = []
@@ -188,6 +189,59 @@ class RecordingStore:
             return self.revision
 
         return None
+
+    def load_research_trial_detail_snapshot(
+        self,
+        trial_id,
+    ):
+        from core.research.sqlite_research_catalog_store import (
+            ResearchTrialDetailSnapshot,
+        )
+
+        self.snapshot_requests.append(
+            trial_id
+        )
+
+        if (
+            self.trial is None
+            or self.trial.trial_id != trial_id
+        ):
+            return None
+
+        owned_attempts = tuple(
+            (
+                job.attempt_id,
+                self.attempts[job.attempt_id],
+            )
+            for job in self.jobs
+            if (
+                job.attempt_id is not None
+                and job.attempt_id in self.attempts
+            )
+        )
+
+        reused_attempts = tuple(
+            (
+                job.reused_attempt_id,
+                self.attempts[
+                    job.reused_attempt_id
+                ],
+            )
+            for job in self.jobs
+            if (
+                job.reused_attempt_id is not None
+                and job.reused_attempt_id
+                in self.attempts
+            )
+        )
+
+        return ResearchTrialDetailSnapshot(
+            trial=self.trial,
+            disposition_events=self.events,
+            jobs=self.jobs,
+            owned_attempts=owned_attempts,
+            reused_attempts=reused_attempts,
+        )
 
     def load_trial(
         self,
@@ -301,18 +355,13 @@ def test_trial_detail_exposes_durable_disposition_job_and_result_lineage(
     )
     assert job.attempt.evidence_id == EVIDENCE_ID
 
-    assert store.trial_requests == [
+    assert store.snapshot_requests == [
         TRIAL_ID
     ]
-    assert store.event_requests == [
-        TRIAL_ID
-    ]
-    assert store.job_requests == [
-        TRIAL_ID
-    ]
-    assert store.attempt_requests == [
-        ATTEMPT_ID
-    ]
+    assert store.trial_requests == []
+    assert store.event_requests == []
+    assert store.job_requests == []
+    assert store.attempt_requests == []
 
 
 def test_trial_detail_reports_missing_trial(
@@ -345,11 +394,13 @@ def test_trial_detail_reports_missing_trial(
             app_config=_config(tmp_path),
         )
 
-    assert store.trial_requests == [
+    assert store.snapshot_requests == [
         TRIAL_ID
     ]
+    assert store.trial_requests == []
     assert store.event_requests == []
     assert store.job_requests == []
+    assert store.attempt_requests == []
 
 
 def test_run_revision_drains_existing_queue_with_explicit_handler(

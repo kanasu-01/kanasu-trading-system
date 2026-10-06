@@ -116,7 +116,7 @@ def _register(
             or {
                 "risk_per_trade_pct": 1.0,
                 "slippage_pct": 0.05,
-                "brokerage_pct": 0.01,
+                "brokerage_rate": 0.0003,
             }
         ),
         parameter_variants=parameters,
@@ -784,7 +784,7 @@ def test_m94g2_mixed_offset_registration_replay_is_idempotent(
             risk_economic_configuration={
                 "risk_per_trade_pct": 1.0,
                 "slippage_pct": 0.05,
-                "brokerage_pct": 0.01,
+                "brokerage_rate": 0.0003,
             },
             parameter_variants=(
                 {"fast": 5, "slow": 20},

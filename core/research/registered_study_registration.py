@@ -42,6 +42,9 @@ from core.research.reproducibility import (
     canonical_bytes,
     canonical_fingerprint,
 )
+from core.research.backtest_financial_configuration import (
+    resolve_registered_backtest_financial_configuration,
+)
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
 )
@@ -534,6 +537,12 @@ class RegisteredStudyRegistrationService:
             for item in resolved
         ]
 
+        resolved_risk_economic_configuration = (
+            resolve_registered_backtest_financial_configuration(
+                risk_economic_configuration
+            )
+        )
+
         plan_payload = {
             "study_id": study_id,
             "research_intent": research_intent,
@@ -548,8 +557,8 @@ class RegisteredStudyRegistrationService:
             "initial_capital": float(
                 initial_capital
             ),
-            "risk_economic_configuration": dict(
-                risk_economic_configuration
+            "risk_economic_configuration": (
+                resolved_risk_economic_configuration
             ),
             "parameter_variants": [
                 {

@@ -853,10 +853,16 @@ def validate_stable_backtest_result_payload(
             label=f"Backtest trade {index} entry_time",
         )
 
-        _require_result_finite_number(
+        entry_price = _require_result_finite_number(
             trade["entry_price"],
             label=f"Backtest trade {index} entry_price",
         )
+
+        if entry_price <= 0:
+            raise ValueError(
+                f"Backtest trade {index} entry_price "
+                "must be positive"
+            )
 
         exit_time = trade["exit_time"]
 
@@ -885,6 +891,21 @@ def validate_stable_backtest_result_payload(
                 label=(
                     f"Backtest trade {index} {field}"
                 ),
+            )
+
+        if (
+            exit_time is not None
+            and trade["exit_price"] <= 0
+        ):
+            raise ValueError(
+                f"Backtest trade {index} exit_price "
+                "must be positive for a closed trade"
+            )
+
+        if trade["stop_price"] < 0:
+            raise ValueError(
+                f"Backtest trade {index} stop_price "
+                "cannot be negative"
             )
 
         _require_result_integer(
@@ -955,6 +976,66 @@ def validate_stable_backtest_result_payload(
                 ),
             )
 
+        for field in (
+            "open",
+            "high",
+            "low",
+            "close",
+        ):
+            if record[field] <= 0:
+                raise ValueError(
+                    f"Backtest bar record {index} "
+                    f"{field} must be positive"
+                )
+
+        if record["low"] > record["high"]:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "low cannot exceed high"
+            )
+
+        if not (
+            record["low"]
+            <= record["open"]
+            <= record["high"]
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "open must lie within the OHLC envelope"
+            )
+
+        if not (
+            record["low"]
+            <= record["close"]
+            <= record["high"]
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "close must lie within the OHLC envelope"
+            )
+
+        if record["volume"] < 0:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "volume cannot be negative"
+            )
+
+        if record["position_size"] < 0:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "position_size cannot be negative "
+                "for long-only research"
+            )
+
+        if (
+            record["position_size"] == 0
+            and record["equity"] != record["cash"]
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "zero position requires equity to equal cash"
+            )
+
         _require_result_string(
             record["strategy"],
             label=(
@@ -976,13 +1057,19 @@ def validate_stable_backtest_result_payload(
             )
 
         if record["execution_price"] is not None:
-            _require_result_finite_number(
+            execution_price = _require_result_finite_number(
                 record["execution_price"],
                 label=(
                     f"Backtest bar record {index} "
                     "execution_price"
                 ),
             )
+
+            if execution_price <= 0:
+                raise ValueError(
+                    f"Backtest bar record {index} "
+                    "execution_price must be positive"
+                )
 
         if (
             record["execution_quantity"]

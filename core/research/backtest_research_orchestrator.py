@@ -38,6 +38,7 @@ from core.research.reproducibility import (
     backtest_run_manifest_bytes,
     build_backtest_run_manifest,
     dataset_fingerprint,
+    decode_stable_backtest_result_bytes,
     stable_backtest_result_fingerprint,
     BACKTEST_RESULT_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
@@ -851,6 +852,13 @@ class BacktestResearchOrchestrator:
             ):
                 continue
 
+            try:
+                decode_stable_backtest_result_bytes(
+                    payload
+                )
+            except (TypeError, ValueError):
+                continue
+
             return ReusableBacktestResearchExecution(
                 attempt=attempt,
                 evidence=evidence,
@@ -1029,6 +1037,11 @@ class BacktestResearchOrchestrator:
                     "prepared ExperimentSpec"
                 )
 
+            if attempt_terminalizer is None:
+                raise ValueError(
+                    "supplied RunAttempt requires attempt_terminalizer"
+                )
+
         elif prepared.experiment_spec_id is not None:
             attempt = (
                 self.catalog_store
@@ -1048,11 +1061,16 @@ class BacktestResearchOrchestrator:
                 "attempt_terminalizer requires a RunAttempt"
             )
 
-        terminalizer = (
-            attempt_terminalizer
-            or self.catalog_store
-            .terminalize_attempt_with_evidence
-        )
+        terminalizer = attempt_terminalizer
+
+        if (
+            attempt is not None
+            and terminalizer is None
+        ):
+            terminalizer = (
+                self.catalog_store
+                .terminalize_attempt_with_evidence
+            )
 
         try:
             # M9.4h N01: final identity verification and financial

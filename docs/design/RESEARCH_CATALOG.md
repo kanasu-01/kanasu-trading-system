@@ -718,3 +718,46 @@ M9.2 does not establish:
 - cloud research storage.
 
 Those require their separately accepted milestone contracts.
+
+## M9.4j corrective integrity boundaries
+
+M9.4j is a corrective integrity layer over the already accepted M9.2-M9.4
+research architecture. It does not introduce qualification authority, shared
+portfolio economics, new trading mathematics or live-order authority.
+
+The registered Study boundary now freezes the complete effective canonical
+Backtest financial configuration rather than only caller-declared fragments.
+Registration resolves omitted canonical values from authoritative RuntimeContext
+defaults, rejects unknown financial keys, persists the complete mapping and
+requires claimed execution to prove exact equality with both the registered
+mapping and the executable runtime configuration.
+
+`RunAttempt` has two lifecycle ownership domains. A standalone M9.2
+`RunAttempt` may continue to use the standalone terminalization and restart
+recovery APIs. Once a `ResearchJob` owns an attempt through `attempt_id`, that
+attempt may be terminalized or recovered only through the coordinated
+ResearchJob lifecycle authority. Standalone terminalizers reject owned attempts
+inside the same database transaction, and standalone startup recovery excludes
+them.
+
+Exact historical reuse requires more than matching metadata and content
+identity. The result artifact bytes must decode and validate against the
+canonical Backtest-result contract before the execution is reusable. Semantic
+validation rejects obviously impossible finite states directly represented by
+the canonical payload, including non-positive OHLC prices, invalid OHLC
+envelopes, negative volume, negative long-only position size, zero-position
+records whose equity differs from cash, non-positive execution prices when
+present, non-positive trade entry/closed-exit prices and negative stop prices.
+This validation does not recompute fills, P&L, brokerage, cash or equity and
+therefore does not become a second financial engine.
+
+The Trial-detail application read is snapshot-consistent. The SQLite catalog
+loads the Trial, disposition events, ResearchJobs, owned attempts and reused
+attempts through one connection and one read transaction, then the API projects
+that immutable snapshot. The API does not assemble one Trial-detail response
+from separate independently timed catalog reads.
+
+These boundaries remain part of an unpublished M9.4j corrective candidate until
+final validation, publication and post-push verification complete. They do not
+authorize M9.5. A fresh independent audit of the exact published corrective HEAD
+must return exactly `M95_GATE=PASS` before fresh M9.5 design begins.
