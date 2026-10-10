@@ -24,6 +24,7 @@ from core.research.models.research_catalog import (
 )
 from core.research.registered_study_registration import (
     PARAMETER_VARIANT_SCHEMA_ID,
+    resolve_registered_data_treatment_basis,
 )
 from core.research.reproducibility import (
     canonical_fingerprint,
@@ -132,6 +133,10 @@ class RegisteredTrialExecutionPlan:
                 field_name,
                 MappingProxyType(dict(value)),
             )
+
+        resolve_registered_data_treatment_basis(
+            self.data_treatment_basis
+        )
 
         if not isinstance(
             self.evidence_reuse_policy,

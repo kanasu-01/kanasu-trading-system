@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 import sqlite3
 
 import pytest
@@ -12,10 +13,16 @@ from core.research.backtest_research_orchestrator import (
     PreparedBacktestResearchSpecification,
 )
 from core.research.models.research_catalog import (
+    ResearchArtifactKind,
     RunAttemptState,
 )
 from core.research.models.research_evidence import (
     ResearchEvidenceStatus,
+)
+from core.research.reproducibility import (
+    BACKTEST_RESULT_SCHEMA,
+    canonical_bytes,
+    decode_canonical_bytes,
 )
 from core.research.research_artifact_store import (
     ContentAddressedResearchArtifactStore,
@@ -1378,6 +1385,174 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
         is RunAttemptState.RUNNING
     )
 
+
+
+def test_m94k_exact_reuse_rejects_real_canonical_long_only_counterexample(
+    tmp_path,
+):
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-m94k-reuse-source",
+        ),
+    )
+
+    execution = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        execution.attempt_id
+    )
+
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+    assert source_attempt.result_artifact_id is not None
+
+    source_result_id = (
+        source_attempt.result_artifact_id
+    )
+
+    payload = decode_canonical_bytes(
+        service.artifact_store.load_bytes(
+            source_result_id
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["trades"].append(
+        {
+            "symbol": "RELIANCE",
+            "entry_time": START,
+            "entry_price": 100.0,
+            "exit_time": END,
+            "exit_price": 101.0,
+            "stop_price": 99.0,
+            "quantity": 0,
+            "direction": "LONG",
+            "exit_reason": "fixture",
+            "pnl": 1.0,
+            "gross_pnl": 1.0,
+            "transaction_cost": 0.0,
+            "pnl_pct": 1.0,
+        }
+    )
+
+    invalid_bytes = canonical_bytes(
+        payload,
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    invalid_artifact = (
+        service.artifact_store.persist_bytes(
+            invalid_bytes,
+            artifact_kind=(
+                ResearchArtifactKind.BACKTEST_RESULT
+            ),
+            schema_id=BACKTEST_RESULT_SCHEMA,
+            created_at=CREATED_AT,
+        )
+    )
+
+    catalog.save_artifact(
+        invalid_artifact
+    )
+
+    old_reference = research_artifact_reference(
+        source_result_id
+    )
+    new_reference = research_artifact_reference(
+        invalid_artifact.artifact_id
+    )
+
+    with sqlite3.connect(database) as connection:
+        row = connection.execute(
+            """
+            SELECT artifact_references
+            FROM research_evidence
+            WHERE evidence_id = ?
+            """,
+            (source_attempt.evidence_id,),
+        ).fetchone()
+
+        assert row is not None
+
+        references = json.loads(
+            row[0]
+        )
+
+        assert old_reference in references
+
+        references = [
+            (
+                new_reference
+                if reference == old_reference
+                else reference
+            )
+            for reference in references
+        ]
+
+        connection.execute(
+            """
+            UPDATE run_attempts
+            SET result_artifact_id = ?
+            WHERE attempt_id = ?
+            """,
+            (
+                invalid_artifact.artifact_id,
+                source_attempt.attempt_id,
+            ),
+        )
+
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET
+                result_fingerprint = ?,
+                artifact_references = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                invalid_artifact.artifact_id,
+                json.dumps(
+                    references,
+                    separators=(",", ":"),
+                ),
+                source_attempt.evidence_id,
+            ),
+        )
+
+        connection.commit()
+
+    before = row_count(
+        database,
+        "run_attempts",
+    )
+
+    assert (
+        service.find_exact_reusable_execution(
+            source_attempt.experiment_spec_id
+        )
+        is None
+    )
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == before
+    )
 
 
 def test_exact_reuse_resolver_rejects_malformed_canonical_result(

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timezone
 import sqlite3
 
@@ -185,6 +186,27 @@ def test_resolves_exact_parameter_variant_for_each_trial(
         assert (
             plan.evidence_reuse_policy
             is EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        )
+
+
+def test_m94k_incomplete_historical_data_treatment_plan_fails_closed(
+    tmp_path,
+):
+    _, population, resolver = _environment(
+        tmp_path
+    )
+
+    resolved = resolver.resolve(
+        population.trials[0].trial_id
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="explicitly declare price_adjustment",
+    ):
+        replace(
+            resolved,
+            data_treatment_basis={},
         )
 
 

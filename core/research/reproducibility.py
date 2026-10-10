@@ -913,6 +913,12 @@ def validate_stable_backtest_result_payload(
             label=f"Backtest trade {index} quantity",
         )
 
+        if trade["quantity"] <= 0:
+            raise ValueError(
+                f"Backtest trade {index} quantity "
+                "must be positive"
+            )
+
         for field in (
             "direction",
             "exit_reason",
@@ -922,6 +928,12 @@ def validate_stable_backtest_result_payload(
                 label=(
                     f"Backtest trade {index} {field}"
                 ),
+            )
+
+        if trade["direction"] != "LONG":
+            raise ValueError(
+                f"Backtest trade {index} direction "
+                "must be LONG for long-only research"
             )
 
     bar_timestamps = []
@@ -1027,6 +1039,12 @@ def validate_stable_backtest_result_payload(
                 "for long-only research"
             )
 
+        if record["drawdown"] > 0:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "drawdown cannot be positive"
+            )
+
         if (
             record["position_size"] == 0
             and record["equity"] != record["cash"]
@@ -1034,6 +1052,15 @@ def validate_stable_backtest_result_payload(
             raise ValueError(
                 f"Backtest bar record {index} "
                 "zero position requires equity to equal cash"
+            )
+
+        if (
+            record["position_size"] > 0
+            and record["equity"] <= record["cash"]
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "positive position requires equity to exceed cash"
             )
 
         _require_result_string(
@@ -1082,6 +1109,12 @@ def validate_stable_backtest_result_payload(
                     "execution_quantity"
                 ),
             )
+
+            if record["execution_quantity"] <= 0:
+                raise ValueError(
+                    f"Backtest bar record {index} "
+                    "execution_quantity must be positive"
+                )
 
         if not isinstance(
             record["decision_snapshot"],

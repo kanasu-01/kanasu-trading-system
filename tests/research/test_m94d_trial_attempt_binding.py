@@ -200,7 +200,7 @@ def _environment(
             ),
             require_point_in_time=True,
             data_treatment_basis={
-                "adjustment": "raw",
+                "price_adjustment": "raw",
             },
             repository_revision="repo-m94d2",
             evidence_reuse_policy=evidence_reuse_policy,

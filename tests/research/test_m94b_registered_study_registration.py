@@ -95,6 +95,7 @@ def _register(
     registered_at=APR,
     research_intent="test deterministic membership",
     risk=None,
+    data_treatment=None,
 ):
     return service.register_study_revision(
         study_id="study-m94b",
@@ -123,16 +124,95 @@ def _register(
         universe_definition=definition,
         universe_snapshots=snapshots,
         require_point_in_time=True,
-        data_treatment_basis={
-            "price_adjustment": "raw",
-            "corporate_actions": "explicit",
-        },
+        data_treatment_basis=(
+            data_treatment
+            if data_treatment is not None
+            else {
+                "price_adjustment": "raw",
+                "corporate_actions": "explicit",
+            }
+        ),
         repository_revision="repo-revision-1",
         evidence_reuse_policy=(
             EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
         ),
         registered_at=registered_at,
     )
+
+
+def test_m94k_registration_requires_explicit_price_adjustment(
+    tmp_path,
+):
+    _, _, service = _environment(
+        tmp_path
+    )
+
+    definition = UniverseDefinition(
+        name="m94k-explicit-data-treatment",
+        selection_spec="fixture",
+    )
+
+    snapshot = _snapshot(
+        definition,
+        ("NSE:A",),
+        JAN,
+        FEB,
+        provenance="m94k-explicit-source",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="explicitly declare price_adjustment",
+    ):
+        _register(
+            service,
+            definition,
+            (snapshot,),
+            data_treatment={},
+        )
+
+
+def test_m94k_registration_preserves_explicit_unknown_price_adjustment(
+    tmp_path,
+):
+    _, artifacts, service = _environment(
+        tmp_path
+    )
+
+    definition = UniverseDefinition(
+        name="m94k-unknown-data-treatment",
+        selection_spec="fixture",
+    )
+
+    snapshot = _snapshot(
+        definition,
+        ("NSE:A",),
+        JAN,
+        FEB,
+        provenance="m94k-unknown-source",
+    )
+
+    population = _register(
+        service,
+        definition,
+        (snapshot,),
+        data_treatment={
+            "price_adjustment": "unknown",
+        },
+    )
+
+    raw = artifacts.load_bytes(
+        population.revision.plan_artifact_id
+    )
+
+    plan = decode_canonical_bytes(
+        raw,
+        schema=STUDY_REVISION_SCHEMA_ID,
+    )
+
+    assert plan["data_treatment_basis"] == {
+        "price_adjustment": "unknown",
+    }
 
 
 def test_continuous_member_coalesces_without_snapshot_reset(

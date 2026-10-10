@@ -21,6 +21,9 @@ from core.research.reproducibility import (
     decode_canonical_bytes,
     stable_backtest_result_bytes,
 )
+from core.research.research_artifact_store import (
+    ContentAddressedResearchArtifactStore,
+)
 from core.research.study_aggregation import (
     StudyAggregationError,
     StudyAggregationService,
@@ -347,6 +350,70 @@ class ArtifactStoreStub:
         ]
 
 
+def _aggregate_real_executed_payload(
+    tmp_path,
+    payload_bytes,
+):
+    store = ContentAddressedResearchArtifactStore(
+        tmp_path / "m94k-artifacts"
+    )
+
+    artifact = store.persist_bytes(
+        payload_bytes,
+        artifact_kind=(
+            ResearchArtifactKind.BACKTEST_RESULT
+        ),
+        schema_id=BACKTEST_RESULT_SCHEMA,
+        created_at=NOW,
+    )
+
+    catalog = CatalogStub()
+
+    catalog.trials = (
+        _trial(
+            EXECUTED_TRIAL_ID,
+            TrialDisposition.EXECUTED,
+        ),
+    )
+
+    catalog.jobs = {
+        EXECUTED_TRIAL_ID: (
+            _executed_job(),
+        ),
+    }
+
+    catalog.events = {
+        EXECUTED_TRIAL_ID: (
+            _terminal_event(
+                trial_id=EXECUTED_TRIAL_ID,
+                disposition=TrialDisposition.EXECUTED,
+                job_id="job-executed",
+            ),
+        ),
+    }
+
+    catalog.attempts = {
+        "attempt-executed": SimpleNamespace(
+            attempt_id="attempt-executed",
+            state=RunAttemptState.SUCCEEDED,
+            result_artifact_id=(
+                artifact.artifact_id
+            ),
+        ),
+    }
+
+    catalog.artifacts = {
+        artifact.artifact_id: artifact,
+    }
+
+    return StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=store,
+    ).aggregate_revision(
+        REVISION_ID
+    )
+
+
 def test_aggregation_reports_explicit_denominators_and_partial_failures():
     result = StudyAggregationService(
         catalog_store=CatalogStub(),
@@ -629,6 +696,93 @@ def test_m94g3_real_canonical_serialized_backtest_result_is_accepted():
 
     assert result.executed_trials == 1
     assert result.result_bearing_trials == 2
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "trade_quantity_zero",
+        "trade_direction_short",
+        "execution_quantity_zero",
+        "positive_drawdown",
+        "positive_position_without_equity_value",
+    ),
+)
+def test_m94k_real_canonical_artifact_rejects_long_only_counterexamples(
+    tmp_path,
+    case,
+):
+    def mutate(payload):
+        if case in {
+            "trade_quantity_zero",
+            "trade_direction_short",
+        }:
+            payload["trades"].append(
+                {
+                    "symbol": "NSE:A",
+                    "entry_time": NOW,
+                    "entry_price": 100.0,
+                    "exit_time": (
+                        NOW + timedelta(minutes=1)
+                    ),
+                    "exit_price": 101.0,
+                    "stop_price": 99.0,
+                    "quantity": 1,
+                    "direction": "LONG",
+                    "exit_reason": "fixture",
+                    "pnl": 1.0,
+                    "gross_pnl": 1.0,
+                    "transaction_cost": 0.0,
+                    "pnl_pct": 1.0,
+                }
+            )
+
+            if case == "trade_quantity_zero":
+                payload["trades"][0][
+                    "quantity"
+                ] = 0
+            else:
+                payload["trades"][0][
+                    "direction"
+                ] = "SHORT"
+
+            return
+
+        record = payload["bar_records"][0]
+
+        if case == "execution_quantity_zero":
+            record["execution_price"] = 100.0
+            record["execution_quantity"] = 0
+            return
+
+        if case == "positive_drawdown":
+            record["drawdown"] = 0.01
+            return
+
+        if (
+            case
+            == "positive_position_without_equity_value"
+        ):
+            record["position_size"] = 1.0
+            record["cash"] = record["equity"]
+            return
+
+        raise AssertionError(
+            f"unknown fixture case: {case}"
+        )
+
+    payload_bytes = _mutated_result_bytes(
+        mutate
+    )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            payload_bytes,
+        )
 
 
 def test_m94g3_missing_required_bar_field_is_rejected():

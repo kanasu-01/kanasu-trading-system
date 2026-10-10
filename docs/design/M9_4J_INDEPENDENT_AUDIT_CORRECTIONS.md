@@ -17,7 +17,7 @@ Published baseline at the start of M9.4j:
 
 `0ba32ee2294f7d6a84288574860a7d1f995f1e34`
 
-The M9.4j corrective working tree is not yet staged, committed or pushed.
+The M9.4j corrective candidate is published and post-push verified at `7f123daa135be4009294f5197676dc5153261255`, whose parent is `0ba32ee2294f7d6a84288574860a7d1f995f1e34`.
 
 ## 2. Preservation boundaries
 
@@ -115,8 +115,7 @@ This document is the dedicated M9.4j correction record.
 
 ## 9. Final whole-package validation evidence
 
-The integrated unpublished M9.4j corrective working tree was validated as one
-package after R01-R06 were present together.
+The integrated M9.4j corrective candidate was validated as one package after R01-R06 were present together and was subsequently published at `7f123daa135be4009294f5197676dc5153261255`.
 
 Reproduced evidence:
 
@@ -135,21 +134,17 @@ research orchestrator test file. The complete 1365-test repository regression
 is the authoritative cross-milestone preservation result for the integrated
 working tree.
 
-These validation results establish a local corrective candidate only. They do
-not constitute publication, independent acceptance or M9.5 authorization.
+These validation results and post-push verification establish the published corrective candidate. They do not constitute independent acceptance or M9.5 authorization.
 
-## 10. Remaining publication and independent-audit requirements
+## 10. Independent-audit requirement at M9.4j publication
 
-Before M9.4j can be accepted as the new M9.4 closure state:
+Staging, commit, push and post-push local/remote verification are complete for
+published corrective HEAD:
 
-1. review the exact changed-file manifest and final diff hygiene;
-2. obtain separate explicit human approval for staging;
-3. validate the exact staged manifest;
-4. obtain separate explicit human approval for commit;
-5. verify the resulting local corrective commit;
-6. obtain separate explicit human approval for push;
-7. verify the exact local and remote corrective HEAD after push;
-8. perform a fresh independent M9.4 audit against that exact published HEAD.
+`7f123daa135be4009294f5197676dc5153261255`
+
+At M9.4j publication, the remaining M9.4 gate was a fresh independent
+audit of that exact published HEAD.
 
 Only:
 
@@ -159,3 +154,44 @@ authorizes fresh M9.5 design.
 
 A PASS authorizes M9.5 design only; M9.5 implementation remains separately
 approved work.
+
+## 11. Post-publication independent audit and M9.4k follow-up
+
+The subsequent independent audit of exact published M9.4j HEAD
+`7f123daa135be4009294f5197676dc5153261255` returned:
+
+`M95_GATE=BLOCKED`
+
+The accepted-scope findings were:
+
+- F01 MEDIUM - registered `data_treatment_basis` could be empty or incomplete,
+  allowing executable price-adjustment verification to be bypassed;
+- F02 MEDIUM - canonical Backtest-result validation admitted direct impossible
+  long-only states including non-positive trade/execution quantities, non-LONG
+  direction, positive stored drawdown, and positive holdings without positive
+  marked position value;
+- F03 LOW - current-state documentation/traceability lagged the actual
+  post-publication state.
+
+M9.4k is the bounded follow-up correction. It does not redesign M9.4 or alter
+accepted M4 financial semantics. The local candidate requires explicit
+`price_adjustment` registration using `raw`, `adjusted` or `unknown`; preserves
+explicit `unknown` without guessing; fails incomplete registered plans closed;
+strengthens only direct canonical long-only invariants; and adds real
+registration/execution plus canonical artifact reuse/aggregation
+counterexample tests.
+
+Validation of the current local M9.4k candidate includes:
+
+- 107 affected M9.4 tests passing;
+- 73 previously failing queue/attempt/cancellation tests passing after three
+  stale historical fixtures were corrected from the obsolete `adjustment`
+  key to canonical `price_adjustment`;
+- complete Python regression: 1375 passed;
+- `git diff --check`: PASS.
+
+M9.4k is not yet staged, committed or pushed. M9.5 remains blocked until the
+M9.4k corrective candidate is published, the exact local/remote published HEAD
+is verified, and a fresh independent audit of that exact HEAD returns exactly:
+
+`M95_GATE=PASS`

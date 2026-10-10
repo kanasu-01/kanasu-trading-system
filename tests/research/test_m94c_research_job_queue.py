@@ -152,7 +152,7 @@ def _register(
         universe_snapshots=(snapshot,),
         require_point_in_time=True,
         data_treatment_basis={
-            "adjustment": "raw",
+            "price_adjustment": "raw",
         },
         repository_revision="repo-m94c",
         evidence_reuse_policy=(

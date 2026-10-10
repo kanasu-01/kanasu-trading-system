@@ -19,6 +19,9 @@ import math
 from typing import Any
 
 from core.market_data.historical_coverage import TimeRange
+from core.research.models.dataset import (
+    PriceAdjustmentBasis,
+)
 from core.research.models.registered_study import (
     EvidenceReusePolicy,
     STUDY_REVISION_SCHEMA_ID,
@@ -61,6 +64,45 @@ TRIAL_DISPOSITION_EVENT_SCHEMA_ID = (
 )
 
 DEFAULT_RESEARCH_MAX_TRIALS_PER_REVISION = 5_000
+
+
+def resolve_registered_data_treatment_basis(
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Require an explicit supported registered price-treatment basis."""
+
+    if not isinstance(value, Mapping):
+        raise TypeError(
+            "data_treatment_basis must be a mapping"
+        )
+
+    resolved = dict(value)
+
+    if "price_adjustment" not in resolved:
+        raise ValueError(
+            "data_treatment_basis must explicitly declare "
+            "price_adjustment"
+        )
+
+    price_adjustment = resolved[
+        "price_adjustment"
+    ]
+
+    supported = {
+        basis.value.lower()
+        for basis in PriceAdjustmentBasis
+    }
+
+    if (
+        not isinstance(price_adjustment, str)
+        or price_adjustment not in supported
+    ):
+        raise ValueError(
+            "data_treatment_basis price_adjustment must be "
+            "one of raw, adjusted, unknown"
+        )
+
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -464,6 +506,12 @@ class RegisteredStudyRegistrationService:
                 "data_treatment_basis must be a mapping"
             )
 
+        resolved_data_treatment_basis = (
+            resolve_registered_data_treatment_basis(
+                data_treatment_basis
+            )
+        )
+
         if not isinstance(
             universe_definition,
             UniverseDefinition,
@@ -580,7 +628,7 @@ class RegisteredStudyRegistrationService:
                 require_point_in_time
             ),
             "data_treatment_basis": dict(
-                data_treatment_basis
+                resolved_data_treatment_basis
             ),
             "repository_revision": (
                 repository_revision

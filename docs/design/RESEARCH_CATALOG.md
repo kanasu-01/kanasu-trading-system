@@ -757,7 +757,14 @@ attempts through one connection and one read transaction, then the API projects
 that immutable snapshot. The API does not assemble one Trial-detail response
 from separate independently timed catalog reads.
 
-These boundaries remain part of an unpublished M9.4j corrective candidate until
-final validation, publication and post-push verification complete. They do not
-authorize M9.5. A fresh independent audit of the exact published corrective HEAD
-must return exactly `M95_GATE=PASS` before fresh M9.5 design begins.
+These boundaries are published and post-push verified in M9.4j corrective HEAD
+`7f123daa135be4009294f5197676dc5153261255`. The fresh independent audit
+of that exact head returned `M95_GATE=BLOCKED`: F01 required explicit registered
+price-adjustment authority, F02 required stricter direct long-only canonical
+Backtest-result invariants, and F03 required current-state documentation
+synchronization. M9.4k applies those bounded corrections locally without changing
+the accepted catalog, Trial, ResearchJob, RunAttempt, reuse or aggregation
+architecture. Its complete Python regression is 1375 passed with clean
+`git diff --check`. M9.5 remains blocked until the M9.4k correction is published
+and a fresh independent audit of its exact published HEAD returns exactly
+`M95_GATE=PASS`.

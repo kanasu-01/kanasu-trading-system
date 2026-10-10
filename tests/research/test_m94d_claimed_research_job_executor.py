@@ -247,6 +247,8 @@ def _config():
 def _inputs(
     *,
     procedure_id="sma-crossover-v1",
+    price_basis=PriceAdjustmentBasis.RAW,
+    data_treatment=None,
 ):
     config = _config()
 
@@ -265,15 +267,19 @@ def _inputs(
         ),
         provider="angelone",
         price_adjustment_basis=(
-            PriceAdjustmentBasis.RAW
+            price_basis
         ),
         strategy_procedure_id=procedure_id,
         risk_economic_configuration=(
             RISK_DECLARATION
         ),
-        data_treatment_basis={
-            "price_adjustment": "raw",
-        },
+        data_treatment_basis=(
+            data_treatment
+            if data_treatment is not None
+            else {
+                "price_adjustment": "raw",
+            }
+        ),
     )
 
 
@@ -292,6 +298,7 @@ def _environment(
     tmp_path,
     *,
     execution_input_resolver,
+    registered_data_treatment=None,
     evidence_reuse_policy=(
         EvidenceReusePolicy.FORCE_NEW_EXECUTION
     ),
@@ -396,9 +403,13 @@ def _environment(
                 snapshot,
             ),
             require_point_in_time=True,
-            data_treatment_basis={
-                "price_adjustment": "raw",
-            },
+            data_treatment_basis=(
+                registered_data_treatment
+                if registered_data_treatment is not None
+                else {
+                    "price_adjustment": "raw",
+                }
+            ),
             repository_revision=REVISION,
             evidence_reuse_policy=(
                 evidence_reuse_policy
@@ -599,6 +610,57 @@ def test_claimed_job_executes_fresh_attempt_through_authoritative_path(
 
     assert len(execution_calls) == 1
     assert execution_calls[0] == _candles()
+
+
+def test_m94k_explicit_unknown_price_adjustment_survives_registered_execution(
+    tmp_path,
+):
+    inputs = _inputs(
+        price_basis=(
+            PriceAdjustmentBasis.UNKNOWN
+        ),
+        data_treatment={
+            "price_adjustment": "unknown",
+        },
+    )
+
+    (
+        catalog,
+        _,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda plan: inputs
+        ),
+        registered_data_treatment={
+            "price_adjustment": "unknown",
+        },
+    )
+
+    terminal_job = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal_job.state
+        is ResearchJobState.SUCCEEDED
+    )
+
+    assert _attempt_count(catalog) == 1
+    assert len(retrieval.calls) == 1
+
+    assert (
+        retrieval.calls[0][
+            "price_adjustment_basis"
+        ]
+        is PriceAdjustmentBasis.UNKNOWN
+    )
+
+    assert len(execution_calls) == 1
 
 
 def test_claimed_job_input_mismatch_fails_before_attempt_or_retrieval(
