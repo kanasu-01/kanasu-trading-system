@@ -1394,6 +1394,8 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
         "trade_quantity_zero",
         "negative_transaction_cost",
         "inconsistent_net_pnl",
+        "inconsistent_gross_pnl",
+        "inconsistent_return_pct",
         "incorrect_marked_equity",
         "drawdown_below_minus_one",
         "incomplete_execution_fields",
@@ -1467,6 +1469,8 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
         "trade_quantity_zero",
         "negative_transaction_cost",
         "inconsistent_net_pnl",
+        "inconsistent_gross_pnl",
+        "inconsistent_return_pct",
     }:
         payload["trades"].append(
             {
@@ -1492,8 +1496,15 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
             payload["trades"][0][
                 "transaction_cost"
             ] = -100.0
-        else:
+        elif case == "inconsistent_net_pnl":
             payload["trades"][0]["pnl"] = 2.0
+        elif case == "inconsistent_gross_pnl":
+            payload["trades"][0]["gross_pnl"] = 2.0
+            payload["trades"][0]["pnl"] = 2.0
+        elif case == "inconsistent_return_pct":
+            payload["trades"][0]["pnl_pct"] = 99.0
+        else:
+            raise AssertionError(case)
 
     elif case == "incorrect_marked_equity":
         record = payload["bar_records"][0]

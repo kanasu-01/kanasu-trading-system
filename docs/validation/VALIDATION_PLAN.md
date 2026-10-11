@@ -1125,7 +1125,7 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9.4 - Registered Studies and bounded local batch execution
 
-**Status:** M9.4l PUBLISHED / AUDIT BLOCKED; M9.4m locally validated at the 2026-10-11 pre-publication checkpoint; independent `M95_GATE=PASS` required before M9.5 design
+**Status:** M9.4m PUBLISHED / AUDIT BLOCKED (B01 MEDIUM, F03 LOW); M9.4n LOCAL 2026-10-11 CORRECTIVE CHECKPOINT; `M95_GATE=BLOCKED`; exact published corrective HEAD requires fresh independent PASS before M9.5 design
 
 M9.4 closure evidence establishes the following accepted boundaries:
 
@@ -1228,3 +1228,7 @@ A refactor may declare `BEHAVIOR IMPACT: NONE`, but that declaration must be ind
 - **Regression and acceptance:** deterministic Python regression, frontend tests/build/lint and representative end-to-end/browser evidence pass on the actual release candidate.
 
 Progress in one gate cannot compensate for a failed mandatory gate. A complete Study may produce no eligible Candidate and still demonstrate a successful research product.
+
+## M9.4m independent review and M9.4n validation checkpoint
+
+The exact published M9.4m HEAD `6e248a2749f162738e75258d8cd972a8e037c6b4` was independently reviewed. Its 1394 full Python tests and 280 repository-wide M9.4 tests across 21 modules passed, but the independent audit returned `M95_GATE=BLOCKED` for B01 (closed-trade gross-profit and percentage contradictions admitted by canonical reuse and aggregation) and F03 (obsolete design introduction). At the 2026-10-11 M9.4n local checkpoint, 70 focused regression tests passed following the direct financial-consistency correction, persisted-artifact checks and decoder coverage. Complete Python regression subsequently passed 1403 tests, repository-wide M9.4 regression passed 287 tests across 21 modules, and git diff --check passed. This is local validation, not post-publication independent acceptance. M9.5 is blocked.

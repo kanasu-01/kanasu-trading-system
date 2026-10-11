@@ -19,6 +19,7 @@ from core.research.reproducibility import (
     BACKTEST_RESULT_SCHEMA,
     canonical_bytes,
     decode_canonical_bytes,
+    decode_stable_backtest_result_bytes,
     stable_backtest_result_bytes,
 )
 from core.research.research_artifact_store import (
@@ -1065,6 +1066,8 @@ def test_m94j_validator_rejects_impossible_financial_states():
     "case",
     (
         "inconsistent_net_pnl",
+        "inconsistent_gross_pnl",
+        "inconsistent_return_pct",
         "incorrect_marked_equity",
     ),
 )
@@ -1073,7 +1076,11 @@ def test_m94m_hash_valid_financial_contradictions_block_aggregation(
     case,
 ):
     def mutate(payload):
-        if case == "inconsistent_net_pnl":
+        if case in {
+            "inconsistent_net_pnl",
+            "inconsistent_gross_pnl",
+            "inconsistent_return_pct",
+        }:
             payload["trades"].append(
                 {
                     "symbol": "NSE:A",
@@ -1085,12 +1092,20 @@ def test_m94m_hash_valid_financial_contradictions_block_aggregation(
                     "quantity": 1,
                     "direction": "LONG",
                     "exit_reason": "fixture",
-                    "pnl": 2.0,
+                    "pnl": 1.0,
                     "gross_pnl": 1.0,
                     "transaction_cost": 0.0,
                     "pnl_pct": 1.0,
                 }
             )
+            trade = payload["trades"][0]
+            if case == "inconsistent_net_pnl":
+                trade["pnl"] = 2.0
+            elif case == "inconsistent_gross_pnl":
+                trade["gross_pnl"] = 2.0
+                trade["pnl"] = 2.0
+            else:
+                trade["pnl_pct"] = 99.0
         elif case == "incorrect_marked_equity":
             record = payload["bar_records"][0]
             record["position_size"] = 1.0
@@ -1112,6 +1127,7 @@ def test_m94m_hash_valid_financial_contradictions_block_aggregation(
     "case",
     (
         "valid_cost_adjusted_trade",
+        "valid_loss_trade",
         "valid_close_marked_holding",
     ),
 )
@@ -1120,22 +1136,45 @@ def test_m94m_valid_direct_financial_relationships_are_accepted(
     case,
 ):
     def mutate(payload):
-        if case == "valid_cost_adjusted_trade":
+        if case in {
+            "valid_cost_adjusted_trade",
+            "valid_loss_trade",
+        }:
+            entry_price = (
+                101.0
+                if case == "valid_cost_adjusted_trade"
+                else 102.0
+            )
+            exit_price = (
+                102.0
+                if case == "valid_cost_adjusted_trade"
+                else 101.0
+            )
+            quantity = 3
+            gross = (
+                (exit_price - entry_price)
+                * quantity
+            )
+            cost = 0.25
+
             payload["trades"].append(
                 {
                     "symbol": "NSE:A",
                     "entry_time": NOW,
-                    "entry_price": 100.0,
+                    "entry_price": entry_price,
                     "exit_time": NOW + timedelta(minutes=1),
-                    "exit_price": 101.0,
+                    "exit_price": exit_price,
                     "stop_price": 99.0,
-                    "quantity": 1,
+                    "quantity": quantity,
                     "direction": "LONG",
                     "exit_reason": "fixture",
-                    "pnl": 0.75,
-                    "gross_pnl": 1.0,
-                    "transaction_cost": 0.25,
-                    "pnl_pct": 1.0,
+                    "pnl": gross - cost,
+                    "gross_pnl": gross,
+                    "transaction_cost": cost,
+                    "pnl_pct": (
+                        (exit_price - entry_price)
+                        / entry_price
+                    ) * 100,
                 }
             )
         elif case == "valid_close_marked_holding":
@@ -1154,3 +1193,104 @@ def test_m94m_valid_direct_financial_relationships_are_accepted(
 
     assert result.executed_trials == 1
     assert result.result_bearing_trials == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "valid_profitable_trade",
+        "valid_losing_trade",
+        "inconsistent_gross_pnl",
+        "inconsistent_return_pct",
+    ),
+)
+def test_m94n_canonical_decoder_enforces_closed_long_trade_prices(
+    case,
+):
+    def mutate(payload):
+        entry_price = (
+            102.0
+            if case == "valid_losing_trade"
+            else 101.0
+        )
+        exit_price = (
+            101.0
+            if case == "valid_losing_trade"
+            else 102.0
+        )
+        quantity = 3
+        transaction_cost = 0.25
+
+        gross_pnl = (
+            (exit_price - entry_price)
+            * quantity
+        )
+
+        payload["trades"].append(
+            {
+                "symbol": "NSE:A",
+                "entry_time": NOW,
+                "entry_price": entry_price,
+                "exit_time": NOW + timedelta(minutes=1),
+                "exit_price": exit_price,
+                "stop_price": 99.0,
+                "quantity": quantity,
+                "direction": "LONG",
+                "exit_reason": "fixture",
+                "pnl": gross_pnl - transaction_cost,
+                "gross_pnl": gross_pnl,
+                "transaction_cost": transaction_cost,
+                "pnl_pct": (
+                    (exit_price - entry_price)
+                    / entry_price
+                ) * 100,
+            }
+        )
+
+        trade = payload["trades"][0]
+
+        if case == "inconsistent_gross_pnl":
+            trade["gross_pnl"] += 1.0
+            trade["pnl"] += 1.0
+
+        elif case == "inconsistent_return_pct":
+            trade["pnl_pct"] = 99.0
+
+    payload_bytes = _mutated_result_bytes(mutate)
+
+    if case in {
+        "valid_profitable_trade",
+        "valid_losing_trade",
+    }:
+        decoded = decode_stable_backtest_result_bytes(
+            payload_bytes
+        )
+
+        trade = decoded["trades"][0]
+
+        assert trade["quantity"] == 3
+        assert trade["transaction_cost"] == 0.25
+
+        if case == "valid_losing_trade":
+            assert trade["gross_pnl"] < 0
+            assert trade["pnl"] < 0
+            assert trade["pnl_pct"] < 0
+        else:
+            assert trade["gross_pnl"] > 0
+            assert trade["pnl"] > 0
+            assert trade["pnl_pct"] > 0
+
+    else:
+        message = (
+            "gross_pnl must"
+            if case == "inconsistent_gross_pnl"
+            else "pnl_pct must"
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=message,
+        ):
+            decode_stable_backtest_result_bytes(
+                payload_bytes
+            )

@@ -129,3 +129,9 @@ At the 2026-10-11 pre-publication validation checkpoint, M9.4m was a local, unst
 Local M9.4m validation passed 1394 complete Python tests and 280 repository-wide M9.4 tests across 21 modules; `git diff --check` passed. At the 2026-10-11 pre-publication checkpoint, `M95_GATE=BLOCKED`. The required release sequence is final review, separately approved stage, commit and push, verification of the exact published HEAD, and a fresh independent post-publication M9.4 audit. Only an explicit `M95_GATE=PASS` for the audited published HEAD authorizes fresh M9.5 design; it does not authorize M9.5 implementation.
 
 Existing VERIFIED traceability rows represent their cited behaviors and tests. They do not independently certify the complete M9.4m publication gate.
+
+## M9.4m independent review and M9.4n financial-result correction
+
+Published `6e248a2749f162738e75258d8cd972a8e037c6b4` was independently audited with `M95_GATE=BLOCKED`: B01 MEDIUM showed that hash-valid contradictory closed-trade gross profit and percentage returns reached exact reuse and Study aggregation; F03 LOW identified obsolete design introductory wording. A01/A02/A03 were independently assessed as corrected.
+
+M9.4n updates the shared canonical result validator in `core/research/reproducibility.py` to enforce existing TradeBuilder price/quantity gross-PnL and price-return equations for closed LONG trades. Associated executable evidence includes `test_m94l_exact_reuse_rejects_additional_canonical_counterexamples`, `test_m94m_hash_valid_financial_contradictions_block_aggregation`, `test_m94m_valid_direct_financial_relationships_are_accepted`, and `test_m94n_canonical_decoder_enforces_closed_long_trade_prices`. These cases passed within the 70-test focused suite on 2026-10-11. Full Python regression subsequently passed 1403 tests and repository-wide M9.4 regression passed 287 tests across 21 modules. Independent closure remains pending; `M95_GATE=BLOCKED`.
