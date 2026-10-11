@@ -1058,3 +1058,99 @@ def test_m94j_validator_rejects_impossible_financial_states():
             validate_stable_backtest_result_payload(
                 payload
             )
+
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "inconsistent_net_pnl",
+        "incorrect_marked_equity",
+    ),
+)
+def test_m94m_hash_valid_financial_contradictions_block_aggregation(
+    tmp_path,
+    case,
+):
+    def mutate(payload):
+        if case == "inconsistent_net_pnl":
+            payload["trades"].append(
+                {
+                    "symbol": "NSE:A",
+                    "entry_time": NOW,
+                    "entry_price": 100.0,
+                    "exit_time": NOW + timedelta(minutes=1),
+                    "exit_price": 101.0,
+                    "stop_price": 99.0,
+                    "quantity": 1,
+                    "direction": "LONG",
+                    "exit_reason": "fixture",
+                    "pnl": 2.0,
+                    "gross_pnl": 1.0,
+                    "transaction_cost": 0.0,
+                    "pnl_pct": 1.0,
+                }
+            )
+        elif case == "incorrect_marked_equity":
+            record = payload["bar_records"][0]
+            record["position_size"] = 1.0
+            record["cash"] = record["equity"] - 1.0
+        else:
+            raise AssertionError(case)
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            _mutated_result_bytes(mutate),
+        )
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "valid_cost_adjusted_trade",
+        "valid_close_marked_holding",
+    ),
+)
+def test_m94m_valid_direct_financial_relationships_are_accepted(
+    tmp_path,
+    case,
+):
+    def mutate(payload):
+        if case == "valid_cost_adjusted_trade":
+            payload["trades"].append(
+                {
+                    "symbol": "NSE:A",
+                    "entry_time": NOW,
+                    "entry_price": 100.0,
+                    "exit_time": NOW + timedelta(minutes=1),
+                    "exit_price": 101.0,
+                    "stop_price": 99.0,
+                    "quantity": 1,
+                    "direction": "LONG",
+                    "exit_reason": "fixture",
+                    "pnl": 0.75,
+                    "gross_pnl": 1.0,
+                    "transaction_cost": 0.25,
+                    "pnl_pct": 1.0,
+                }
+            )
+        elif case == "valid_close_marked_holding":
+            record = payload["bar_records"][0]
+            record["position_size"] = 1.0
+            record["cash"] = (
+                record["equity"] - record["close"]
+            )
+        else:
+            raise AssertionError(case)
+
+    result = _aggregate_real_executed_payload(
+        tmp_path,
+        _mutated_result_bytes(mutate),
+    )
+
+    assert result.executed_trials == 1
+    assert result.result_bearing_trials == 1

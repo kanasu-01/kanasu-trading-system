@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED; IMPLEMENTED / VALIDATED; M9.4l LOCAL CORRECTIVE CANDIDATE; INDEPENDENT RE-REVIEW REQUIRED; M9.5 BLOCKED
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED; M9.4l PUBLISHED / AUDIT BLOCKED; M9.4m locally validated at the 2026-10-11 pre-publication checkpoint; independent PASS required before M9.5 design
 
 **Target:** M9.4
 
@@ -617,7 +617,11 @@ Historical M9.4h validation included 144 focused h1+h2 tests, 66 focused h3 test
 
 The fresh independent audit of exact M9.4k HEAD returned `M95_GATE=BLOCKED` with F05 HIGH, F04 MEDIUM, F06 MEDIUM and F03 LOW. M9.4l preserves AD-025 and the accepted architecture while making raw registered fresh-execution persistence phases internal behind the claimed-job validation authority; strengthening only direct canonical-result invariants for nonnegative transaction cost, nonnegative-equity drawdown lower bound and execution tuple consistency; and using one coherent restart-recovery terminal timestamp across the linked attempt, job, Trial and disposition event.
 
-Current local M9.4l validation is 176 focused tests, 207 repository M9.4 tests across 13 `test_m94*.py` modules and 1383 complete Python tests, with `git diff --check` clean. This validation is not independent acceptance. M9.5 remains blocked until the M9.4l candidate is separately reviewed, staged, committed and pushed, its exact published head is verified, and a fresh independent audit returns exactly `M95_GATE=PASS`.
+M9.4l was published/post-push verified at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. Its local validation included 176 focused tests, 207 research-only M9.4 tests across 13 modules and 1383 complete Python tests. The independent reviewer subsequently discovered 273 repository-wide M9.4 tests across 21 modules and independently ran all 1383 Python tests. The audit returned `M95_GATE=BLOCKED` with A01, A02, A03 and F03. Publication and passing tests did not establish independent acceptance.
+
+At the 2026-10-11 pre-publication validation checkpoint, M9.4m was a local, unstaged and unpublished corrective candidate. This is a historical checkpoint statement, not an assertion about its eventual publication state. A01 adds direct canonical financial consistency checks for net/gross/cost and single-symbol close-marked equity. A02 includes durable cancellation-request time in the shared restart-recovery terminal timestamp. A03 separates public standalone prepared execution from internal supplied-RunAttempt execution and rejects stale attempts before computation; a concurrent claimed-job test verifies one physical execution through that supported entry path. Existing M4 Backtest economics, M5 WFA, M6/M7 Paper causality, M8 application authority, M9.3 data truth and the no-live-order boundary are retained.
+
+Local M9.4m validation passed 1394 complete Python tests and 280 repository-wide M9.4 tests across 21 modules; `git diff --check` passed. At the 2026-10-11 pre-publication checkpoint, `M95_GATE=BLOCKED`. The required release sequence is final review, separately approved stage, commit and push, verification of the exact published HEAD, and a fresh independent post-publication M9.4 audit. Only an explicit `M95_GATE=PASS` for the audited published HEAD authorizes fresh M9.5 design; it does not authorize M9.5 implementation.
 
 ## Decision workflow
 

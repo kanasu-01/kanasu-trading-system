@@ -6852,6 +6852,8 @@ class SQLiteResearchCatalogStore:
                         current.created_at,
                         current.claimed_at
                         or current.created_at,
+                        current.cancel_requested_at
+                        or current.created_at,
                     )
 
                     if any(

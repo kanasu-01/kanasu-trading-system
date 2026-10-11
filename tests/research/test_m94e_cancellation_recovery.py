@@ -2200,3 +2200,96 @@ def test_m94j_mixed_restart_recovery_preserves_attempt_ownership(
         final_trial.disposition
         is TrialDisposition.INTERRUPTED
     )
+
+
+
+@pytest.mark.parametrize("linked_attempt", (False, True))
+def test_m94m_recovery_cannot_precede_durable_cancellation_request(
+    tmp_path,
+    linked_attempt,
+):
+    catalog, trial, job = _environment(
+        tmp_path,
+        claim_job=True,
+    )
+
+    attempt = None
+
+    if linked_attempt:
+        manifest_id = "sha256:" + ("a" * 64)
+
+        catalog.save_artifact(
+            ResearchArtifact(
+                artifact_id=manifest_id,
+                artifact_kind=(
+                    ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+                ),
+                schema_id=BACKTEST_RUN_MANIFEST_SCHEMA,
+                relative_path=(
+                    "m94m/"
+                    + ("a" * 64)
+                    + ".json"
+                ),
+                byte_count=2,
+                created_at=APR,
+            )
+        )
+
+        spec = catalog.resolve_experiment_spec(
+            computation_kind=ComputationKind.BACKTEST,
+            manifest_artifact_id=manifest_id,
+            dataset_fingerprint="sha256:" + ("b" * 64),
+            configuration_fingerprint="sha256:" + ("c" * 64),
+            repository_revision="repo-m94m",
+            created_at=APR,
+        )
+
+        _, linked_job, attempt = (
+            catalog
+            ._bind_trial_spec_create_attempt_for_running_job(
+                job_id=job.job_id,
+                experiment_spec_id=spec.experiment_spec_id,
+                attempt_created_at=JUN,
+            )
+        )
+
+        assert linked_job.attempt_id == attempt.attempt_id
+
+    requested = catalog.request_running_research_job_cancellation(
+        job_id=job.job_id,
+        requested_at=JUL,
+    )
+
+    assert requested.cancel_requested_at == JUL
+    assert requested.state is ResearchJobState.RUNNING
+
+    recovered = catalog.recover_running_research_jobs(
+        terminal_at=JUN,
+    )
+
+    assert len(recovered) == 1
+    assert recovered[0].state is ResearchJobState.INTERRUPTED
+    assert recovered[0].cancel_requested_at == JUL
+    assert recovered[0].terminal_at == JUL
+
+    persisted_trial = catalog.load_trial(trial.trial_id)
+    events = catalog.load_trial_disposition_events(trial.trial_id)
+
+    assert persisted_trial is not None
+    assert persisted_trial.disposition is TrialDisposition.INTERRUPTED
+    assert persisted_trial.disposition_at == JUL
+    assert events[-1].occurred_at == JUL
+
+    if attempt is not None:
+        persisted_attempt = catalog.load_run_attempt(
+            attempt.attempt_id
+        )
+        assert persisted_attempt is not None
+        assert persisted_attempt.state is RunAttemptState.INTERRUPTED
+        assert persisted_attempt.terminal_at == JUL
+    else:
+        assert _attempt_count(catalog) == 0
+
+    assert catalog.recover_running_research_jobs(
+        terminal_at=JUL,
+    ) == ()

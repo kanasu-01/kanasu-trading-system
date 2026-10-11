@@ -196,15 +196,10 @@ remaining direct canonical invariants; and uses one coherent restart-recovery
 timestamp floored by linked RunAttempt creation for attempt, ResearchJob,
 Trial and disposition-event chronology.
 
-Current local M9.4l validation includes:
+## 12. M9.4l publication, independent audit and M9.4m
 
-- focused affected regression: 176 passed;
-- repository `test_m94*.py` regression: 207 passed across 13 modules;
-- complete Python regression: 1383 passed;
-- `git diff --check`: PASS.
+M9.4l was published/post-push verified at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. Its local validation included 176 focused tests, 207 research-only M9.4 tests across 13 modules and 1383 complete Python tests. The independent reviewer subsequently discovered 273 repository-wide M9.4 tests across 21 modules and independently ran all 1383 Python tests. The audit returned `M95_GATE=BLOCKED` with A01, A02, A03 and F03. Publication and passing tests did not establish independent acceptance.
 
-M9.4l is not yet staged, committed or pushed. M9.5 remains blocked until the
-M9.4l corrective candidate is published, the exact local/remote published HEAD
-is verified, and a fresh independent audit of that exact HEAD returns exactly:
+At the 2026-10-11 pre-publication validation checkpoint, M9.4m was a local, unstaged and unpublished corrective candidate. This is a historical checkpoint statement, not an assertion about its eventual publication state. A01 adds direct canonical financial consistency checks for net/gross/cost and single-symbol close-marked equity. A02 includes durable cancellation-request time in the shared restart-recovery terminal timestamp. A03 separates public standalone prepared execution from internal supplied-RunAttempt execution and rejects stale attempts before computation; a concurrent claimed-job test verifies one physical execution through that supported entry path. Existing M4 Backtest economics, M5 WFA, M6/M7 Paper causality, M8 application authority, M9.3 data truth and the no-live-order boundary are retained.
 
-`M95_GATE=PASS`
+Local M9.4m validation passed 1394 complete Python tests and 280 repository-wide M9.4 tests across 21 modules; `git diff --check` passed. At the 2026-10-11 pre-publication checkpoint, `M95_GATE=BLOCKED`. The required release sequence is final review, separately approved stage, commit and push, verification of the exact published HEAD, and a fresh independent post-publication M9.4 audit. Only an explicit `M95_GATE=PASS` for the audited published HEAD authorizes fresh M9.5 design; it does not authorize M9.5 implementation.

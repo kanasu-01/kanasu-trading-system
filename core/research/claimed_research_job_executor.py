@@ -785,7 +785,7 @@ class ClaimedResearchJobExecutor:
             (
                 self.successor_coordinator
                 .orchestrator
-                .execute_prepared(
+                ._execute_prepared_internal(
                     prepared=prepared,
                     strategy=execution_strategy,
                     config=inputs.config,

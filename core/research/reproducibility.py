@@ -914,6 +914,20 @@ def validate_stable_backtest_result_payload(
                 "cannot be negative"
             )
 
+        if not math.isclose(
+            trade["pnl"],
+            (
+                trade["gross_pnl"]
+                - trade["transaction_cost"]
+            ),
+            rel_tol=1e-12,
+            abs_tol=1e-8,
+        ):
+            raise ValueError(
+                f"Backtest trade {index} pnl must equal "
+                "gross_pnl minus transaction_cost"
+            )
+
         _require_result_integer(
             trade["quantity"],
             label=f"Backtest trade {index} quantity",
@@ -1077,6 +1091,24 @@ def validate_stable_backtest_result_payload(
             raise ValueError(
                 f"Backtest bar record {index} "
                 "positive position requires equity to exceed cash"
+            )
+
+        if (
+            record["position_size"] > 0
+            and not math.isclose(
+                record["equity"],
+                (
+                    record["cash"]
+                    + record["position_size"] * record["close"]
+                ),
+                rel_tol=1e-12,
+                abs_tol=1e-7,
+            )
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "equity must equal cash plus "
+                "close-marked position value"
             )
 
         _require_result_string(

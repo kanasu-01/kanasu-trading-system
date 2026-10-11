@@ -890,7 +890,7 @@ def test_execute_prepared_uses_supplied_attempt_without_duplicate(
 
     before = row_count(database, "run_attempts")
 
-    execution = service.execute_prepared(
+    execution = service._execute_prepared_internal(
         prepared=prepared,
         strategy=create_strategy(config()),
         config=config(),
@@ -965,7 +965,7 @@ def test_execute_prepared_terminalizes_supplied_attempt_on_failure(
         RuntimeError,
         match="m94d supplied-attempt failure",
     ):
-        service.execute_prepared(
+        service._execute_prepared_internal(
             prepared=prepared,
             strategy=create_strategy(config()),
             config=config(),
@@ -1356,7 +1356,7 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
             "attempt_terminalizer"
         ),
     ):
-        service.execute_prepared(
+        service._execute_prepared_internal(
             prepared=prepared,
             strategy=create_strategy(config()),
             config=config(),
@@ -1393,6 +1393,8 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
     (
         "trade_quantity_zero",
         "negative_transaction_cost",
+        "inconsistent_net_pnl",
+        "incorrect_marked_equity",
         "drawdown_below_minus_one",
         "incomplete_execution_fields",
     ),
@@ -1464,6 +1466,7 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
     if case in {
         "trade_quantity_zero",
         "negative_transaction_cost",
+        "inconsistent_net_pnl",
     }:
         payload["trades"].append(
             {
@@ -1485,10 +1488,17 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
 
         if case == "trade_quantity_zero":
             payload["trades"][0]["quantity"] = 0
-        else:
+        elif case == "negative_transaction_cost":
             payload["trades"][0][
                 "transaction_cost"
             ] = -100.0
+        else:
+            payload["trades"][0]["pnl"] = 2.0
+
+    elif case == "incorrect_marked_equity":
+        record = payload["bar_records"][0]
+        record["position_size"] = 1.0
+        record["cash"] = record["equity"] - 1.0
 
     elif case == "drawdown_below_minus_one":
         assert payload["bar_records"][0]["equity"] > 0
@@ -1678,3 +1688,137 @@ def test_exact_reuse_resolver_rejects_malformed_canonical_result(
         )
         == before
     )
+
+
+def test_m94m_public_prepared_execution_refuses_supplied_attempt_before_engine(
+    tmp_path,
+):
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="unexpected-public-supplied-execution",
+        )
+
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=execute,
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert prepared.experiment_spec_id is not None
+
+    attempt = catalog.create_running_attempt(
+        experiment_spec_id=prepared.experiment_spec_id,
+        created_at=CREATED_AT,
+    )
+
+    before_count = row_count(database, "run_attempts")
+
+    with pytest.raises(
+        TypeError,
+        match="unexpected keyword argument 'attempt'",
+    ):
+        service.execute_prepared(
+            prepared=prepared,
+            strategy=create_strategy(config()),
+            config=config(),
+            runtime_context=RuntimeContext(
+                risk_per_trade_pct=1.0
+            ),
+            dataset_context=context(),
+            attempt=attempt,
+            attempt_terminalizer=lambda *args, **kwargs: None,
+        )
+
+    assert execution_calls == []
+    assert row_count(database, "run_attempts") == before_count
+
+    persisted = catalog.load_run_attempt(attempt.attempt_id)
+    assert persisted is not None
+    assert persisted.state is RunAttemptState.RUNNING
+
+
+
+def test_m94m_stale_internal_supplied_attempt_cannot_reexecute(
+    tmp_path,
+):
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[],
+            session_id="runtime-m94m-stale",
+        )
+
+    service, catalog, _, database = make_orchestrator(
+        tmp_path,
+        SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(),
+        execute=execute,
+    )
+
+    prepared = service.prepare_specification(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert prepared.experiment_spec_id is not None
+
+    attempt = catalog.create_running_attempt(
+        experiment_spec_id=prepared.experiment_spec_id,
+        created_at=CREATED_AT,
+    )
+
+    arguments = dict(
+        prepared=prepared,
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+        attempt=attempt,
+        attempt_terminalizer=(
+            catalog.terminalize_attempt_with_evidence
+        ),
+    )
+
+    service._execute_prepared_internal(**arguments)
+
+    assert len(execution_calls) == 1
+    assert row_count(database, "run_attempts") == 1
+
+    persisted = catalog.load_run_attempt(attempt.attempt_id)
+    assert persisted is not None
+    assert persisted.state is RunAttemptState.SUCCEEDED
+
+    with pytest.raises(
+        ValueError,
+        match="durably RUNNING",
+    ):
+        service._execute_prepared_internal(**arguments)
+
+    assert len(execution_calls) == 1
+    assert row_count(database, "run_attempts") == 1

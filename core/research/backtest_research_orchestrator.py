@@ -994,6 +994,30 @@ class BacktestResearchOrchestrator:
         config: BacktestConfig,
         runtime_context: RuntimeContext,
         dataset_context: DatasetContext,
+    ) -> BacktestResearchExecution:
+        """
+        Public standalone prepared Backtest execution.
+
+        ResearchJob-owned supplied attempts must enter through
+        the validated claimed-job executor, never this public
+        standalone entry point.
+        """
+        return self._execute_prepared_internal(
+            prepared=prepared,
+            strategy=strategy,
+            config=config,
+            runtime_context=runtime_context,
+            dataset_context=dataset_context,
+        )
+
+    def _execute_prepared_internal(
+        self,
+        *,
+        prepared: PreparedBacktestResearchSpecification,
+        strategy: BaseStrategy,
+        config: BacktestConfig,
+        runtime_context: RuntimeContext,
+        dataset_context: DatasetContext,
         attempt: RunAttempt | None = None,
         attempt_terminalizer: AttemptTerminalizer | None = None,
     ) -> BacktestResearchExecution:
@@ -1022,6 +1046,21 @@ class BacktestResearchOrchestrator:
             if attempt.state is not RunAttemptState.RUNNING:
                 raise ValueError(
                     "supplied RunAttempt must be RUNNING"
+                )
+            persisted_attempt = (
+                self.catalog_store.load_run_attempt(
+                    attempt.attempt_id
+                )
+            )
+            if (
+                persisted_attempt is None
+                or persisted_attempt != attempt
+                or persisted_attempt.state
+                is not RunAttemptState.RUNNING
+            ):
+                raise ValueError(
+                    "supplied RunAttempt must still be "
+                    "durably RUNNING with matching identity"
                 )
             if prepared.experiment_spec_id is None:
                 raise ValueError(

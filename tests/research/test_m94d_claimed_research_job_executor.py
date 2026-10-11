@@ -3357,3 +3357,70 @@ def test_m94i2_worker_pool_stops_after_unreadable_authoritative_manifest(
         TrialDisposition.PENDING,
         TrialDisposition.PENDING,
     ]
+
+
+
+def test_m94m_concurrent_claimed_job_replay_executes_once(
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+    )
+
+    assert claimed is not None
+
+    barrier = Barrier(2)
+    original_resolve = executor.plan_resolver.resolve
+
+    def synchronized_resolve(trial_id):
+        barrier.wait(timeout=10)
+        return original_resolve(trial_id)
+
+    monkeypatch.setattr(
+        executor.plan_resolver,
+        "resolve",
+        synchronized_resolve,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(executor.execute, claimed)
+            for _ in range(2)
+        ]
+
+        outcomes = []
+        failures = []
+
+        for future in futures:
+            try:
+                outcomes.append(future.result(timeout=15))
+            except Exception as error:
+                failures.append(error)
+
+    assert len(outcomes) == 1
+    assert outcomes[0].state is ResearchJobState.SUCCEEDED
+    assert len(failures) == 1
+    assert isinstance(failures[0], ValueError)
+
+    assert len(execution_calls) == 1
+    assert _attempt_count(catalog) == 1
+
+    job = catalog.load_research_job(claimed.job_id)
+    persisted_trial = catalog.load_trial(trial.trial_id)
+
+    assert job is not None
+    assert job.state is ResearchJobState.SUCCEEDED
+    assert persisted_trial is not None
+    assert persisted_trial.disposition is TrialDisposition.EXECUTED
