@@ -1639,7 +1639,7 @@ def test_m94e_cancellation_wins_fresh_attempt_bind_race(
 
     original_bind = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job
+        ._bind_trial_spec_create_attempt_for_running_job
     )
 
     injected = False
@@ -1662,7 +1662,7 @@ def test_m94e_cancellation_wins_fresh_attempt_bind_race(
 
     monkeypatch.setattr(
         catalog,
-        "bind_trial_spec_create_attempt_for_running_job",
+        "_bind_trial_spec_create_attempt_for_running_job",
         cancel_then_bind,
     )
 

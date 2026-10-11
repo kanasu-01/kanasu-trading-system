@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED; IMPLEMENTED / VALIDATED; M9.4h CORRECTIVE RE-CLOSURE CANDIDATE; INDEPENDENT RE-REVIEW PENDING
+**Status:** ACCEPTED; IMPLEMENTED / VALIDATED; M9.4l LOCAL CORRECTIVE CANDIDATE; INDEPENDENT RE-REVIEW REQUIRED; M9.5 BLOCKED
 
 **Target:** M9.4
 
@@ -613,12 +613,11 @@ atomic proof of the complete registered Trial denominator and FIFO ordering is
 semantic across timezone offsets with exact microsecond chronology and stable
 `job_id` tie-breaking.
 
-Current corrective evidence includes 144 focused h1+h2 tests, 66 focused h3
-tests, 172 M9.4-wide tests, 1342 cross-milestone preservation tests and 1342
-complete Python tests, with `git diff --check` clean. AD-025 remains accepted,
-but the historical M9.4g closure claim is not current M9.5 gate evidence.
-M9.4h is a corrective re-closure candidate and the independent re-review must
-return `M95_GATE=PASS` before fresh M9.5 design begins.
+Historical M9.4h validation included 144 focused h1+h2 tests, 66 focused h3 tests, 172 M9.4-wide tests and 1342 complete Python tests. Later M9.4i and M9.4j corrective states were separately published, and M9.4k was published/post-push verified at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`.
+
+The fresh independent audit of exact M9.4k HEAD returned `M95_GATE=BLOCKED` with F05 HIGH, F04 MEDIUM, F06 MEDIUM and F03 LOW. M9.4l preserves AD-025 and the accepted architecture while making raw registered fresh-execution persistence phases internal behind the claimed-job validation authority; strengthening only direct canonical-result invariants for nonnegative transaction cost, nonnegative-equity drawdown lower bound and execution tuple consistency; and using one coherent restart-recovery terminal timestamp across the linked attempt, job, Trial and disposition event.
+
+Current local M9.4l validation is 176 focused tests, 207 repository M9.4 tests across 13 `test_m94*.py` modules and 1383 complete Python tests, with `git diff --check` clean. This validation is not independent acceptance. M9.5 remains blocked until the M9.4l candidate is separately reviewed, staged, committed and pushed, its exact published head is verified, and a fresh independent audit returns exactly `M95_GATE=PASS`.
 
 ## Decision workflow
 

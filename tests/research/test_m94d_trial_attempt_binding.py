@@ -346,7 +346,7 @@ def test_atomic_bind_creates_attempt_and_links_running_job(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -429,7 +429,7 @@ def test_m94e_cancel_request_blocks_fresh_attempt_binding(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -483,7 +483,7 @@ def test_existing_matching_trial_binding_allows_new_job_attempt(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -532,7 +532,7 @@ def test_conflicting_trial_binding_rolls_back_without_attempt(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     primary_spec.experiment_spec_id
@@ -592,7 +592,7 @@ def test_job_already_linked_to_attempt_fails_without_second_attempt(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -632,7 +632,7 @@ def test_non_running_job_cannot_create_attempt(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -691,7 +691,7 @@ def test_non_pending_trial_cannot_create_attempt(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -735,7 +735,7 @@ def test_missing_experiment_spec_rolls_back(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     missing_spec_id
@@ -781,7 +781,7 @@ def test_attempt_created_at_cannot_precede_job_claim_and_rolls_back(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -843,7 +843,7 @@ def test_attempt_id_collision_rolls_back_trial_binding_and_job_link(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -907,7 +907,7 @@ def test_transaction_failure_leaves_no_partial_identity_links(
     ):
         (
             catalog
-            .bind_trial_spec_create_attempt_for_running_job(
+            ._bind_trial_spec_create_attempt_for_running_job(
                 job_id=job.job_id,
                 experiment_spec_id=(
                     spec.experiment_spec_id
@@ -1662,7 +1662,7 @@ def test_fresh_success_terminalizes_attempt_job_trial_and_event_atomically(
     )
 
     _, linked_job, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=MAY,
@@ -1679,7 +1679,7 @@ def test_fresh_success_terminalizes_attempt_job_trial_and_event_atomically(
     before_attempts = _attempt_count(catalog)
 
     terminal = (
-        catalog.terminalize_running_job_attempt_with_evidence(
+        catalog._terminalize_running_job_attempt_with_evidence(
             attempt.attempt_id,
             job_id=job.job_id,
             state=RunAttemptState.SUCCEEDED,
@@ -1751,7 +1751,7 @@ def test_fresh_failure_terminalizes_attempt_job_trial_and_event_atomically(
     )
 
     _, _, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=MAY,
@@ -1780,7 +1780,7 @@ def test_fresh_failure_terminalizes_attempt_job_trial_and_event_atomically(
     before_attempts = _attempt_count(catalog)
 
     terminal = (
-        catalog.terminalize_running_job_attempt_with_evidence(
+        catalog._terminalize_running_job_attempt_with_evidence(
             attempt.attempt_id,
             job_id=job.job_id,
             state=RunAttemptState.FAILED,
@@ -1852,7 +1852,7 @@ def test_fresh_success_rejects_failure_metadata_without_mutation(
     )
 
     _, _, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=MAY,
@@ -1868,7 +1868,7 @@ def test_fresh_success_rejects_failure_metadata_without_mutation(
         ValueError,
         match="cannot carry failure metadata",
     ):
-        catalog.terminalize_running_job_attempt_with_evidence(
+        catalog._terminalize_running_job_attempt_with_evidence(
             attempt.attempt_id,
             job_id=job.job_id,
             state=RunAttemptState.SUCCEEDED,
@@ -1903,7 +1903,7 @@ def test_fresh_failure_rejects_result_artifact_without_mutation(
     )
 
     _, _, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=MAY,
@@ -1934,7 +1934,7 @@ def test_fresh_failure_rejects_result_artifact_without_mutation(
         ValueError,
         match="cannot carry a result artifact",
     ):
-        catalog.terminalize_running_job_attempt_with_evidence(
+        catalog._terminalize_running_job_attempt_with_evidence(
             attempt.attempt_id,
             job_id=job.job_id,
             state=RunAttemptState.FAILED,
@@ -1970,7 +1970,7 @@ def test_fresh_success_requires_result_artifact_evidence_reference(
     )
 
     _, _, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=MAY,
@@ -2003,7 +2003,7 @@ def test_fresh_success_requires_result_artifact_evidence_reference(
         ValueError,
         match="must reference the exact Backtest result artifact",
     ):
-        catalog.terminalize_running_job_attempt_with_evidence(
+        catalog._terminalize_running_job_attempt_with_evidence(
             attempt.attempt_id,
             job_id=job.job_id,
             state=RunAttemptState.SUCCEEDED,
@@ -2119,7 +2119,7 @@ def test_pre_attempt_failure_refuses_job_after_run_attempt_link(
     )
 
     _, linked_job, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -2201,7 +2201,7 @@ def test_explicit_retry_preserves_trial_spec_and_prior_failure_history(
     )
 
     _, _, attempt = (
-        catalog.bind_trial_spec_create_attempt_for_running_job(
+        catalog._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -2238,7 +2238,7 @@ def test_explicit_retry_preserves_trial_spec_and_prior_failure_history(
         summary="Retry source failure fixture.",
     )
 
-    catalog.terminalize_running_job_attempt_with_evidence(
+    catalog._terminalize_running_job_attempt_with_evidence(
         attempt.attempt_id,
         job_id=job.job_id,
         state=RunAttemptState.FAILED,
@@ -2709,6 +2709,30 @@ def test_m94i2_raw_exact_reuse_terminalizer_is_not_public_catalog_authority(
 
 
 
+def test_m94l_raw_fresh_execution_phases_are_not_public_catalog_authority(
+    tmp_path,
+):
+    catalog = SQLiteResearchCatalogStore(
+        tmp_path / "research.sqlite3"
+    )
+
+    assert not hasattr(
+        catalog,
+        "bind_trial_spec_create_attempt_for_running_job",
+    )
+    assert callable(
+        catalog._bind_trial_spec_create_attempt_for_running_job
+    )
+
+    assert not hasattr(
+        catalog,
+        "terminalize_running_job_attempt_with_evidence",
+    )
+    assert callable(
+        catalog._terminalize_running_job_attempt_with_evidence
+    )
+
+
 @pytest.mark.parametrize(
     "terminal_state",
     (
@@ -2731,7 +2755,7 @@ def test_m94j_standalone_terminalizer_rejects_job_owned_attempt(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=JUN,
@@ -2795,7 +2819,7 @@ def test_m94j_atomic_evidence_terminalizer_rejects_job_owned_attempt(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=spec.experiment_spec_id,
             attempt_created_at=JUN,
@@ -2921,7 +2945,7 @@ def test_m94j_trial_detail_snapshot_uses_one_read_transaction(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id

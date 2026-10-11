@@ -6,6 +6,7 @@ import pytest
 
 import core.research.backtest_research_orchestrator as orchestration
 from core.backtest.backtest_result import BacktestResult
+from core.backtest.bar_record import BarRecord
 from core.config.backtest_config import BacktestConfig
 from core.entities.candle import Candle
 from core.research.backtest_research_orchestrator import (
@@ -1387,8 +1388,18 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
 
 
 
-def test_m94k_exact_reuse_rejects_real_canonical_long_only_counterexample(
+@pytest.mark.parametrize(
+    "case",
+    (
+        "trade_quantity_zero",
+        "negative_transaction_cost",
+        "drawdown_below_minus_one",
+        "incomplete_execution_fields",
+    ),
+)
+def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
     tmp_path,
+    case,
 ):
     service, catalog, _, database = make_orchestrator(
         tmp_path,
@@ -1396,8 +1407,28 @@ def test_m94k_exact_reuse_rejects_real_canonical_long_only_counterexample(
         retrieve=lambda **kwargs: candles(),
         execute=lambda **kwargs: BacktestResult(
             trades=[],
-            bar_records=[],
-            session_id="runtime-m94k-reuse-source",
+            bar_records=[
+                BarRecord(
+                    timestamp=START,
+                    open=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0,
+                    volume=1000.0,
+                    strategy="m94l-reuse-fixture",
+                    state=None,
+                    signal=None,
+                    execution_event=None,
+                    execution_price=None,
+                    execution_quantity=None,
+                    decision_snapshot={},
+                    equity=100_000.0,
+                    cash=100_000.0,
+                    position_size=0.0,
+                    drawdown=0.0,
+                ),
+            ],
+            session_id="runtime-m94l-reuse-source",
         ),
     )
 
@@ -1430,23 +1461,49 @@ def test_m94k_exact_reuse_rejects_real_canonical_long_only_counterexample(
         schema=BACKTEST_RESULT_SCHEMA,
     )
 
-    payload["trades"].append(
-        {
-            "symbol": "RELIANCE",
-            "entry_time": START,
-            "entry_price": 100.0,
-            "exit_time": END,
-            "exit_price": 101.0,
-            "stop_price": 99.0,
-            "quantity": 0,
-            "direction": "LONG",
-            "exit_reason": "fixture",
-            "pnl": 1.0,
-            "gross_pnl": 1.0,
-            "transaction_cost": 0.0,
-            "pnl_pct": 1.0,
-        }
-    )
+    if case in {
+        "trade_quantity_zero",
+        "negative_transaction_cost",
+    }:
+        payload["trades"].append(
+            {
+                "symbol": "RELIANCE",
+                "entry_time": START,
+                "entry_price": 100.0,
+                "exit_time": END,
+                "exit_price": 101.0,
+                "stop_price": 99.0,
+                "quantity": 1,
+                "direction": "LONG",
+                "exit_reason": "fixture",
+                "pnl": 1.0,
+                "gross_pnl": 1.0,
+                "transaction_cost": 0.0,
+                "pnl_pct": 1.0,
+            }
+        )
+
+        if case == "trade_quantity_zero":
+            payload["trades"][0]["quantity"] = 0
+        else:
+            payload["trades"][0][
+                "transaction_cost"
+            ] = -100.0
+
+    elif case == "drawdown_below_minus_one":
+        assert payload["bar_records"][0]["equity"] > 0
+        payload["bar_records"][0]["drawdown"] = -2.0
+
+    elif case == "incomplete_execution_fields":
+        record = payload["bar_records"][0]
+        record["execution_event"] = None
+        record["execution_price"] = None
+        record["execution_quantity"] = 1
+
+    else:
+        raise AssertionError(
+            f"unknown fixture case: {case}"
+        )
 
     invalid_bytes = canonical_bytes(
         payload,

@@ -83,7 +83,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - CORRECTIVE RE-CLOSURE CANDIDATE AFTER M9.4h** - M9.4g's historical re-closure at `68df76b` was challenged by the independent post-remediation audit. Residual corrections N01-N04 are published at `d1efd238` and N05-N06 at `524b9dda`; N07 documentation/re-closure synchronization is current. M9.5 remains blocked until an independent M9.4 re-review returns `M95_GATE=PASS`.
+  - **M9.4 - M9.4l CORRECTIVE CANDIDATE; M9.5 BLOCKED** - Historical M9.4g/h/i/j corrective states remain published evidence. M9.4k is published/post-push verified at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`; its fresh independent audit returned `M95_GATE=BLOCKED` with F03-F06. The bounded local M9.4l candidate corrects registered fresh-execution authority exposure, remaining direct canonical-result impossible states, restart-recovery chronology and current-state documentation drift. Fresh independent review of the eventual published M9.4l head must return `M95_GATE=PASS` before M9.5 design begins.
   - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; historical M9.4g re-closure was challenged by the post-remediation audit; M9.4h corrective implementation is published through `524b9dda` and N07 re-closure documentation is current; M9.5 remains blocked until independent M9.4 re-review returns `M95_GATE=PASS`.
+**Status:** ACTIVE - M9.1 design baseline accepted; M9.2 DONE/CLOSED; M9.3 DONE/CLOSED; M9.4k published/post-push verified at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`; independent audit of that exact head returned `M95_GATE=BLOCKED` with F03-F06; M9.4l is the validated local corrective candidate; M9.5 remains blocked until a fresh independent review of the eventual published M9.4l head returns `M95_GATE=PASS`.
 
 M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
 

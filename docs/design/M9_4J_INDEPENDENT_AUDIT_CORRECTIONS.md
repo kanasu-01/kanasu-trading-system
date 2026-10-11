@@ -155,43 +155,56 @@ authorizes fresh M9.5 design.
 A PASS authorizes M9.5 design only; M9.5 implementation remains separately
 approved work.
 
-## 11. Post-publication independent audit and M9.4k follow-up
+## 11. Post-publication independent audit and later corrective chain
 
-The subsequent independent audit of exact published M9.4j HEAD
-`7f123daa135be4009294f5197676dc5153261255` returned:
+The independent audit of exact published M9.4j HEAD
+`7f123daa135be4009294f5197676dc5153261255` returned
+`M95_GATE=BLOCKED` with F01-F03. M9.4k was the bounded follow-up:
+explicit `raw` / `adjusted` / `unknown` price-adjustment registration,
+fail-closed incomplete registered plans, stricter direct long-only canonical
+result invariants, real registration/execution and canonical artifact
+reuse/aggregation counterexamples, and synchronized then-current documentation.
+
+Historical M9.4k local validation included 107 affected M9.4 tests, 73 tests
+covering corrected stale historical fixtures, all 1375 Python tests and clean
+`git diff --check`. The candidate was subsequently separately reviewed, staged,
+committed and pushed at
+`9ac407fd4910edf9392445a6fa0539ba90fa97c5`; post-push verification confirmed
+exact local/remote HEAD equality.
+
+A fresh independent audit of exact published M9.4k HEAD then returned:
 
 `M95_GATE=BLOCKED`
 
-The accepted-scope findings were:
+The remaining accepted-scope findings were:
 
-- F01 MEDIUM - registered `data_treatment_basis` could be empty or incomplete,
-  allowing executable price-adjustment verification to be bypassed;
-- F02 MEDIUM - canonical Backtest-result validation admitted direct impossible
-  long-only states including non-positive trade/execution quantities, non-LONG
-  direction, positive stored drawdown, and positive holdings without positive
-  marked position value;
-- F03 LOW - current-state documentation/traceability lagged the actual
-  post-publication state.
+- F05 HIGH - public raw registered fresh-execution persistence phases could
+  bind and execute an ExperimentSpec without proving frozen StudyRevision
+  compatibility;
+- F04 MEDIUM - canonical validation still admitted negative transaction cost,
+  drawdown below `-1` with nonnegative equity and partial execution
+  event/price/quantity tuples;
+- F06 MEDIUM - restart recovery could persist a job/Trial/event terminal time
+  earlier than the linked RunAttempt creation time;
+- F03 LOW - current-state documentation still lagged the published/audited
+  state.
 
-M9.4k is the bounded follow-up correction. It does not redesign M9.4 or alter
-accepted M4 financial semantics. The local candidate requires explicit
-`price_adjustment` registration using `raw`, `adjusted` or `unknown`; preserves
-explicit `unknown` without guessing; fails incomplete registered plans closed;
-strengthens only direct canonical long-only invariants; and adds real
-registration/execution plus canonical artifact reuse/aggregation
-counterexample tests.
+M9.4l is the bounded follow-up correction. It makes raw registered
+fresh-execution persistence phases internal behind the claimed-job authority
+that already validates frozen registered execution inputs; adds only the
+remaining direct canonical invariants; and uses one coherent restart-recovery
+timestamp floored by linked RunAttempt creation for attempt, ResearchJob,
+Trial and disposition-event chronology.
 
-Validation of the current local M9.4k candidate includes:
+Current local M9.4l validation includes:
 
-- 107 affected M9.4 tests passing;
-- 73 previously failing queue/attempt/cancellation tests passing after three
-  stale historical fixtures were corrected from the obsolete `adjustment`
-  key to canonical `price_adjustment`;
-- complete Python regression: 1375 passed;
+- focused affected regression: 176 passed;
+- repository `test_m94*.py` regression: 207 passed across 13 modules;
+- complete Python regression: 1383 passed;
 - `git diff --check`: PASS.
 
-M9.4k is not yet staged, committed or pushed. M9.5 remains blocked until the
-M9.4k corrective candidate is published, the exact local/remote published HEAD
+M9.4l is not yet staged, committed or pushed. M9.5 remains blocked until the
+M9.4l corrective candidate is published, the exact local/remote published HEAD
 is verified, and a fresh independent audit of that exact HEAD returns exactly:
 
 `M95_GATE=PASS`

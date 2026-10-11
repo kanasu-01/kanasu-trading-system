@@ -908,6 +908,12 @@ def validate_stable_backtest_result_payload(
                 "cannot be negative"
             )
 
+        if trade["transaction_cost"] < 0:
+            raise ValueError(
+                f"Backtest trade {index} transaction_cost "
+                "cannot be negative"
+            )
+
         _require_result_integer(
             trade["quantity"],
             label=f"Backtest trade {index} quantity",
@@ -1046,6 +1052,16 @@ def validate_stable_backtest_result_payload(
             )
 
         if (
+            record["equity"] >= 0
+            and record["drawdown"] < -1
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "nonnegative equity requires drawdown "
+                "to be at least -1"
+            )
+
+        if (
             record["position_size"] == 0
             and record["equity"] != record["cash"]
         ):
@@ -1115,6 +1131,22 @@ def validate_stable_backtest_result_payload(
                     f"Backtest bar record {index} "
                     "execution_quantity must be positive"
                 )
+
+        execution_field_presence = (
+            record["execution_event"] is not None,
+            record["execution_price"] is not None,
+            record["execution_quantity"] is not None,
+        )
+
+        if (
+            any(execution_field_presence)
+            and not all(execution_field_presence)
+        ):
+            raise ValueError(
+                f"Backtest bar record {index} execution_event, "
+                "execution_price and execution_quantity "
+                "must be present together"
+            )
 
         if not isinstance(
             record["decision_snapshot"],

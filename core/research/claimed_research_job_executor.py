@@ -732,7 +732,7 @@ class ClaimedResearchJobExecutor:
         try:
             _, linked_job, attempt = (
                 self.catalog_store
-                .bind_trial_spec_create_attempt_for_running_job(
+                ._bind_trial_spec_create_attempt_for_running_job(
                     job_id=job.job_id,
                     experiment_spec_id=(
                         experiment_spec_id
@@ -774,7 +774,7 @@ class ClaimedResearchJobExecutor:
         ):
             return (
                 self.catalog_store
-                .terminalize_running_job_attempt_with_evidence(
+                ._terminalize_running_job_attempt_with_evidence(
                     attempt_id,
                     job_id=job.job_id,
                     **kwargs,

@@ -757,14 +757,23 @@ attempts through one connection and one read transaction, then the API projects
 that immutable snapshot. The API does not assemble one Trial-detail response
 from separate independently timed catalog reads.
 
-These boundaries are published and post-push verified in M9.4j corrective HEAD
-`7f123daa135be4009294f5197676dc5153261255`. The fresh independent audit
-of that exact head returned `M95_GATE=BLOCKED`: F01 required explicit registered
-price-adjustment authority, F02 required stricter direct long-only canonical
-Backtest-result invariants, and F03 required current-state documentation
-synchronization. M9.4k applies those bounded corrections locally without changing
-the accepted catalog, Trial, ResearchJob, RunAttempt, reuse or aggregation
-architecture. Its complete Python regression is 1375 passed with clean
-`git diff --check`. M9.5 remains blocked until the M9.4k correction is published
-and a fresh independent audit of its exact published HEAD returns exactly
+Those M9.4j boundaries are published/post-push verified at
+`7f123daa135be4009294f5197676dc5153261255`. M9.4k then corrected the
+subsequent F01-F03 audit findings and was published/post-push verified at
+`9ac407fd4910edf9392445a6fa0539ba90fa97c5`. The fresh independent audit
+of exact M9.4k HEAD returned `M95_GATE=BLOCKED` with F05 HIGH public raw
+fresh-execution authority exposure, F04 MEDIUM remaining direct canonical-result
+impossible states, F06 MEDIUM restart-recovery chronology inconsistency and
+F03 LOW current-state documentation drift.
+
+M9.4l preserves the accepted catalog, Trial, ResearchJob, RunAttempt, reuse and
+aggregation architecture. Raw registered fresh-execution persistence phases are
+internal behind the claimed-job registered-input validation boundary; canonical
+Backtest-result validation rejects negative transaction cost, drawdown below
+`-1` when equity is nonnegative and partial execution event/price/quantity
+tuples; restart recovery uses one coherent terminal timestamp including linked
+RunAttempt creation time. Current local validation is 176 focused tests,
+207 repository M9.4 tests and 1383 complete Python tests with clean
+`git diff --check`. M9.5 remains blocked until M9.4l is published and a fresh
+independent audit of its exact published HEAD returns exactly
 `M95_GATE=PASS`.

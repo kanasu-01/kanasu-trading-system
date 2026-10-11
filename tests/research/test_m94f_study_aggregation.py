@@ -706,6 +706,9 @@ def test_m94g3_real_canonical_serialized_backtest_result_is_accepted():
         "execution_quantity_zero",
         "positive_drawdown",
         "positive_position_without_equity_value",
+        "negative_transaction_cost",
+        "drawdown_below_minus_one",
+        "incomplete_execution_fields",
     ),
 )
 def test_m94k_real_canonical_artifact_rejects_long_only_counterexamples(
@@ -716,6 +719,7 @@ def test_m94k_real_canonical_artifact_rejects_long_only_counterexamples(
         if case in {
             "trade_quantity_zero",
             "trade_direction_short",
+            "negative_transaction_cost",
         }:
             payload["trades"].append(
                 {
@@ -741,10 +745,14 @@ def test_m94k_real_canonical_artifact_rejects_long_only_counterexamples(
                 payload["trades"][0][
                     "quantity"
                 ] = 0
-            else:
+            elif case == "trade_direction_short":
                 payload["trades"][0][
                     "direction"
                 ] = "SHORT"
+            else:
+                payload["trades"][0][
+                    "transaction_cost"
+                ] = -100.0
 
             return
 
@@ -765,6 +773,17 @@ def test_m94k_real_canonical_artifact_rejects_long_only_counterexamples(
         ):
             record["position_size"] = 1.0
             record["cash"] = record["equity"]
+            return
+
+        if case == "drawdown_below_minus_one":
+            assert record["equity"] > 0
+            record["drawdown"] = -2.0
+            return
+
+        if case == "incomplete_execution_fields":
+            record["execution_event"] = None
+            record["execution_price"] = None
+            record["execution_quantity"] = 1
             return
 
         raise AssertionError(

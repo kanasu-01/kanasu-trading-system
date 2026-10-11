@@ -2,11 +2,13 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; M9.4k LOCAL CORRECTIVE CANDIDATE VALIDATED; PUBLICATION + FRESH INDEPENDENT RE-REVIEW REQUIRED; M9.5 BLOCKED**
+**ACCEPTED DESIGN BASELINE; M9.4k PUBLISHED; M9.4l LOCAL CORRECTIVE CANDIDATE VALIDATED; PUBLICATION + FRESH INDEPENDENT RE-REVIEW REQUIRED; M9.5 BLOCKED**
 
 `M94_DESIGN_ACCEPTED=True`
 
-The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. M9.4g, M9.4h and M9.4i are retained as historical corrective states. A later independent post-publication audit identified R01-R06; M9.4j corrected those findings without changing the accepted architecture and is published/post-push verified at `7f123daa135be4009294f5197676dc5153261255`, parent `0ba32ee2294f7d6a84288574860a7d1f995f1e34`. Its integrated validation reproduced 259 repository-wide M9.4 tests, 265 semantic M9.4 tests with 1100 deselected, an explicit 23-test preservation set, 1365 complete Python tests, and clean `git diff --check`. The fresh independent audit of that exact published M9.4j head returned `M95_GATE=BLOCKED` with F01 incomplete registered data-treatment authority, F02 insufficient direct long-only canonical Backtest-result validation, and F03 documentation drift. M9.4k is the bounded local correction: explicit `raw` / `adjusted` / `unknown` price-adjustment registration with no guessing, fail-closed incomplete plans, narrow direct long-only result invariants, real canonical reuse/aggregation counterexample coverage, and synchronized documentation. The current local candidate passes 107 affected tests and all 1375 Python tests with clean `git diff --check`. It is not yet staged, committed or pushed, and M9.5 remains blocked pending publication and a fresh independent audit of the exact M9.4k published head.
+The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. M9.4g, M9.4h and M9.4i remain historical corrective states. M9.4j is published/post-push verified at `7f123daa135be4009294f5197676dc5153261255`; its subsequent independent audit produced F01-F03, which M9.4k corrected without changing the accepted architecture. M9.4k was then published/post-push verified at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`.
+
+The fresh independent audit of exact published M9.4k HEAD returned `M95_GATE=BLOCKED` with F05 HIGH public fresh-execution authority bypass, F04 MEDIUM remaining direct canonical-result impossible states, F06 MEDIUM restart-recovery chronology inconsistency and F03 LOW current-state documentation drift. M9.4l is the bounded local correction: raw registered fresh-execution persistence phases are internal behind the validated claimed-job authority; canonical validation requires nonnegative transaction cost, drawdown not below `-1` when equity is nonnegative, and complete execution event/price/quantity tuples; restart recovery uses one coherent timestamp floored by linked RunAttempt creation. Current validation is 176 focused tests, 207 repository M9.4 tests across 13 modules and all 1383 Python tests with clean `git diff --check`. M9.5 remains blocked pending M9.4l publication and a fresh independent audit of its exact published head.
 
 M9.4 introduces the durable research workflow above individual
 Backtests:
@@ -1710,10 +1712,14 @@ requires explicit review and does not change StudyRevision or Trial identity.
 
 Historical M9.4g D20 automated validation passed 64 focused tests, 222 M9.4-wide tests, 757 cross-milestone preservation tests and 1325 complete Python tests with `git diff --check` clean. Final human review, separately approved stage/commit/push and post-push verification also passed, and the candidate was published at `68df76b`. A subsequent independent post-remediation audit nevertheless returned `M95_GATE=BLOCKED`; therefore that re-closure remains a historical fact rather than current gate proof.
 
-## M9.4h post-remediation corrective evidence
+## Historical M9.4h post-remediation corrective evidence
 
-M9.4h preserves the accepted 24-decision design baseline and corrects the residual N01-N07 findings. N01-N04 are published at `d1efd238`: stable execution snapshots/final semantic binding, executable procedure authority, mandatory successor reuse dataset lineage and fail-closed authoritative error propagation. N05-N06 are published at `524b9dda`: durable atomic complete-population proof required by Start and semantic FIFO chronology across timezone offsets with exact microsecond ordering and stable job-ID tie-breaking.
+M9.4h preserved the accepted 24-decision design baseline and corrected residual N01-N07 findings. N01-N04 were published at `d1efd238`; N05-N06 at `524b9dda`; and h4 documentation synchronization at `306c156a5b58edb8a4dd6331409d473bc08af98b`. Historical validation included 144 focused h1+h2 tests, 66 focused h3 tests, 172 M9.4-wide tests and 1342 complete Python tests. Later independent review superseded M9.4h as current gate evidence.
 
-Current corrective validation consists of 144 focused h1+h2 tests, 66 focused h3 tests, 172 M9.4-wide tests, 1342 cross-milestone preservation tests and 1342 complete Python tests, with `git diff --check` clean. N07 synchronizes authoritative closure/traceability documentation. M9.4h is a corrective re-closure candidate; the independent re-review has not yet returned PASS and M9.5 remains blocked.
-The independent post-remediation M9.4 audit remains required before M9.5
-implementation.
+## M9.4k publication and M9.4l corrective evidence
+
+M9.4k was separately reviewed, staged, committed and pushed at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`; post-push verification confirmed exact local/remote HEAD equality. The fresh independent audit of that exact published head returned `M95_GATE=BLOCKED` with F05 HIGH, F04 MEDIUM, F06 MEDIUM and F03 LOW.
+
+M9.4l preserves the accepted architecture. Raw registered fresh-execution persistence phases are internal implementation phases used by the claimed-job executor only after registered Trial execution inputs are validated against the frozen plan. Canonical Backtest-result validation additionally rejects negative transaction cost, drawdown below `-1` when equity is nonnegative, and partial execution event/price/quantity tuples. Restart recovery floors one effective terminal timestamp by linked RunAttempt creation and uses that same timestamp for attempt, ResearchJob, Trial and disposition-event chronology.
+
+The local M9.4l candidate passes 176 focused tests, 207 repository M9.4 tests across 13 `test_m94*.py` modules and all 1383 Python tests; `git diff --check` is clean. These results establish a local corrective candidate only. M9.5 remains blocked until the candidate is separately reviewed, staged, committed and pushed, the exact published head is verified, and a fresh independent audit of that exact head returns `M95_GATE=PASS`.

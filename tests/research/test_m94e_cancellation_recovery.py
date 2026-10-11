@@ -720,7 +720,7 @@ def test_restart_recovery_interrupts_running_job_with_linked_attempt(
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -813,6 +813,94 @@ def test_restart_recovery_interrupts_running_job_with_linked_attempt(
         terminal_at=JUL,
     ) == ()
 
+
+
+def test_m94l_restart_recovery_uses_attempt_creation_as_shared_terminal_floor(
+    tmp_path,
+):
+    catalog, trial, job = _environment(
+        tmp_path,
+        claim_job=True,
+    )
+
+    manifest_id = "sha256:" + ("9" * 64)
+
+    catalog.save_artifact(
+        ResearchArtifact(
+            artifact_id=manifest_id,
+            artifact_kind=(
+                ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+            ),
+            schema_id="kanasu.backtest-run-manifest.v1",
+            relative_path=(
+                "m94l/"
+                + ("9" * 64)
+                + ".json"
+            ),
+            byte_count=2,
+            created_at=APR,
+        )
+    )
+
+    spec = catalog.resolve_experiment_spec(
+        computation_kind=ComputationKind.BACKTEST,
+        manifest_artifact_id=manifest_id,
+        dataset_fingerprint=(
+            "sha256:" + ("8" * 64)
+        ),
+        configuration_fingerprint=(
+            "sha256:" + ("7" * 64)
+        ),
+        repository_revision="repo-m94l",
+        created_at=APR,
+    )
+
+    (
+        _,
+        linked_job,
+        attempt,
+    ) = (
+        catalog
+        ._bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=(
+                spec.experiment_spec_id
+            ),
+            attempt_created_at=JUL,
+        )
+    )
+
+    assert linked_job.attempt_id == attempt.attempt_id
+    assert attempt.created_at == JUL
+
+    recovered = catalog.recover_running_research_jobs(
+        terminal_at=JUN,
+    )
+
+    assert len(recovered) == 1
+    assert recovered[0].terminal_at == JUL
+
+    persisted_attempt = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+    events = catalog.load_trial_disposition_events(
+        trial.trial_id
+    )
+
+    assert persisted_attempt is not None
+    assert persisted_trial is not None
+    assert events
+
+    assert (
+        persisted_attempt.state
+        is RunAttemptState.INTERRUPTED
+    )
+    assert persisted_attempt.terminal_at == JUL
+    assert persisted_trial.disposition_at == JUL
+    assert events[-1].occurred_at == JUL
 
 
 def test_batch_cancellation_cancels_queued_and_requests_running_without_retry(
@@ -1014,7 +1102,7 @@ def test_m94g4_recovery_persistence_failure_rolls_back_and_startup_refuses_to_co
         attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1200,7 +1288,7 @@ def test_m94g4_retry_after_recovered_interrupted_bound_work_preserves_spec_and_h
         interrupted_attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1292,7 +1380,7 @@ def test_m94g4_retry_after_recovered_interrupted_bound_work_preserves_spec_and_h
         retry_attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=claimed_retry.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id
@@ -1600,7 +1688,7 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
 
     _, _, executed_attempt = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=executed_job.job_id,
             experiment_spec_id=(
                 executed_spec.experiment_spec_id
@@ -1620,7 +1708,7 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
         MAY + timedelta(seconds=5),
     )
 
-    catalog.terminalize_running_job_attempt_with_evidence(
+    catalog._terminalize_running_job_attempt_with_evidence(
         executed_attempt.attempt_id,
         job_id=executed_job.job_id,
         state=RunAttemptState.SUCCEEDED,
@@ -1714,7 +1802,7 @@ def test_m94g4_mixed_state_restart_recovers_only_running_work(
 
     _, _, running_attempt = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=running_job.job_id,
             experiment_spec_id=(
                 running_spec.experiment_spec_id
@@ -1987,7 +2075,7 @@ def test_m94j_mixed_restart_recovery_preserves_attempt_ownership(
         owned_attempt,
     ) = (
         catalog
-        .bind_trial_spec_create_attempt_for_running_job(
+        ._bind_trial_spec_create_attempt_for_running_job(
             job_id=job.job_id,
             experiment_spec_id=(
                 spec.experiment_spec_id

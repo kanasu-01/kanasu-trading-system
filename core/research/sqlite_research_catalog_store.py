@@ -3578,7 +3578,7 @@ class SQLiteResearchCatalogStore:
     # and links the already-RUNNING ResearchJob to that attempt in one
     # SQLite transaction. It performs no financial execution or
     # terminalization.
-    def bind_trial_spec_create_attempt_for_running_job(
+    def _bind_trial_spec_create_attempt_for_running_job(
         self,
         *,
         job_id: str,
@@ -4357,7 +4357,7 @@ class SQLiteResearchCatalogStore:
             events[-1],
         )
 
-    def terminalize_running_job_attempt_with_evidence(
+    def _terminalize_running_job_attempt_with_evidence(
         self,
         attempt_id: str,
         *,
@@ -6904,7 +6904,7 @@ class SQLiteResearchCatalogStore:
                             )
                         )
 
-                        attempt_terminal_at = max(
+                        effective_terminal_at = max(
                             effective_terminal_at,
                             attempt_created_at,
                         )
@@ -6925,7 +6925,7 @@ class SQLiteResearchCatalogStore:
                             """,
                             (
                                 RunAttemptState.INTERRUPTED.value,
-                                attempt_terminal_at.isoformat(
+                                effective_terminal_at.isoformat(
                                     timespec="microseconds"
                                 ),
                                 "application_restart",
