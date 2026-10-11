@@ -893,10 +893,7 @@ def validate_stable_backtest_result_payload(
                 ),
             )
 
-        if (
-            exit_time is not None
-            and trade["exit_price"] <= 0
-        ):
+        if trade["exit_price"] <= 0:
             raise ValueError(
                 f"Backtest trade {index} exit_price "
                 "must be positive for a closed trade"
@@ -956,36 +953,35 @@ def validate_stable_backtest_result_payload(
                 "must be LONG for long-only research"
             )
 
-        if exit_time is not None:
-            expected_gross_pnl = (
-                (trade["exit_price"] - entry_price)
-                * trade["quantity"]
+        expected_gross_pnl = (
+            (trade["exit_price"] - entry_price)
+            * trade["quantity"]
+        )
+        if not math.isclose(
+            trade["gross_pnl"],
+            expected_gross_pnl,
+            rel_tol=1e-12,
+            abs_tol=1e-8,
+        ):
+            raise ValueError(
+                f"Backtest trade {index} gross_pnl must "
+                "equal price difference times quantity"
             )
-            if not math.isclose(
-                trade["gross_pnl"],
-                expected_gross_pnl,
-                rel_tol=1e-12,
-                abs_tol=1e-8,
-            ):
-                raise ValueError(
-                    f"Backtest trade {index} gross_pnl must "
-                    "equal price difference times quantity"
-                )
 
-            expected_pnl_pct = (
-                (trade["exit_price"] - entry_price)
-                / entry_price
-            ) * 100
-            if not math.isclose(
-                trade["pnl_pct"],
-                expected_pnl_pct,
-                rel_tol=1e-12,
-                abs_tol=1e-8,
-            ):
-                raise ValueError(
-                    f"Backtest trade {index} pnl_pct must "
-                    "equal percentage price return"
-                )
+        expected_pnl_pct = (
+            (trade["exit_price"] - entry_price)
+            / entry_price
+        ) * 100
+        if not math.isclose(
+            trade["pnl_pct"],
+            expected_pnl_pct,
+            rel_tol=1e-12,
+            abs_tol=1e-8,
+        ):
+            raise ValueError(
+                f"Backtest trade {index} pnl_pct must "
+                "equal percentage price return"
+            )
 
     bar_timestamps = []
     bar_equities = []

@@ -354,6 +354,8 @@ class ArtifactStoreStub:
 def _aggregate_real_executed_payload(
     tmp_path,
     payload_bytes,
+    *,
+    lineage="EXECUTED",
 ):
     store = ContentAddressedResearchArtifactStore(
         tmp_path / "m94k-artifacts"
@@ -406,6 +408,40 @@ def _aggregate_real_executed_payload(
     catalog.artifacts = {
         artifact.artifact_id: artifact,
     }
+
+    if lineage == "REUSED":
+        reused_job = _reused_job()
+        reused_job.reused_result_artifact_id = (
+            artifact.artifact_id
+        )
+
+        catalog.trials = (
+            _trial(
+                REUSED_TRIAL_ID,
+                TrialDisposition.REUSED,
+            ),
+        )
+        catalog.jobs = {
+            REUSED_TRIAL_ID: (reused_job,),
+        }
+        catalog.events = {
+            REUSED_TRIAL_ID: (
+                _terminal_event(
+                    trial_id=REUSED_TRIAL_ID,
+                    disposition=TrialDisposition.REUSED,
+                    job_id="job-reused",
+                ),
+            ),
+        }
+        catalog.attempts = {
+            "attempt-reused": SimpleNamespace(
+                attempt_id="attempt-reused",
+                state=RunAttemptState.SUCCEEDED,
+                result_artifact_id=artifact.artifact_id,
+            ),
+        }
+    elif lineage != "EXECUTED":
+        raise AssertionError("Unsupported test lineage")
 
     return StudyAggregationService(
         catalog_store=catalog,
@@ -1196,6 +1232,10 @@ def test_m94m_valid_direct_financial_relationships_are_accepted(
 
 
 @pytest.mark.parametrize(
+    "exit_time",
+    (None, NOW + timedelta(minutes=1)),
+)
+@pytest.mark.parametrize(
     "case",
     (
         "valid_profitable_trade",
@@ -1204,8 +1244,9 @@ def test_m94m_valid_direct_financial_relationships_are_accepted(
         "inconsistent_return_pct",
     ),
 )
-def test_m94n_canonical_decoder_enforces_closed_long_trade_prices(
+def test_m94o_canonical_decoder_enforces_trade_prices_with_optional_exit_time(
     case,
+    exit_time,
 ):
     def mutate(payload):
         entry_price = (
@@ -1231,7 +1272,7 @@ def test_m94n_canonical_decoder_enforces_closed_long_trade_prices(
                 "symbol": "NSE:A",
                 "entry_time": NOW,
                 "entry_price": entry_price,
-                "exit_time": NOW + timedelta(minutes=1),
+                "exit_time": exit_time,
                 "exit_price": exit_price,
                 "stop_price": 99.0,
                 "quantity": quantity,
@@ -1294,3 +1335,157 @@ def test_m94n_canonical_decoder_enforces_closed_long_trade_prices(
             decode_stable_backtest_result_bytes(
                 payload_bytes
             )
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+@pytest.mark.parametrize(
+    "case",
+    (
+        "inconsistent_gross_pnl",
+        "inconsistent_return_pct",
+        "valid_cost_adjusted_trade",
+        "valid_losing_trade",
+    ),
+)
+def test_m94o_nullable_exit_time_evidence_aggregation(
+    tmp_path,
+    lineage,
+    case,
+):
+    def mutate(payload):
+        entry_price = (
+            102.0 if case == "valid_losing_trade"
+            else 101.0
+        )
+        exit_price = (
+            101.0 if case == "valid_losing_trade"
+            else 102.0
+        )
+        quantity = 3
+        transaction_cost = 0.25
+
+        gross = (
+            (exit_price - entry_price) * quantity
+        )
+
+        payload["trades"].append(
+            {
+                "symbol": "NSE:A",
+                "entry_time": NOW,
+                "entry_price": entry_price,
+                "exit_time": None,
+                "exit_price": exit_price,
+                "stop_price": 99.0,
+                "quantity": quantity,
+                "direction": "LONG",
+                "exit_reason": "fixture",
+                "pnl": gross - transaction_cost,
+                "gross_pnl": gross,
+                "transaction_cost": transaction_cost,
+                "pnl_pct": (
+                    (exit_price - entry_price)
+                    / entry_price
+                ) * 100,
+            }
+        )
+
+        trade = payload["trades"][0]
+
+        if case == "inconsistent_gross_pnl":
+            trade["gross_pnl"] += 1.0
+            trade["pnl"] += 1.0
+        elif case == "inconsistent_return_pct":
+            trade["pnl_pct"] = 99.0
+
+    payload_bytes = _mutated_result_bytes(mutate)
+
+    if case.startswith("inconsistent_"):
+        with pytest.raises(
+            StudyAggregationError,
+            match="canonical Backtest result artifact",
+        ):
+            _aggregate_real_executed_payload(
+                tmp_path,
+                payload_bytes,
+                lineage=lineage,
+            )
+    else:
+        result = _aggregate_real_executed_payload(
+            tmp_path,
+            payload_bytes,
+            lineage=lineage,
+        )
+
+        assert result.result_bearing_trials == 1
+
+        if lineage == "EXECUTED":
+            assert result.executed_trials == 1
+        else:
+            assert result.reused_trials == 1
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+@pytest.mark.parametrize(
+    "exit_time",
+    (None, NOW + timedelta(minutes=1)),
+)
+@pytest.mark.parametrize(
+    "exit_price",
+    (0.0, -1.0),
+)
+def test_m94o_c01_nonpositive_exit_price_is_never_authoritative(
+    tmp_path,
+    lineage,
+    exit_time,
+    exit_price,
+):
+    def mutate(payload):
+        entry_price = 101.0
+        quantity = 3
+        transaction_cost = 0.25
+        gross = (exit_price - entry_price) * quantity
+
+        payload["trades"].append(
+            {
+                "symbol": "NSE:A",
+                "entry_time": NOW,
+                "entry_price": entry_price,
+                "exit_time": exit_time,
+                "exit_price": exit_price,
+                "stop_price": 99.0,
+                "quantity": quantity,
+                "direction": "LONG",
+                "exit_reason": "fixture",
+                "pnl": gross - transaction_cost,
+                "gross_pnl": gross,
+                "transaction_cost": transaction_cost,
+                "pnl_pct": (
+                    (exit_price - entry_price)
+                    / entry_price
+                ) * 100,
+            }
+        )
+
+    payload_bytes = _mutated_result_bytes(mutate)
+
+    with pytest.raises(
+        ValueError,
+        match="exit_price must be positive",
+    ):
+        decode_stable_backtest_result_bytes(
+            payload_bytes
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            payload_bytes,
+            lineage=lineage,
+        )

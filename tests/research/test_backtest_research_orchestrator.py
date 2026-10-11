@@ -1396,6 +1396,10 @@ def test_execute_prepared_supplied_attempt_requires_terminalizer(
         "inconsistent_net_pnl",
         "inconsistent_gross_pnl",
         "inconsistent_return_pct",
+        "inconsistent_gross_pnl_no_exit_time",
+        "inconsistent_return_pct_no_exit_time",
+        "zero_exit_price_no_exit_time",
+        "negative_exit_price_no_exit_time",
         "incorrect_marked_equity",
         "drawdown_below_minus_one",
         "incomplete_execution_fields",
@@ -1471,6 +1475,10 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
         "inconsistent_net_pnl",
         "inconsistent_gross_pnl",
         "inconsistent_return_pct",
+        "inconsistent_gross_pnl_no_exit_time",
+        "inconsistent_return_pct_no_exit_time",
+        "zero_exit_price_no_exit_time",
+        "negative_exit_price_no_exit_time",
     }:
         payload["trades"].append(
             {
@@ -1498,13 +1506,42 @@ def test_m94l_exact_reuse_rejects_additional_canonical_counterexamples(
             ] = -100.0
         elif case == "inconsistent_net_pnl":
             payload["trades"][0]["pnl"] = 2.0
-        elif case == "inconsistent_gross_pnl":
+        elif case in {
+            "inconsistent_gross_pnl",
+            "inconsistent_gross_pnl_no_exit_time",
+        }:
             payload["trades"][0]["gross_pnl"] = 2.0
             payload["trades"][0]["pnl"] = 2.0
-        elif case == "inconsistent_return_pct":
+        elif case in {
+            "inconsistent_return_pct",
+            "inconsistent_return_pct_no_exit_time",
+        }:
             payload["trades"][0]["pnl_pct"] = 99.0
+        elif case in {
+            "zero_exit_price_no_exit_time",
+            "negative_exit_price_no_exit_time",
+        }:
+            trade = payload["trades"][0]
+            trade["exit_price"] = (
+                0.0
+                if case == "zero_exit_price_no_exit_time"
+                else -1.0
+            )
+            gross = (
+                (trade["exit_price"] - trade["entry_price"])
+                * trade["quantity"]
+            )
+            trade["gross_pnl"] = gross
+            trade["pnl"] = gross - trade["transaction_cost"]
+            trade["pnl_pct"] = (
+                (trade["exit_price"] - trade["entry_price"])
+                / trade["entry_price"]
+            ) * 100
         else:
             raise AssertionError(case)
+
+        if case.endswith("_no_exit_time"):
+            payload["trades"][0]["exit_time"] = None
 
     elif case == "incorrect_marked_equity":
         record = payload["bar_records"][0]
