@@ -1,8 +1,12 @@
-"""M9.4q independent audit regression draft (ChatGPT-authored).
+"""Permanent M9.4q IND-01 through IND-04 regressions (ChatGPT-authored).
 
-Target repository path: tests/research/test_m94q_ind_identity_authority.py
-Verified source baseline: 9f41a54c0c31985e4d33069401279586782c1858
-These are draft tests and have not been run against the complete repository.
+Original published baseline: 9f41a54c0c31985e4d33069401279586782c1858.
+The eight parametrized cases in this module are included in GitHub Actions
+run 39482590794 (1684 passed) for reviewed correction e6002758f22e0bb07d0886dcc1603eba21e6e501.
+Codex independently audited that exact SHA, ran the complete 1684-test suite
+and 122 additional reviewer-authored tests, and returned runtime PASS.
+M9.5 remains blocked pending final approved milestone integration and
+independent acceptance of the exact published milestone HEAD.
 """
 from __future__ import annotations
 

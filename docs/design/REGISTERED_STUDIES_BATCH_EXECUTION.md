@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; CURRENT GATE BLOCKED: The exact published milestone correction `9f41a54c` failed independent review on IND-01 through IND-04. ChatGPT's corrected implementation is committed only to isolated review branch `m94q-ind-authority-review` through `b8a9530000c68b11cc4ccb78a808d81b610f92e0`, where GitHub Actions run `39482178310` passed 1684 tests. Preserve registered identity, immutable Trial denominator, accepted evidence authority, independent simulated accounts and earlier milestone semantics. A new independent exact-candidate PASS is required; no milestone integration or M9.5 design/implementation has been authorized.**
+**ACCEPTED DESIGN BASELINE; M9.4q CURRENT STATE: Isolated development correction `e6002758f22e0bb07d0886dcc1603eba21e6e501` passed exact-SHA independent technical review of IND-01 through IND-04 (all CLOSED), with 1684 complete repository tests and 122 reviewer-authored cases passing. The remaining Codex observation is low-severity traceability/mechanical cleanup, not a runtime blocker. Existing Trial identity, population proof, independent accounts and previous milestone semantics remain preserved. The published milestone branch has NOT been updated from independently failed `9f41a54c`. Final human approval, integration and a fresh published-HEAD independent PASS are required. M9.5 design and implementation BLOCKED.**
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -2085,7 +2085,41 @@ for the corrected development commit and retained as RED/GREEN history.
 
 The reported historical 90 preservation controls remain without an
 independently identified exact selector; the complete 1684-test suite passed.
-The candidate remains under **independent Codex review**, not accepted.
-No Codex PASS or M9.4q closure is claimed. No protected milestone-branch
-merge, integration or publication was performed. M9.5 design and implementation
-remain blocked pending the accepted independent review and final release gate.
+At this earlier development-validation checkpoint, independent Codex review
+had not yet completed. The later exact-SHA audit of `e6002758` returned a
+technical PASS, documented in the next section; this does not close M9.4q.
+No milestone merge, integration or publication has occurred. M9.5 remains
+blocked pending human-approved integration and exact published-HEAD PASS.
+
+
+## M9.4q independent development-candidate audit outcome — 2026-10-21
+
+**Reviewer target:** branch `m94q-ind-authority-review`, commit
+`e6002758f22e0bb07d0886dcc1603eba21e6e501`,
+tree `3a9c79aea390da70b4b242f7819b0f58ef76a40e`.
+Published milestone branch remains at independently failed `9f41a54c`.
+
+**Independent technical verdict: PASS** at the reviewed development SHA.
+IND-01 validated snapshot consistency, IND-02 fresh/reuse/terminal authority,
+IND-03 atomic Start, and IND-04 coherent Trial detail were each **CLOSED**.
+No new accepted-scope runtime blocker was found. The external auditor observed:
+
+- 1684 complete repository Python tests passed (Python 3.12), including
+  560 M9.4 tests across 24 files;
+- 23 prior and 99 extended reviewer-authored probes passed (122 total);
+- GitHub Actions run `39482590794` (Python 3.11), 1684 passed at
+  this exact SHA;
+- nonblocking LOW `M94Q-COR-DOC-01`: stale traceability, test header
+  and decision history; one trailing space on `ROADMAP.md` line 704;
+- the separate historical 90 preservation controls were not identified as
+  an independently runnable selector.
+
+A follow-up documentation-only correction is authorized on the isolated
+development branch and does not change the reviewed runtime implementation.
+Historical checkpoints elsewhere remain historical. The final candidate SHA
+after documentation cleanup must be mechanically checked, and its exact
+identity must be verified before any acceptance request.
+
+**No M9.4q closure or M9.5 authorization is implied by this PASS.**
+Human approval is still required for milestone integration, followed by
+a separate independent PASS on the exact published milestone HEAD.

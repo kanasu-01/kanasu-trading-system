@@ -1125,7 +1125,7 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9.4 - Registered Studies and bounded local batch execution
 
-**Status:** Published REVIEW-01 correction `9f41a54c` independently FAIL (IND-01/02/03/04). Isolated branch `m94q-ind-authority-review` has ChatGPT correction through `b8a9530000c68b11cc4ccb78a808d81b610f92e0`; GitHub Actions run `39482178310` finished SUCCESS with 1684 passing repository tests. This green result is not a fresh independent review PASS. Reviewer acceptance, final human approval and integration into `m9-v1-research-platform` remain pending; `M94Q_AUDIT_GATE=BLOCKED`, M9.5 blocked.**
+**Status:** Published milestone baseline `9f41a54c` independently FAILED; isolated correction `e6002758f22e0bb07d0886dcc1603eba21e6e501` received exact-candidate independent Codex technical PASS: 1684 full repository tests, 560 M9.4 cases across 24 modules, and 122 reviewer-authored probes passed. GitHub Actions run `39482590794` at that exact SHA passed 1684 Python tests. Nonblocking `M94Q-COR-DOC-01` traceability/whitespace follow-up remains. This is NOT an exact published milestone PASS; no integration has occurred. `M95_GATE=BLOCKED`, M9.4q not closed.
 
 M9.4 closure evidence establishes the following accepted boundaries:
 
@@ -1648,7 +1648,41 @@ for the corrected development commit and retained as RED/GREEN history.
 
 The reported historical 90 preservation controls remain without an
 independently identified exact selector; the complete 1684-test suite passed.
-The candidate remains under **independent Codex review**, not accepted.
-No Codex PASS or M9.4q closure is claimed. No protected milestone-branch
-merge, integration or publication was performed. M9.5 design and implementation
-remain blocked pending the accepted independent review and final release gate.
+At this earlier development-validation checkpoint, independent Codex review
+had not yet completed. The later exact-SHA audit of `e6002758` returned a
+technical PASS, documented in the next section; this does not close M9.4q.
+No milestone merge, integration or publication has occurred. M9.5 remains
+blocked pending human-approved integration and exact published-HEAD PASS.
+
+
+## M9.4q independent development-candidate audit outcome — 2026-10-21
+
+**Reviewer target:** branch `m94q-ind-authority-review`, commit
+`e6002758f22e0bb07d0886dcc1603eba21e6e501`,
+tree `3a9c79aea390da70b4b242f7819b0f58ef76a40e`.
+Published milestone branch remains at independently failed `9f41a54c`.
+
+**Independent technical verdict: PASS** at the reviewed development SHA.
+IND-01 validated snapshot consistency, IND-02 fresh/reuse/terminal authority,
+IND-03 atomic Start, and IND-04 coherent Trial detail were each **CLOSED**.
+No new accepted-scope runtime blocker was found. The external auditor observed:
+
+- 1684 complete repository Python tests passed (Python 3.12), including
+  560 M9.4 tests across 24 files;
+- 23 prior and 99 extended reviewer-authored probes passed (122 total);
+- GitHub Actions run `39482590794` (Python 3.11), 1684 passed at
+  this exact SHA;
+- nonblocking LOW `M94Q-COR-DOC-01`: stale traceability, test header
+  and decision history; one trailing space on `ROADMAP.md` line 704;
+- the separate historical 90 preservation controls were not identified as
+  an independently runnable selector.
+
+A follow-up documentation-only correction is authorized on the isolated
+development branch and does not change the reviewed runtime implementation.
+Historical checkpoints elsewhere remain historical. The final candidate SHA
+after documentation cleanup must be mechanically checked, and its exact
+identity must be verified before any acceptance request.
+
+**No M9.4q closure or M9.5 authorization is implied by this PASS.**
+Human approval is still required for milestone integration, followed by
+a separate independent PASS on the exact published milestone HEAD.

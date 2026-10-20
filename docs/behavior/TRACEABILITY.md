@@ -403,10 +403,11 @@ from that corrupted row.
 BEHAVIOR AFTER: authoritative registered-population reads retain the accepted
 population-proof format and additionally recompute each persisted Trial's
 canonical `trial_id` from its registered immutable identity fields. A
-contradiction fails closed. Registered execution-plan resolution crosses that
-authority boundary before downstream execution-input resolution, retrieval,
-RunAttempt creation or financial execution while preserving established
-specific plan-validation errors.
+contradiction fails closed. Registered execution-plan resolution consumes the validated Trial before
+deriving Trial-dependent parameter, instrument and range fields. A corrupt
+immutable identity now fails with an authoritative identity/proof error before
+subsequent plan-specific error checks; valid identities retain those checks.
+Downstream retrieval, RunAttempt creation and financial execution remain gated.
 
 IMPLEMENTATION PATHS:
 `core/research/sqlite_research_catalog_store.py`;
@@ -418,9 +419,11 @@ PERMANENT TEST/EVIDENCE:
 `test_m94q_review_01_aggregation_rejects_result_bearing_trial_identity_corruption`
 for both EXECUTED and REUSED lineage.
 
-Current validation: **4 REVIEW-01 permanent regressions; 549 repository-wide
-M9.4 tests across 23 files; 90 preservation controls; 1673 complete Python
-tests; clean `git diff --check`**.
+Historical REVIEW-01 validation checkpoint (before the independent IND-01–04
+audit): **4 REVIEW-01 permanent regressions; 549 repository-wide M9.4 tests
+across 23 files; 90 reported preservation controls; 1673 complete Python
+tests**. These are not current post-IND-01–04 validation results. The
+90-test selector remains independently unidentified.
 
 Historical checkpoints remain explicit: FRESH-04 **545 / 90 / 1669** and
 FRESH-03 **541 / 90 / 1665**.
@@ -431,7 +434,47 @@ reproducibility/evidence identity, M9.3 data truth, fixed Trial denominator
 semantics, retry/recovery, no-fake-RunAttempt reuse, independent-account
 aggregation, M9.5 qualification ownership and the no-live-money boundary.
 
-This is local remediation evidence, not an independent PASS. The candidate is
-unstaged, uncommitted and unpublished. `M94Q_AUDIT_GATE=BLOCKED` pending fresh
-independent candidate review and later exact-published-HEAD independent PASS.
-M9.5 implementation remains blocked.
+The preceding REVIEW-01 narrative is a historical pre-IND-01–04 checkpoint.
+That earlier published correction at `9f41a54c` independently failed. The
+subsequent isolated development correction passed an independent runtime audit
+of exact SHA `e6002758`; the milestone branch is not yet integrated.
+M9.5 remains blocked pending final milestone-head acceptance.
+
+
+## M9.4q IND-01–04 corrected authority trace — 2026-10-21
+
+**Reviewed development commit:** `e6002758f22e0bb07d0886dcc1603eba21e6e501`
+on `m94q-ind-authority-review`; published milestone baseline remained
+`9f41a54c0c31985e4d33069401279586782c1858`.
+Independent Codex technical verdict for this exact development candidate:
+**PASS**. This is not the final published milestone gate.
+
+| Finding | Before | After: canonical authority | Permanent repository regression |
+|---|---|---|---|
+| IND-01 (HIGH) | Resolver and aggregation could consume stale/unvalidated Trial fields after separately checking identities | Resolver consumes `list_registered_trials_for_revision` before deriving Trial-dependent values; canonical Study aggregation consumes that validated snapshot, never the generic stale tuple | `test_ind01_resolver_never_uses_unvalidated_initial_trial`; `test_ind01_aggregation_consumes_validated_trial_snapshot`; EXECUTED/REUSED review probes |
+| IND-02 (HIGH) | Trial identity could change after initial plan validation while retrieval or execution proceeded | Connection-scoped Trial identity/population guard runs inside the SQLite transaction granting fresh attempt binding, exact reuse or terminalization; corrupted state cannot become accepted evidence | `test_ind02_attempt_binding_rechecks_after_preparation`; `test_m94q_ind02_retrieval_corruption_blocks_execution_authority`; `test_m94q_ind02_retrieval_corruption_blocks_exact_reuse_authority`; `test_m94q_ind02_mutation_after_execution_blocks_successful_terminalization` |
+| IND-03 (MEDIUM) | Start could insert initial ResearchJobs and timestamp before post-commit identity rejection | Start validates persisted immutable Trial identity within `BEGIN IMMEDIATE` before queue mutation, preserving original population-proof mismatch precedence | `test_ind03_start_rejects_corrupt_identity_atomically`; `test_ind03_application_start_failure_preserves_unstarted_state`; reviewer HTTP-route, WAL and rollback probes |
+| IND-04 (MEDIUM) | Trial-detail read could return corrupted immutable identity | Trial-detail snapshot validates authoritative registered population inside its existing read transaction before returning Trial/event/job/attempt lineage | `test_ind04_trial_detail_rejects_corrupt_registered_identity`; `test_ind04_application_trial_detail_rejects_corrupt_identity`; reviewer HTTP, WAL, EXECUTED/REUSED probes |
+
+**Behavior impact:** CHANGED at the registered integrity boundary;
+**preserved:** fixed finite Trial denominator, `kanasu.study-revision-population.v1`,
+`kanasu.trial.v1`, exact evidence authority, M4 financial accounting,
+M5 WFA, M6/M7 Paper causality, M8 API/application semantics, M9.2/9.3
+data lineage, independent simulated Trial accounts and V1 research-only scope.
+The earlier generic proof/plan-validation error precedence differs when a
+persisted immutable identity itself is corrupted, by design; this is not a
+silent redefinition of valid Trial or financial behavior.
+
+**Validation:** GitHub Actions run `39482590794`, Python 3.11, 1684 passed
+at exact reviewed SHA. Codex's fresh isolated-clone Python 3.12 run:
+1684 passed, 560 M9.4 cases across 24 modules; 23 original independent
+probes and 99 extended independent probes passed (122 reviewer-authored
+cases total). The 90 claimed historical preservation controls were not
+independently isolated; complete repository regression is the confirmed
+preservation evidence. The audit reported documentation follow-up
+`M94Q-COR-DOC-01` and one whitespace error, with no runtime blocker.
+
+**Gate:** development-candidate independent PASS only. Further documentation
+synchronization creates a different commit and therefore requires exact-final
+candidate identity and mechanical verification. No milestone integration,
+M9.4 closure or M9.5 design authorization is implied.

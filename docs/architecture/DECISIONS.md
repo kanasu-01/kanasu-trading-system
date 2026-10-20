@@ -831,12 +831,13 @@ authoritative denominator-bearing read must therefore reject a persisted Trial
 row whose immutable identity fields no longer reproduce that `trial_id`, even
 when the surviving ID set and cardinality still match the StudyRevision proof.
 
-`RegisteredTrialExecutionPlanResolver` preserves established specific
-parameter-configuration and membership-range error precedence, then validates
-the Trial through the authoritative registered-population boundary before any
-downstream execution-input resolution, retrieval, RunAttempt creation or
-financial execution. EXECUTED and REUSED Study aggregation inherit the same
-fail-closed registered-population authority.
+The original REVIEW-01 design note described plan-specific error precedence
+before registered-population validation. The subsequent IND-01 correction
+validates and consumes the authoritative registered Trial **first**. An
+identity-corrupted Trial now fails with an immutable identity/proof error
+rather than a later parameter-configuration or membership-range error;
+valid Trial identities still receive the ordinary plan checks. EXECUTED and
+REUSED Study aggregation consume the validated registered population.
 
 Permanent REVIEW-01 evidence is four adversarial regressions spanning
 registered-population read, claimed execution, EXECUTED aggregation and REUSED
@@ -849,6 +850,35 @@ does not alter M4 execution economics, fixed Trial count, retry/recovery,
 exact-reuse lineage, independent-account aggregation, M9.5 qualification
 ownership or the no-live-money boundary.
 
-The candidate remains unpublished. Fresh independent candidate PASS, separate
-human approvals for stage/commit/push, and independent exact-published-HEAD PASS
-remain required. M9.5 implementation remains blocked.
+Historical REVIEW-01 checkpoint only: that candidate was subsequently
+published at `9f41a54c` and independently FAILED (IND-01–04).
+ChatGPT's isolated development correction at `e6002758` independently
+PASSED the accepted-scope technical audit (1684 full-suite and 122 reviewer
+probes), but has not been integrated into the milestone branch. Final human
+integration approval and exact-published-HEAD independent PASS remain
+required; M9.5 design and implementation are still blocked.
+
+### AD-025 follow-up - M9.4q IND-01–04 transaction and snapshot enforcement
+
+The immutable Trial identity and finite registered StudyRevision denominator
+retain their accepted `kanasu.trial.v1` and
+`kanasu.study-revision-population.v1` fingerprint semantics.
+The correction does **not** change immutable identities or financial
+economics. It changes the authorization boundary:
+
+- Validated registered Trial reads supply the object actually consumed by
+  resolver and canonical EXECUTED/REUSED aggregation (IND-01).
+- `BEGIN IMMEDIATE` authority transactions verify immutable identity and
+  population before fresh RunAttempt binding and exact reuse, and validate
+  before attempt/evidence terminalization (IND-02).
+- Start rejects corrupted immutable identities before any job or Start
+  timestamp write while retaining original proof-mismatch error priority
+  (IND-03).
+- Trial-detail integrity is checked in the coherent read transaction (IND-04).
+
+Accepted prior-M9.4 semantics, independent-account aggregation and exact
+evidence lineage are preserved. GitHub run `39482590794`: 1684 passed.
+Independent audit of exact SHA `e6002758f22e0bb07d0886dcc1603eba21e6e501`:
+122 reviewer cases passed, no runtime blocker, candidate-level PASS.
+Human-approved milestone integration and independent published-HEAD PASS are
+distinct remaining gates; M9.5 remains blocked.
