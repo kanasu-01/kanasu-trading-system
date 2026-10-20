@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE — M9.4q REVIEW-01 correction was published at `9f41a54c0c31985e4d33069401279586782c1858` and independently audited on that exact SHA. Verdict FAIL: four accepted-scope defects IND-01/02/03/04 and documentation drift DOC-01. The independent auditor confirmed 1673 repository tests and 549 M9.4 tests; those passing tests do not override reproduced adversarial failures. The ChatGPT-authored fix remains an uncommitted Git tree, not a tested branch candidate. `M94Q_AUDIT_GATE=BLOCKED`; M9.5 design/implementation remain blocked until corrected and independently accepted. 
+**Status:** ACTIVE — The exact published milestone commit `9f41a54c` has an independent postpublication FAIL (IND-01 through IND-04 and DOC-01). ChatGPT committed an isolated remediation to `m94q-ind-authority-review` at `b8a9530000c68b11cc4ccb78a808d81b610f92e0`; GitHub Actions run `39482178310` passed all 1684 Python tests. This is development validation only, not independent acceptance. The authoritative branch has not changed; M9.5 design and implementation remain blocked. 
 
 M9.4q revised unpublished candidate validation checkpoint (2026-10-15; `KANASU_900150`): The bounded correction addresses M94Q-NEW-01 (trade timestamps outside authoritative bar history), M94Q-NEW-02 (oversized canonical integers raising uncontrolled `OverflowError`), and M94Q-NEW-03 (contradictory current validation evidence). `KANASU_900147` established five permanent RED regression cases. After the production correction, `KANASU_900148` passed those five cases, five reviewer-authored adversarial cases, and 35 focused `m94q_` cases. `KANASU_900150` subsequently passed 134 touched-module tests, 338 M9.4 tests across 21 modules, and 1,462 full Python tests, without failures, errors or skips. The saved validation summary has SHA-256 `6c5fd30e8384993ba81960f6c9b36d6431e403f30411ae62c7cfa4ba7426a04c`. These are local validation results, not independent acceptance. The latest independent pre-publication verdict remains `M94Q_AUDIT_GATE=BLOCKED` for the earlier candidate; the revised candidate still requires a fresh independent PASS. It remains unstaged and unpublished, and substantive M9.5 implementation remains blocked. Protected stage, commit and push operations require separate human approval.
 
@@ -948,3 +948,35 @@ Do not claim corrective PASS or M9.4q closure until real RED/GREEN, focused,
 preservation and full-suite evidence, a new independent exact-candidate PASS,
 and a verified exact published-HEAD PASS. No M9.5 work is authorized by
 these preliminary corrections.
+
+
+## M9.4q isolated GitHub-first development correction — 2026-10-21
+
+Current development branch: `m94q-ind-authority-review`.
+Code/test correction commit: `b8a9530000c68b11cc4ccb78a808d81b610f92e0`;
+parent: `c173d7441278017181e0602d9cd59e7ef82cbed3`.
+The branch began from published audited milestone commit
+`9f41a54c0c31985e4d33069401279586782c1858`.
+The milestone branch remains unchanged at that audited commit.
+
+ChatGPT-authored changes target reviewer findings IND-01 through IND-04:
+consume validated registered Trial snapshots, recheck identity inside the
+RunAttempt, exact-reuse and terminalization authority transactions, reject
+corrupt initial Start before durable queue writes, and verify Trial-detail
+identity in one read transaction. Original population fingerprint format,
+independent-account aggregation and earlier economic semantics are preserved.
+
+Fresh added tests: 11 across a new identity-authority regression module and
+executor-level retrieval/reuse/terminalization race coverage. After correcting
+obsolete placeholder Trial-ID fixtures and expected error-order assertions,
+**GitHub Actions run 39482178310** completed SUCCESS:
+`1684 passed`, no failed tests, Python 3.11, in 16.43 seconds.
+Earlier CI run 39481660667 reported `1679 passed, 5 failed`; it is superseded
+for the corrected development commit and retained as RED/GREEN history.
+
+The reported historical 90 preservation controls remain without an
+independently identified exact selector; the complete 1684-test suite passed.
+The candidate remains under **independent Codex review**, not accepted.
+No Codex PASS or M9.4q closure is claimed. No protected milestone-branch
+merge, integration or publication was performed. M9.5 design and implementation
+remain blocked pending the accepted independent review and final release gate.

@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; CURRENT GATE BLOCKED: REVIEW-01 was published at `9f41a54c0c31985e4d33069401279586782c1858`; a fresh independent exact-HEAD audit returned FAIL with four accepted-scope integrity findings (IND-01 through IND-04). ChatGPT corrections are in uncommitted Git objects, not yet regression-tested or independently reviewed. Preserve the population-proof format, immutable Trial identity, independent simulated accounts and prior-milestone behavior. M9.5 design and implementation remain blocked.**
+**ACCEPTED DESIGN BASELINE; CURRENT GATE BLOCKED: The exact published milestone correction `9f41a54c` failed independent review on IND-01 through IND-04. ChatGPT's corrected implementation is committed only to isolated review branch `m94q-ind-authority-review` through `b8a9530000c68b11cc4ccb78a808d81b610f92e0`, where GitHub Actions run `39482178310` passed 1684 tests. Preserve registered identity, immutable Trial denominator, accepted evidence authority, independent simulated accounts and earlier milestone semantics. A new independent exact-candidate PASS is required; no milestone integration or M9.5 design/implementation has been authorized.**
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -2057,3 +2057,35 @@ Do not claim corrective PASS or M9.4q closure until real RED/GREEN, focused,
 preservation and full-suite evidence, a new independent exact-candidate PASS,
 and a verified exact published-HEAD PASS. No M9.5 work is authorized by
 these preliminary corrections.
+
+
+## M9.4q isolated GitHub-first development correction — 2026-10-21
+
+Current development branch: `m94q-ind-authority-review`.
+Code/test correction commit: `b8a9530000c68b11cc4ccb78a808d81b610f92e0`;
+parent: `c173d7441278017181e0602d9cd59e7ef82cbed3`.
+The branch began from published audited milestone commit
+`9f41a54c0c31985e4d33069401279586782c1858`.
+The milestone branch remains unchanged at that audited commit.
+
+ChatGPT-authored changes target reviewer findings IND-01 through IND-04:
+consume validated registered Trial snapshots, recheck identity inside the
+RunAttempt, exact-reuse and terminalization authority transactions, reject
+corrupt initial Start before durable queue writes, and verify Trial-detail
+identity in one read transaction. Original population fingerprint format,
+independent-account aggregation and earlier economic semantics are preserved.
+
+Fresh added tests: 11 across a new identity-authority regression module and
+executor-level retrieval/reuse/terminalization race coverage. After correcting
+obsolete placeholder Trial-ID fixtures and expected error-order assertions,
+**GitHub Actions run 39482178310** completed SUCCESS:
+`1684 passed`, no failed tests, Python 3.11, in 16.43 seconds.
+Earlier CI run 39481660667 reported `1679 passed, 5 failed`; it is superseded
+for the corrected development commit and retained as RED/GREEN history.
+
+The reported historical 90 preservation controls remain without an
+independently identified exact selector; the complete 1684-test suite passed.
+The candidate remains under **independent Codex review**, not accepted.
+No Codex PASS or M9.4q closure is claimed. No protected milestone-branch
+merge, integration or publication was performed. M9.5 design and implementation
+remain blocked pending the accepted independent review and final release gate.
