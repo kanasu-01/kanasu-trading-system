@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; M9.4q REVIEW-01 CORRECTION LOCALLY VALIDATED; THE FRESH INDEPENDENT PRE-PUBLICATION REVIEW OF THE POST-FRESH-04 CANDIDATE FOUND PERSISTED TRIAL SELF-IDENTITY CORRUPTION COULD EVADE THE ID-ONLY POPULATION PROOF; REVIEW-01 PRESERVES THE EXISTING POPULATION-PROOF FORMAT, RECOMPUTES CONTENT-ADDRESSED TRIAL IDENTITY AT AUTHORITATIVE REGISTERED-POPULATION READS, AND REQUIRES EXECUTION-PLAN RESOLUTION TO CROSS THAT BOUNDARY BEFORE DOWNSTREAM EXECUTION; 549 M9.4 / 90 PRESERVATION / 1673 FULL PYTHON GREEN; CORRECTED CANDIDATE UNSTAGED, UNCOMMITTED AND UNPUBLISHED PENDING FRESH INDEPENDENT RE-REVIEW; M9.5 IMPLEMENTATION BLOCKED**
+**ACCEPTED DESIGN BASELINE; CURRENT GATE BLOCKED: REVIEW-01 was published at `9f41a54c0c31985e4d33069401279586782c1858`; a fresh independent exact-HEAD audit returned FAIL with four accepted-scope integrity findings (IND-01 through IND-04). ChatGPT corrections are in uncommitted Git objects, not yet regression-tested or independently reviewed. Preserve the population-proof format, immutable Trial identity, independent simulated accounts and prior-milestone behavior. M9.5 design and implementation remain blocked.**
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -2018,3 +2018,42 @@ independent pre-publication PASS is required before any protected publication
 request. Stage, commit and push remain separate human approvals. The exact
 published M9.4 HEAD must then independently PASS. M9.5 begins only as fresh
 design after that gate; M9.5 implementation remains unauthorized.
+
+
+## M9.4q exact published-HEAD postpublication audit — 2026-10-21
+
+Published, exact audited commit: `9f41a54c0c31985e4d33069401279586782c1858`
+(parent `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; tree
+`561fdeefeea9fc64e56c5d2612da5537444cf0d3`).
+
+Independent result: `M94Q_INDEPENDENT_VERDICT=FAIL`, `M95_GATE=BLOCKED`.
+The published commit passed 1673 full Python tests and 549 M9.4 tests
+across 23 files. Fresh reviewer-authored probes produced 14 passes,
+9 failures against four accepted-scope integrity defects:
+
+- **IND-01 (HIGH):** resolver and EXECUTED/REUSED aggregation can validate
+  a different Trial snapshot than the consumed data.
+- **IND-02 (HIGH):** persisted Trial identity corruption after plan
+  resolution but during retrieval can precede a successful RunAttempt,
+  exact reuse, or financial execution unless authority is transactionally checked.
+- **IND-03 (MEDIUM):** Start may commit initial queue jobs for a corrupt
+  Trial and then return an HTTP error when subsequent progress read fails.
+- **IND-04 (MEDIUM):** canonical Trial-detail reads/HTTP route can emit a
+  contradictory immutable registered identity.
+- **DOC-01 (LOW):** published correction incorrectly described as
+  unpublished in active status summaries.
+
+The independent reviewer could not independently identify the reported
+90-preservation-control selection; it did not refute the passing full-suite run.
+Historical earlier local/unpublished checkpoint narratives elsewhere in this
+document remain history and are not active publication status.
+
+Implementation candidate: ChatGPT-authored unreferenced Git tree
+`a4ac76fdce0d0c3a2f154b7ff94b971aaff88a81` (three corrected
+production paths and two regression-test paths), based on the published
+source tree. This is **NOT** a commit, branch update, run test or independent
+acceptance. Later tree revisions require a new exact candidate identity.
+Do not claim corrective PASS or M9.4q closure until real RED/GREEN, focused,
+preservation and full-suite evidence, a new independent exact-candidate PASS,
+and a verified exact published-HEAD PASS. No M9.5 work is authorized by
+these preliminary corrections.

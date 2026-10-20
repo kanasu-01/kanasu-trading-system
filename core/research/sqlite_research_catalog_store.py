@@ -2784,6 +2784,10 @@ class SQLiteResearchCatalogStore:
                 trial = self._trial_from_row(
                     trial_row
                 )
+                self._assert_registered_trial_authority_in_connection(
+                    connection,
+                    trial.trial_id,
+                )
                 events = tuple(
                     self._trial_event_from_row(row)
                     for row in event_rows
@@ -3091,6 +3095,40 @@ class SQLiteResearchCatalogStore:
                 "denominator"
             )
 
+    def _assert_registered_trial_authority_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        trial_id: str,
+    ) -> None:
+        """Validate immutable identity and population in caller transaction."""
+        row = connection.execute(
+            """
+            SELECT trial_id, study_revision_id
+            FROM trials
+            WHERE trial_id = ?
+            """,
+            (trial_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("authoritative registered Trial does not exist")
+        revision_id = row[1]
+        trial_ids = tuple(
+            item[0] for item in connection.execute(
+                """
+                SELECT trial_id
+                FROM trials
+                WHERE study_revision_id = ?
+                ORDER BY trial_id
+                """,
+                (revision_id,),
+            ).fetchall()
+        )
+        self._validate_study_revision_population_in_connection(
+            connection,
+            revision_id,
+            trial_ids,
+        )
+
     def validate_study_revision_population(
         self,
         study_revision_id: str,
@@ -3301,6 +3339,13 @@ class SQLiteResearchCatalogStore:
                     """,
                     (study_revision_id,),
                 ).fetchall()
+
+                # Reject corruption before writing jobs or Start metadata.
+                self._validate_study_revision_population_in_connection(
+                    connection,
+                    study_revision_id,
+                    tuple(row[0] for row in trial_rows),
+                )
 
                 actual_population_fingerprint = (
                     _registered_trial_population_fingerprint(
@@ -4064,6 +4109,12 @@ class SQLiteResearchCatalogStore:
                     self._trial_from_row(
                         trial_row
                     )
+                )
+
+                # Recheck inside the transaction granting RunAttempt authority.
+                self._assert_registered_trial_authority_in_connection(
+                    connection,
+                    current_trial.trial_id,
                 )
 
                 if (
@@ -4885,6 +4936,12 @@ class SQLiteResearchCatalogStore:
                         "ResearchJob or RunAttempt does not exist"
                     )
 
+                # Do not certify a Trial corrupted during external Backtest.
+                self._assert_registered_trial_authority_in_connection(
+                    connection,
+                    row[0],
+                )
+
                 (
                     trial_id,
                     job_state,
@@ -5450,6 +5507,12 @@ class SQLiteResearchCatalogStore:
                     manifest_artifact_schema,
                     artifact_kind, artifact_schema,
                 ) = row
+
+                # Exact reuse grants terminal authority without a new attempt.
+                self._assert_registered_trial_authority_in_connection(
+                    connection,
+                    trial_id,
+                )
 
                 if job_state != ResearchJobState.RUNNING.value:
                     raise ValueError("ResearchJob must be RUNNING for reuse")

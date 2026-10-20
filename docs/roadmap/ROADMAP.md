@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.4q 2026-10-20 locally corrected post-REVIEW-01 candidate. The fresh independent pre-publication review of the exact post-FRESH-04 candidate found `M94Q-REVIEW-01`: a persisted Trial could retain its original content-addressed `trial_id` while an identity-bearing row field was changed, leaving the ID-only StudyRevision population proof apparently valid. The correction preserves that population-proof format, enforces persisted Trial self-identity at authoritative registered-population reads, and makes registered execution-plan resolution cross that boundary before downstream execution. Validation is 549 repository-wide M9.4 tests across 23 files, 90 preservation controls and 1673 complete Python tests. Candidate remains unstaged, uncommitted and unpublished; fresh independent candidate PASS and later exact-published-HEAD PASS remain required. M9.5 may then begin as fresh design only; M9.5 implementation remains blocked.
+**Status:** ACTIVE — M9.4q REVIEW-01 correction was published at `9f41a54c0c31985e4d33069401279586782c1858` and independently audited on that exact SHA. Verdict FAIL: four accepted-scope defects IND-01/02/03/04 and documentation drift DOC-01. The independent auditor confirmed 1673 repository tests and 549 M9.4 tests; those passing tests do not override reproduced adversarial failures. The ChatGPT-authored fix remains an uncommitted Git tree, not a tested branch candidate. `M94Q_AUDIT_GATE=BLOCKED`; M9.5 design/implementation remain blocked until corrected and independently accepted. 
 
 M9.4q revised unpublished candidate validation checkpoint (2026-10-15; `KANASU_900150`): The bounded correction addresses M94Q-NEW-01 (trade timestamps outside authoritative bar history), M94Q-NEW-02 (oversized canonical integers raising uncontrolled `OverflowError`), and M94Q-NEW-03 (contradictory current validation evidence). `KANASU_900147` established five permanent RED regression cases. After the production correction, `KANASU_900148` passed those five cases, five reviewer-authored adversarial cases, and 35 focused `m94q_` cases. `KANASU_900150` subsequently passed 134 touched-module tests, 338 M9.4 tests across 21 modules, and 1,462 full Python tests, without failures, errors or skips. The saved validation summary has SHA-256 `6c5fd30e8384993ba81960f6c9b36d6431e403f30411ae62c7cfa4ba7426a04c`. These are local validation results, not independent acceptance. The latest independent pre-publication verdict remains `M94Q_AUDIT_GATE=BLOCKED` for the earlier candidate; the revised candidate still requires a fresh independent PASS. It remains unstaged and unpublished, and substantive M9.5 implementation remains blocked. Protected stage, commit and push operations require separate human approval.
 
@@ -909,3 +909,42 @@ corrected candidate. If that passes, stage, commit and push still require
 separate human approvals, followed by independent review of the exact published
 M9.4 HEAD. Only that published-head PASS opens fresh M9.5 design; M9.5
 implementation remains blocked pending separate acceptance of that fresh design.
+
+
+## M9.4q exact published-HEAD postpublication audit — 2026-10-21
+
+Published, exact audited commit: `9f41a54c0c31985e4d33069401279586782c1858`
+(parent `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; tree
+`561fdeefeea9fc64e56c5d2612da5537444cf0d3`).
+
+Independent result: `M94Q_INDEPENDENT_VERDICT=FAIL`, `M95_GATE=BLOCKED`.
+The published commit passed 1673 full Python tests and 549 M9.4 tests
+across 23 files. Fresh reviewer-authored probes produced 14 passes,
+9 failures against four accepted-scope integrity defects:
+
+- **IND-01 (HIGH):** resolver and EXECUTED/REUSED aggregation can validate
+  a different Trial snapshot than the consumed data.
+- **IND-02 (HIGH):** persisted Trial identity corruption after plan
+  resolution but during retrieval can precede a successful RunAttempt,
+  exact reuse, or financial execution unless authority is transactionally checked.
+- **IND-03 (MEDIUM):** Start may commit initial queue jobs for a corrupt
+  Trial and then return an HTTP error when subsequent progress read fails.
+- **IND-04 (MEDIUM):** canonical Trial-detail reads/HTTP route can emit a
+  contradictory immutable registered identity.
+- **DOC-01 (LOW):** published correction incorrectly described as
+  unpublished in active status summaries.
+
+The independent reviewer could not independently identify the reported
+90-preservation-control selection; it did not refute the passing full-suite run.
+Historical earlier local/unpublished checkpoint narratives elsewhere in this
+document remain history and are not active publication status.
+
+Implementation candidate: ChatGPT-authored unreferenced Git tree
+`a4ac76fdce0d0c3a2f154b7ff94b971aaff88a81` (three corrected
+production paths and two regression-test paths), based on the published
+source tree. This is **NOT** a commit, branch update, run test or independent
+acceptance. Later tree revisions require a new exact candidate identity.
+Do not claim corrective PASS or M9.4q closure until real RED/GREEN, focused,
+preservation and full-suite evidence, a new independent exact-candidate PASS,
+and a verified exact published-HEAD PASS. No M9.5 work is authorized by
+these preliminary corrections.

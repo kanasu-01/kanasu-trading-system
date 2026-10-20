@@ -11,14 +11,14 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest M9.4 corrective validation | 2026-10-20 local M9.4q post-REVIEW-01 corrected candidate. A fresh independent pre-publication review of the exact post-FRESH-04 candidate found accepted-scope blocker `M94Q-REVIEW-01`: persisted identity-bearing Trial fields could be changed while the surviving `trial_id` set/cardinality still matched the StudyRevision population proof. Because `trial_id` is content-addressed from the registered Trial identity, authoritative reads must also prove that each persisted row still reproduces its own immutable `trial_id`. The local correction preserves the existing StudyRevision population-proof format, validates persisted Trial self-identity at authoritative registered-population reads, and makes registered execution-plan resolution cross that integrity boundary before downstream execution input, retrieval, RunAttempt or financial execution. REVIEW-01 permanent regression is 4/4; broad validation is 549 repository-wide M9.4 tests across 23 files, 90 preservation controls and 1673 complete Python tests. Candidate remains unstaged/uncommitted/unpublished and M94Q_AUDIT_GATE=BLOCKED pending fresh independent review of this corrected candidate and later independent exact-published-HEAD PASS |
+| Latest M9.4 corrective validation | Published REVIEW-01 correction at `9f41a54c0c31985e4d33069401279586782c1858` (tree `561fdeefeea9fc64e56c5d2612da5537444cf0d3`). Fresh independent postpublication audit verified 1673/1673 complete tests and 549 M9.4 tests in 23 modules, but returned `M94Q_INDEPENDENT_VERDICT=FAIL` on IND-01/02/03/04 plus DOC-01. The audit did not independently identify the reported 90-control selector. ChatGPT prepared an uncommitted, unreviewed corrective Git tree; no passing new test evidence exists yet. |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.4q REVIEW-01 immutable Trial self-identity correction locally GREEN after the fresh post-FRESH-04 independent audit; current authority 23 files / 549 M9.4 / 90 preservation / 1673 complete Python; fresh independent corrected-candidate review required before any publication request |
-| Lifecycle | M0-M8 complete at accepted scope; M9.1 design complete; M9.2/M9.3 closed; M9.4q remains unstaged/unpublished; M94Q_AUDIT_GATE=BLOCKED; after exact-published-M9.4 independent PASS the next authority is fresh M9.5 design only; M9.5 implementation is not authorized |
+| Step | M9.4q postpublication integrity correction in progress. Reviewer blockers: IND-01 coherent registered snapshot, IND-02 execution/reuse/terminal authority, IND-03 atomic Start, IND-04 Trial-detail integrity; documentation drift DOC-01. |
+| Lifecycle | M0-M8 closed at accepted scope; M9.2/M9.3 closed; published M9.4q REVIEW-01 SHA `9f41a54c` independently FAIL; correction candidate is an uncommitted Git tree, not a reviewed or published correction; `M94Q_AUDIT_GATE=BLOCKED`; M9.5 design and implementation not authorized. |
 | Gate to M9.5 | Exact published M9.4 independent PASS authorizes fresh M9.5 design only; M9.5 implementation requires a separately accepted fresh M9.5 design |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
@@ -722,3 +722,42 @@ corrected candidate. Stage, commit and push remain separate human approvals.
 After publication, the exact published M9.4 HEAD must independently PASS before
 M9.4 closes. Only that published-head PASS authorizes fresh M9.5 design; M9.5
 implementation remains blocked until a fresh M9.5 design is separately accepted.
+
+
+## M9.4q exact published-HEAD postpublication audit — 2026-10-21
+
+Published, exact audited commit: `9f41a54c0c31985e4d33069401279586782c1858`
+(parent `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; tree
+`561fdeefeea9fc64e56c5d2612da5537444cf0d3`).
+
+Independent result: `M94Q_INDEPENDENT_VERDICT=FAIL`, `M95_GATE=BLOCKED`.
+The published commit passed 1673 full Python tests and 549 M9.4 tests
+across 23 files. Fresh reviewer-authored probes produced 14 passes,
+9 failures against four accepted-scope integrity defects:
+
+- **IND-01 (HIGH):** resolver and EXECUTED/REUSED aggregation can validate
+  a different Trial snapshot than the consumed data.
+- **IND-02 (HIGH):** persisted Trial identity corruption after plan
+  resolution but during retrieval can precede a successful RunAttempt,
+  exact reuse, or financial execution unless authority is transactionally checked.
+- **IND-03 (MEDIUM):** Start may commit initial queue jobs for a corrupt
+  Trial and then return an HTTP error when subsequent progress read fails.
+- **IND-04 (MEDIUM):** canonical Trial-detail reads/HTTP route can emit a
+  contradictory immutable registered identity.
+- **DOC-01 (LOW):** published correction incorrectly described as
+  unpublished in active status summaries.
+
+The independent reviewer could not independently identify the reported
+90-preservation-control selection; it did not refute the passing full-suite run.
+Historical earlier local/unpublished checkpoint narratives elsewhere in this
+document remain history and are not active publication status.
+
+Implementation candidate: ChatGPT-authored unreferenced Git tree
+`a4ac76fdce0d0c3a2f154b7ff94b971aaff88a81` (three corrected
+production paths and two regression-test paths), based on the published
+source tree. This is **NOT** a commit, branch update, run test or independent
+acceptance. Later tree revisions require a new exact candidate identity.
+Do not claim corrective PASS or M9.4q closure until real RED/GREEN, focused,
+preservation and full-suite evidence, a new independent exact-candidate PASS,
+and a verified exact published-HEAD PASS. No M9.5 work is authorized by
+these preliminary corrections.

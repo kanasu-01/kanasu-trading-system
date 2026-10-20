@@ -834,41 +834,31 @@ class StudyAggregationService:
                 "StudyRevision does not exist"
             )
 
-        trials = tuple(
-            self.catalog_store
-            .list_trials_for_revision(
-                study_revision_id
-            )
-        )
-
         if isinstance(revision, StudyRevision):
-            validator = getattr(
+            # Consume exactly the validated SQLite snapshot.
+            reader = getattr(
                 self.catalog_store,
-                "validate_study_revision_population",
+                "list_registered_trials_for_revision",
                 None,
             )
-
-            if not callable(validator):
+            if not callable(reader):
                 raise StudyAggregationError(
-                    "canonical StudyRevision aggregation "
-                    "requires registered Trial "
-                    "population-proof validation"
+                    "canonical StudyRevision aggregation requires "
+                    "an authoritative registered Trial reader"
                 )
-
             try:
-                validator(
-                    study_revision_id,
-                    tuple(
-                        trial.trial_id
-                        for trial in trials
-                    ),
-                )
+                trials = tuple(reader(study_revision_id))
             except Exception as error:
                 raise StudyAggregationError(
-                    "StudyRevision registered Trial "
-                    "population proof does not match "
-                    "persisted Trial denominator"
+                    "StudyRevision registered Trial population "
+                    "is not authoritative"
                 ) from error
+        else:
+            trials = tuple(
+                self.catalog_store.list_trials_for_revision(
+                    study_revision_id
+                )
+            )
 
         counts = {
             disposition: 0

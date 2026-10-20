@@ -6114,3 +6114,105 @@ def test_m94q_review_01_aggregation_rejects_result_bearing_trial_identity_corrup
         aggregation.aggregate_revision(
             trial.study_revision_id
         )
+
+# M9.4q IND-02: mutation after validated plan resolution.
+# Each probe uses the existing real registered Trial and executor fixtures.
+
+
+def test_m94q_ind02_retrieval_corruption_blocks_execution_authority(tmp_path):
+    catalog, trial, claimed, executor, retrieval, execution_calls = _environment(
+        tmp_path,
+        execution_input_resolver=lambda _plan: _inputs(),
+    )
+    assert claimed is not None
+    retrieval.on_retrieve = lambda: _m94q_review01_corrupt_trial_instrument(
+        catalog, trial,
+    )
+
+    with pytest.raises(ValueError):
+        executor.execute(claimed)
+
+    assert len(retrieval.calls) == 1
+    assert execution_calls == []
+    assert _attempt_count(catalog) == 0
+    job = catalog.load_research_job(claimed.job_id)
+    assert job is not None
+    assert job.state is ResearchJobState.RUNNING
+    assert job.attempt_id is None
+    assert job.reused_attempt_id is None
+    assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.PENDING
+
+
+def test_m94q_ind02_retrieval_corruption_blocks_exact_reuse_authority(tmp_path):
+    catalog, trial, claimed, executor, retrieval, execution_calls = _environment(
+        tmp_path,
+        execution_input_resolver=lambda _plan: _inputs(),
+        evidence_reuse_policy=EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED,
+    )
+    assert claimed is not None
+    inputs = _inputs()
+    prior = executor.successor_coordinator.execute(
+        strategy=inputs.strategy,
+        config=inputs.config,
+        runtime_context=inputs.runtime_context,
+        dataset_context=inputs.dataset_context,
+        instrument_id=INSTRUMENT_ID,
+        provider=inputs.provider,
+        price_adjustment_basis=inputs.price_adjustment_basis,
+    )
+    assert prior.attempt_id is not None
+    assert _attempt_count(catalog) == 1
+    assert len(execution_calls) == 1
+
+    retrieval.on_retrieve = lambda: _m94q_review01_corrupt_trial_instrument(
+        catalog, trial,
+    )
+    with pytest.raises(ValueError):
+        executor.execute(claimed)
+
+    assert len(retrieval.calls) == 2
+    assert len(execution_calls) == 1
+    assert _attempt_count(catalog) == 1
+    job = catalog.load_research_job(claimed.job_id)
+    assert job is not None
+    assert job.state is ResearchJobState.RUNNING
+    assert job.attempt_id is None
+    assert job.reused_attempt_id is None
+    assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.PENDING
+
+
+def test_m94q_ind02_mutation_after_execution_blocks_successful_terminalization(
+    tmp_path,
+):
+    catalog, trial, claimed, executor, retrieval, _ = _environment(
+        tmp_path,
+        execution_input_resolver=lambda _plan: _inputs(),
+    )
+    assert claimed is not None
+    executed = []
+
+    def corrupt_after_real_backtest(**kwargs):
+        result = execute_backtest_candles(**kwargs)
+        executed.append(True)
+        _m94q_review01_corrupt_trial_instrument(catalog, trial)
+        return result
+
+    executor.successor_coordinator.orchestrator._execute_candles = (
+        corrupt_after_real_backtest
+    )
+
+    with pytest.raises((ValueError, RuntimeError, AuthoritativeResearchStateError)):
+        executor.execute(claimed)
+
+    assert executed == [True]
+    assert len(retrieval.calls) == 1
+    assert _attempt_count(catalog) == 1
+    job = catalog.load_research_job(claimed.job_id)
+    assert job is not None
+    assert job.state is ResearchJobState.RUNNING
+    assert job.attempt_id is not None
+    assert job.reused_attempt_id is None
+    attempt = catalog.load_run_attempt(job.attempt_id)
+    assert attempt is not None
+    assert attempt.state is RunAttemptState.RUNNING
+    assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.PENDING
