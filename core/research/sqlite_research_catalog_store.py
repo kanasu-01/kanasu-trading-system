@@ -1763,6 +1763,77 @@ class SQLiteResearchCatalogStore:
             trial.parameter_configuration_fingerprint,
         )
 
+    @staticmethod
+    def _validate_persisted_trial_identity_row(
+        row: tuple,
+    ) -> None:
+        """
+        Verify that persisted immutable Trial fields still reproduce
+        the content-addressed trial_id minted at registration.
+
+        The StudyRevision population proof freezes the finite Trial
+        denominator. The trial_id independently freezes the immutable
+        registered identity of each Trial.
+        """
+
+        if len(row) != 9:
+            raise ValueError(
+                "persisted Trial identity row has unexpected shape"
+            )
+
+        (
+            trial_id,
+            identity_schema,
+            study_revision_id,
+            instrument_id,
+            membership_episode_start,
+            membership_episode_end,
+            membership_evidence_fingerprint,
+            membership_evidence_artifact_id,
+            parameter_configuration_fingerprint,
+        ) = row
+
+        if (
+            membership_evidence_artifact_id
+            != membership_evidence_fingerprint
+        ):
+            raise ValueError(
+                "persisted Trial membership evidence artifact "
+                "does not match its canonical evidence fingerprint"
+            )
+
+        expected_trial_id = canonical_fingerprint(
+            {
+                "study_revision_id": (
+                    study_revision_id
+                ),
+                "instrument_id": (
+                    instrument_id
+                ),
+                "membership_episode": {
+                    "start": datetime.fromisoformat(
+                        membership_episode_start
+                    ),
+                    "end": datetime.fromisoformat(
+                        membership_episode_end
+                    ),
+                },
+                "membership_evidence_fingerprint": (
+                    membership_evidence_fingerprint
+                ),
+                "parameter_configuration_fingerprint": (
+                    parameter_configuration_fingerprint
+                ),
+            },
+            schema=identity_schema,
+        )
+
+        if trial_id != expected_trial_id:
+            raise ValueError(
+                "persisted Trial immutable identity does not "
+                "reproduce its registered trial_id"
+            )
+
     def save_registered_revision_population(
         self,
         *,
@@ -2902,6 +2973,234 @@ class SQLiteResearchCatalogStore:
             for row in rows
         )
 
+    def _validate_study_revision_population_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        study_revision_id: str,
+        trial_ids: tuple[str, ...],
+    ) -> None:
+        """
+        Verify one observed Trial population against its immutable proof
+        using the caller's SQLite snapshot.
+        """
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        if not isinstance(trial_ids, tuple):
+            raise TypeError(
+                "trial_ids must be a tuple"
+            )
+
+        if any(
+            not isinstance(trial_id, str)
+            or not trial_id
+            for trial_id in trial_ids
+        ):
+            raise ValueError(
+                "trial_ids must contain non-empty strings"
+            )
+
+        if len(set(trial_ids)) != len(trial_ids):
+            raise ValueError(
+                "trial_ids must contain unique identities"
+            )
+
+        identity_rows = connection.execute(
+            """
+            SELECT
+                trial_id,
+                identity_schema,
+                study_revision_id,
+                instrument_id,
+                membership_episode_start,
+                membership_episode_end,
+                membership_evidence_fingerprint,
+                membership_evidence_artifact_id,
+                parameter_configuration_fingerprint
+            FROM trials
+            WHERE study_revision_id = ?
+            ORDER BY trial_id
+            """,
+            (study_revision_id,),
+        ).fetchall()
+
+        persisted_trial_ids = tuple(
+            row[0]
+            for row in identity_rows
+        )
+
+        if (
+            tuple(sorted(trial_ids))
+            != tuple(sorted(persisted_trial_ids))
+        ):
+            raise ValueError(
+                "observed StudyRevision Trial denominator "
+                "does not match persisted Trial identities"
+            )
+
+        for identity_row in identity_rows:
+            try:
+                self._validate_persisted_trial_identity_row(
+                    tuple(identity_row)
+                )
+            except Exception as error:
+                raise ValueError(
+                    "StudyRevision registered Trial population "
+                    "proof does not match persisted immutable "
+                    "Trial identity"
+                ) from error
+
+        proof_row = connection.execute(
+            """
+            SELECT
+                trial_count,
+                population_fingerprint
+            FROM study_revision_population_registrations
+            WHERE study_revision_id = ?
+            """,
+            (study_revision_id,),
+        ).fetchone()
+
+        if proof_row is None:
+            raise ValueError(
+                "StudyRevision registered Trial population "
+                "proof does not exist"
+            )
+
+        actual_population_fingerprint = (
+            _registered_trial_population_fingerprint(
+                study_revision_id,
+                persisted_trial_ids,
+            )
+        )
+
+        if (
+            proof_row[0] != len(trial_ids)
+            or proof_row[1]
+            != actual_population_fingerprint
+        ):
+            raise ValueError(
+                "StudyRevision registered Trial population "
+                "proof does not match persisted Trial "
+                "denominator"
+            )
+
+    def validate_study_revision_population(
+        self,
+        study_revision_id: str,
+        trial_ids: tuple[str, ...],
+    ) -> None:
+        """
+        Verify the immutable registered Trial denominator.
+
+        This public validator preserves the existing caller contract.
+        Read models that require one coherent SQLite snapshot use the
+        connection-scoped helper directly.
+        """
+
+        with closing(self._connect()) as connection:
+            self._validate_study_revision_population_in_connection(
+                connection,
+                study_revision_id,
+                trial_ids,
+            )
+
+    def list_registered_trials_for_revision(
+        self,
+        study_revision_id: str,
+    ) -> tuple[Trial, ...]:
+        """
+        Read an authoritative registered Trial population atomically.
+
+        The Trial rows and immutable population proof are evaluated from
+        the same SQLite read snapshot. Generic/private Trial persistence
+        continues to use list_trials_for_revision().
+        """
+
+        if (
+            not isinstance(study_revision_id, str)
+            or not study_revision_id
+        ):
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+
+                revision_row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM study_revisions
+                    WHERE study_revision_id = ?
+                    """,
+                    (study_revision_id,),
+                ).fetchone()
+
+                if revision_row is None:
+                    raise ValueError(
+                        "StudyRevision does not exist"
+                    )
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        trial_id,
+                        identity_schema,
+                        study_revision_id,
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        membership_evidence_fingerprint,
+                        membership_evidence_artifact_id,
+                        parameter_configuration_fingerprint,
+                        registered_at,
+                        experiment_spec_id,
+                        disposition,
+                        disposition_at,
+                        reused_attempt_id,
+                        failure_classification,
+                        failure_message
+                    FROM trials
+                    WHERE study_revision_id = ?
+                    ORDER BY
+                        instrument_id,
+                        membership_episode_start,
+                        membership_episode_end,
+                        trial_id
+                    """,
+                    (study_revision_id,),
+                ).fetchall()
+
+                trials = tuple(
+                    self._trial_from_row(row)
+                    for row in rows
+                )
+
+                self._validate_study_revision_population_in_connection(
+                    connection,
+                    study_revision_id,
+                    tuple(
+                        trial.trial_id
+                        for trial in trials
+                    ),
+                )
+
+                connection.commit()
+
+            except Exception:
+                connection.rollback()
+                raise
+
+        return trials
+
     def start_study_revision_batch(
         self,
         study_revision_id: str,
@@ -3247,6 +3546,25 @@ class SQLiteResearchCatalogStore:
                     raise ValueError(
                         "StudyRevision does not exist"
                     )
+
+                trial_id_rows = connection.execute(
+                    """
+                    SELECT trial_id
+                    FROM trials
+                    WHERE study_revision_id = ?
+                    ORDER BY trial_id
+                    """,
+                    (study_revision_id,),
+                ).fetchall()
+
+                self._validate_study_revision_population_in_connection(
+                    connection,
+                    study_revision_id,
+                    tuple(
+                        row[0]
+                        for row in trial_id_rows
+                    ),
+                )
 
                 trial_counts = dict(
                     connection.execute(
@@ -4109,6 +4427,7 @@ class SQLiteResearchCatalogStore:
                         j.trial_id,
                         j.state,
                         j.claimed_at,
+                        j.cancel_requested_at,
                         j.terminal_at,
                         j.attempt_id,
                         j.completion_kind,
@@ -4136,6 +4455,7 @@ class SQLiteResearchCatalogStore:
                     trial_id,
                     job_state,
                     claimed_at_value,
+                    cancel_requested_at_value,
                     job_terminal_at,
                     attempt_id,
                     completion_kind,
@@ -4147,6 +4467,20 @@ class SQLiteResearchCatalogStore:
                     current_trial_disposition,
                     _trial_spec_id,
                 ) = row
+
+                cancellation_requested_at = (
+                    datetime.fromisoformat(
+                        cancel_requested_at_value
+                    )
+                    if cancel_requested_at_value is not None
+                    else None
+                )
+
+                if (
+                    cancellation_requested_at is not None
+                    and terminal_at < cancellation_requested_at
+                ):
+                    terminal_at = cancellation_requested_at
 
                 if (
                     job_state
@@ -4196,6 +4530,55 @@ class SQLiteResearchCatalogStore:
                         "pre-attempt failure"
                     )
 
+                terminal_job_state = ResearchJobState.FAILED.value
+                terminal_trial_disposition = trial_disposition.value
+                terminal_failure_classification = (
+                    failure_classification
+                )
+                terminal_failure_message = failure_message
+                terminal_event_classification = (
+                    failure_classification
+                )
+                terminal_event_message = failure_message
+
+                if cancellation_requested_at is not None:
+                    # BEGIN IMMEDIATE serializes this decision
+                    # with durable cancellation requests. A
+                    # pre-attempt failure cannot supersede one.
+                    other_active_count = connection.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM research_jobs
+                        WHERE
+                            trial_id = ?
+                            AND job_id <> ?
+                            AND state IN ('QUEUED', 'RUNNING')
+                        """,
+                        (trial_id, job_id),
+                    ).fetchone()[0]
+
+                    if other_active_count != 0:
+                        raise RuntimeError(
+                            "running cancellation acknowledgement "
+                            "found another active ResearchJob"
+                        )
+
+                    terminal_job_state = (
+                        ResearchJobState.CANCELLED.value
+                    )
+                    terminal_trial_disposition = (
+                        TrialDisposition.CANCELLED.value
+                    )
+                    terminal_failure_classification = None
+                    terminal_failure_message = None
+                    terminal_event_classification = (
+                        "running_cancellation_acknowledged"
+                    )
+                    terminal_event_message = (
+                        "ResearchJob cancellation acknowledged "
+                        "at a cooperative pre-execution checkpoint"
+                    )
+
                 cursor = connection.execute(
                     """
                     UPDATE research_jobs
@@ -4217,12 +4600,12 @@ class SQLiteResearchCatalogStore:
                         AND failure_message IS NULL
                     """,
                     (
-                        ResearchJobState.FAILED.value,
+                        terminal_job_state,
                         terminal_at.isoformat(
                             timespec="microseconds"
                         ),
-                        failure_classification,
-                        failure_message,
+                        terminal_failure_classification,
+                        terminal_failure_message,
                         job_id,
                         ResearchJobState.RUNNING.value,
                     ),
@@ -4247,12 +4630,12 @@ class SQLiteResearchCatalogStore:
                         AND disposition = ?
                     """,
                     (
-                        trial_disposition.value,
+                        terminal_trial_disposition,
                         terminal_at.isoformat(
                             timespec="microseconds"
                         ),
-                        failure_classification,
-                        failure_message,
+                        terminal_failure_classification,
+                        terminal_failure_message,
                         trial_id,
                         TrialDisposition.PENDING.value,
                     ),
@@ -4282,7 +4665,7 @@ class SQLiteResearchCatalogStore:
                         "trial_id": trial_id,
                         "sequence_number": sequence_number,
                         "new_disposition": (
-                            trial_disposition.value
+                            terminal_trial_disposition
                         ),
                     },
                     schema=(
@@ -4309,13 +4692,13 @@ class SQLiteResearchCatalogStore:
                         trial_id,
                         sequence_number,
                         TrialDisposition.PENDING.value,
-                        trial_disposition.value,
+                        terminal_trial_disposition,
                         terminal_at.isoformat(
                             timespec="microseconds"
                         ),
                         job_id,
-                        failure_classification,
-                        failure_message,
+                        terminal_event_classification,
+                        terminal_event_message,
                     ),
                 )
 
@@ -4465,6 +4848,7 @@ class SQLiteResearchCatalogStore:
                         j.trial_id,
                         j.state,
                         j.claimed_at,
+                        j.cancel_requested_at,
                         j.terminal_at,
                         j.attempt_id,
                         j.completion_kind,
@@ -4505,6 +4889,7 @@ class SQLiteResearchCatalogStore:
                     trial_id,
                     job_state,
                     claimed_at_value,
+                    cancel_requested_at_value,
                     job_terminal_at,
                     linked_attempt_id,
                     completion_kind,
@@ -4595,6 +4980,24 @@ class SQLiteResearchCatalogStore:
                             "terminal_at cannot precede "
                             "ResearchJob claim"
                         )
+
+                # A cooperative cancellation request may be recorded
+                # while non-interruptible financial execution continues.
+                # Preserve the computed outcome, but never persist a
+                # completion earlier than the durable request.
+                # The SELECT and all terminal writes share BEGIN IMMEDIATE.
+                if cancel_requested_at_value is not None:
+                    cancellation_floor = datetime.fromisoformat(
+                        cancel_requested_at_value
+                    )
+                    try:
+                        if terminal_at < cancellation_floor:
+                            terminal_at = cancellation_floor
+                    except TypeError as exc:
+                        raise ValueError(
+                            "terminal_at must be comparable with "
+                            "the durable cancellation request"
+                        ) from exc
 
                 if (
                     current_runtime_session_id is not None

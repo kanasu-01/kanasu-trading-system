@@ -471,3 +471,164 @@ def test_invalid_entry_rejection_stays_flat_through_result_boundary():
     assert stable_backtest_result_fingerprint(
         result
     ).startswith("sha256:")
+
+
+
+
+def test_m94q_real_m4_open_holding_survives_canonical_result_boundary():
+    from core.research.reproducibility import (
+        decode_stable_backtest_result_bytes,
+        stable_backtest_result_bytes,
+    )
+
+    strategy = IntegrationStrategy(
+        {1: SignalType.BUY},
+        rejection_midpoint=90.2,
+        scenario="m94q-open-holding",
+    )
+    runtime = RuntimeContext(
+        execution_config=ExecutionConfig(
+            slippage_pct=0.0,
+            slippage_enabled=False,
+            brokerage_enabled=False,
+        ),
+        risk_per_trade_pct=1.0,
+    )
+    engine = BacktestEngine(
+        strategy=strategy,
+        initial_capital=100_000.0,
+        runtime_context=runtime,
+        dataset_context=CONTEXT,
+    )
+
+    result = engine.run(
+        [
+            candle(
+                0,
+                open_price=100.0,
+                high=101.0,
+                low=99.0,
+                close=100.0,
+            ),
+            candle(
+                1,
+                open_price=100.0,
+                high=111.0,
+                low=99.0,
+                close=110.0,
+            ),
+        ]
+    )
+
+    position = engine.execution_engine.get_runtime_position(
+        CONTEXT.symbol
+    )
+
+    assert position is not None
+    assert result.trades == []
+
+    terminal = result.bar_records[-1]
+    assert terminal.position_size > 0
+    assert int(terminal.position_size) == terminal.position_size
+    assert terminal.execution_event == "BUY"
+
+    assert all(
+        int(record.position_size) == record.position_size
+        for record in result.bar_records
+    )
+
+    decoded = decode_stable_backtest_result_bytes(
+        stable_backtest_result_bytes(result)
+    )
+
+    decoded_terminal = decoded["bar_records"][-1]
+    assert decoded_terminal["position_size"] == terminal.position_size
+    assert (
+        int(decoded_terminal["position_size"])
+        == decoded_terminal["position_size"]
+    )
+
+
+def test_m94q_real_m4_same_bar_protective_exit_survives_canonical_result_boundary():
+    from core.research.reproducibility import (
+        decode_stable_backtest_result_bytes,
+        stable_backtest_result_bytes,
+    )
+
+    strategy = IntegrationStrategy(
+        {1: SignalType.BUY},
+        rejection_midpoint=None,
+        scenario="m94q-same-bar-protective-exit",
+    )
+    runtime = RuntimeContext(
+        execution_config=ExecutionConfig(
+            slippage_pct=0.0,
+            slippage_enabled=False,
+            brokerage_enabled=False,
+        ),
+        risk_per_trade_pct=1.0,
+    )
+    engine = BacktestEngine(
+        strategy=strategy,
+        initial_capital=100_000.0,
+        runtime_context=runtime,
+        dataset_context=CONTEXT,
+    )
+
+    result = engine.run(
+        [
+            candle(
+                0,
+                open_price=100.0,
+                high=101.0,
+                low=99.0,
+                close=100.0,
+            ),
+            candle(
+                1,
+                open_price=100.0,
+                high=102.0,
+                low=97.0,
+                close=99.0,
+            ),
+        ]
+    )
+
+    assert [
+        event.event_type
+        for event in strategy.feedback
+    ] == [
+        ExecutionFeedbackType.ENTRY_ACCEPTED,
+        ExecutionFeedbackType.PROTECTIVE_EXIT,
+    ]
+
+    assert (
+        engine.execution_engine.get_runtime_position(
+            CONTEXT.symbol
+        )
+        is None
+    )
+
+    assert len(result.trades) == 1
+    assert result.trades[0].exit_reason == "STOP_LOSS"
+
+    terminal = result.bar_records[-1]
+    assert terminal.position_size == 0
+    assert terminal.execution_event == "STOP_EXIT"
+
+    assert all(
+        int(record.position_size) == record.position_size
+        for record in result.bar_records
+    )
+
+    decoded = decode_stable_backtest_result_bytes(
+        stable_backtest_result_bytes(result)
+    )
+
+    assert decoded["bar_records"][-1]["position_size"] == 0
+    assert decoded["bar_records"][-1]["execution_event"] == "STOP_EXIT"
+
+    assert all(
+        int(record["position_size"]) == record["position_size"]
+        for record in decoded["bar_records"]
+    )

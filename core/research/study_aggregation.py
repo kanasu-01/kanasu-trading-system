@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from fractions import Fraction
 from math import fsum, isfinite
 from statistics import median
 
@@ -8,12 +9,19 @@ from core.backtest.performance_metrics import (
 from core.research.models.registered_study import (
     ResearchJobCompletionKind,
     ResearchJobState,
+    StudyRevision,
     Trial,
     TrialDisposition,
 )
 from core.research.models.research_catalog import (
     ResearchArtifactKind,
     RunAttemptState,
+)
+from core.research.models.research_evidence import (
+    ResearchEvidenceStatus,
+)
+from core.research.research_artifact_store import (
+    research_artifact_reference,
 )
 from core.research.reproducibility import (
     BACKTEST_RESULT_SCHEMA,
@@ -84,10 +92,50 @@ class StudyMetricDistribution:
             for value in values
         )
 
+        # Keep the accurate fast path for ordinary inputs.
+        # On intermediate overflow, preserve the exact
+        # binary-float sum before dividing and rounding once.
+        # Scaling individual inputs can lose subnormal
+        # remainders or overflow a representable average.
+        try:
+            try:
+                mean_value = fsum(values) / count
+            except OverflowError:
+                exact_total = sum(
+                    (
+                        Fraction.from_float(value)
+                        for value in values
+                    ),
+                    start=Fraction(0),
+                )
+                mean_value = float(exact_total / count)
+
+            median_value = float(median(values))
+            if not isfinite(median_value) and count % 2 == 0:
+                ordered = sorted(values)
+                lower = ordered[count // 2 - 1]
+                upper = ordered[count // 2]
+                median_value = fsum(
+                    (lower / 2.0, upper / 2.0)
+                )
+        except (OverflowError, ValueError) as exc:
+            raise StudyAggregationError(
+                "aggregate metric statistics cannot "
+                "be represented as finite values"
+            ) from exc
+
+        if (
+            not isfinite(mean_value)
+            or not isfinite(median_value)
+        ):
+            raise StudyAggregationError(
+                "aggregate metric statistics must be finite"
+            )
+
         return cls(
             count=count,
-            mean=fsum(values) / count,
-            median=float(median(values)),
+            mean=mean_value,
+            median=median_value,
             minimum=min(values),
             maximum=max(values),
             positive_count=positive_count,
@@ -135,9 +183,200 @@ class StudyAggregationService:
         *,
         catalog_store,
         artifact_store,
+        evidence_store=None,
     ):
         self.catalog_store = catalog_store
         self.artifact_store = artifact_store
+        self.evidence_store = evidence_store
+
+    def _authoritative_evidence_store(self):
+        database_path = getattr(
+            self.catalog_store,
+            "database_path",
+            None,
+        )
+
+        if database_path is not None:
+            try:
+                from core.research.sqlite_research_evidence_store import (
+                    SQLiteResearchEvidenceStore,
+                )
+
+                # A canonical persisted Trial derives evidence authority
+                # exclusively from the catalog's own research database.
+                # An injected foreign store must never override it.
+                return SQLiteResearchEvidenceStore(
+                    database_path
+                )
+            except Exception as error:
+                raise StudyAggregationError(
+                    "authoritative ResearchEvidence store "
+                    "could not be opened from catalog database"
+                ) from error
+
+        # Lightweight/noncanonical projection callers have no durable
+        # catalog database. Preserve their explicit evidence dependency.
+        if self.evidence_store is not None:
+            return self.evidence_store
+
+        raise StudyAggregationError(
+            "canonical result-bearing Trial requires "
+            "authoritative ResearchEvidence store"
+        )
+
+    def _validate_selected_result_evidence(
+        self,
+        *,
+        attempt,
+        result_artifact_id: str,
+    ) -> None:
+        evidence_id = getattr(
+            attempt,
+            "evidence_id",
+            None,
+        )
+
+        experiment_spec_id = getattr(
+            attempt,
+            "experiment_spec_id",
+            None,
+        )
+
+        if (
+            evidence_id is None
+            or experiment_spec_id is None
+        ):
+            raise StudyAggregationError(
+                "result-bearing RunAttempt requires "
+                "authoritative ResearchEvidence lineage"
+            )
+
+        spec = (
+            self.catalog_store
+            .load_experiment_spec(
+                experiment_spec_id
+            )
+        )
+
+        if spec is None:
+            raise StudyAggregationError(
+                "result-bearing RunAttempt "
+                "ExperimentSpec does not exist"
+            )
+
+        result_artifact = (
+            self.catalog_store
+            .load_artifact(
+                result_artifact_id
+            )
+        )
+
+        manifest_artifact = (
+            self.catalog_store
+            .load_artifact(
+                spec.manifest_artifact_id
+            )
+        )
+
+        from core.research.reproducibility import (
+            BACKTEST_RUN_MANIFEST_SCHEMA,
+        )
+
+        if (
+            result_artifact is None
+            or result_artifact.artifact_kind
+            is not ResearchArtifactKind.BACKTEST_RESULT
+            or result_artifact.schema_id
+            != BACKTEST_RESULT_SCHEMA
+        ):
+            raise StudyAggregationError(
+                "ResearchEvidence result authority "
+                "requires canonical Backtest result artifact"
+            )
+
+        if (
+            manifest_artifact is None
+            or manifest_artifact.artifact_kind
+            is not ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+            or manifest_artifact.schema_id
+            != BACKTEST_RUN_MANIFEST_SCHEMA
+        ):
+            raise StudyAggregationError(
+                "ResearchEvidence result authority "
+                "requires canonical Backtest run manifest"
+            )
+
+        try:
+            evidence = (
+                self._authoritative_evidence_store()
+                .load(
+                    evidence_id
+                )
+            )
+        except StudyAggregationError:
+            raise
+        except Exception as error:
+            raise StudyAggregationError(
+                "authoritative ResearchEvidence "
+                "could not be loaded"
+            ) from error
+
+        if (
+            evidence is None
+            or evidence.evidence_id
+            != evidence_id
+            or evidence.status
+            is not ResearchEvidenceStatus.ACCEPTED
+        ):
+            raise StudyAggregationError(
+                "selected result requires actual "
+                "ACCEPTED ResearchEvidence"
+            )
+
+        if (
+            evidence.dataset_fingerprint
+            != spec.dataset_fingerprint
+            or evidence.configuration_fingerprint
+            != spec.configuration_fingerprint
+            or evidence.repository_revision
+            != spec.repository_revision
+        ):
+            raise StudyAggregationError(
+                "selected result ResearchEvidence "
+                "does not match ExperimentSpec identity"
+            )
+
+        if (
+            evidence.result_fingerprint
+            != result_artifact.artifact_id
+        ):
+            raise StudyAggregationError(
+                "selected result artifact does not match "
+                "accepted ResearchEvidence result fingerprint"
+            )
+
+        manifest_reference = (
+            research_artifact_reference(
+                manifest_artifact.artifact_id
+            )
+        )
+
+        result_reference = (
+            research_artifact_reference(
+                result_artifact.artifact_id
+            )
+        )
+
+        if (
+            manifest_reference
+            not in evidence.artifact_references
+            or result_reference
+            not in evidence.artifact_references
+        ):
+            raise StudyAggregationError(
+                "selected result requires accepted "
+                "ResearchEvidence manifest/result references"
+            )
 
     @staticmethod
     def _result_bearing_disposition(
@@ -233,6 +472,25 @@ class StudyAggregationService:
                     "requires successful result-bearing RunAttempt"
                 )
 
+            if (
+                isinstance(trial, Trial)
+                and attempt.experiment_spec_id
+                != trial.experiment_spec_id
+            ):
+                raise StudyAggregationError(
+                    "EXECUTED result-bearing Trial "
+                    "RunAttempt ExperimentSpec lineage "
+                    "does not match Trial binding"
+                )
+
+            if isinstance(trial, Trial):
+                self._validate_selected_result_evidence(
+                    attempt=attempt,
+                    result_artifact_id=(
+                        attempt.result_artifact_id
+                    ),
+                )
+
             return attempt.result_artifact_id
 
         if (
@@ -257,12 +515,35 @@ class StudyAggregationService:
             source_attempt is None
             or source_attempt.state
             is not RunAttemptState.SUCCEEDED
+            or source_attempt.evidence_id is None
+            or job.reused_evidence_id
+            != source_attempt.evidence_id
             or source_attempt.result_artifact_id
             != job.reused_result_artifact_id
         ):
             raise StudyAggregationError(
                 "REUSED result-bearing Trial "
-                "source attempt does not match reused result"
+                "source attempt evidence/result lineage "
+                "does not match reused sources"
+            )
+
+        if (
+            isinstance(trial, Trial)
+            and source_attempt.experiment_spec_id
+            != trial.experiment_spec_id
+        ):
+            raise StudyAggregationError(
+                "REUSED result-bearing Trial "
+                "source RunAttempt ExperimentSpec lineage "
+                "does not match Trial binding"
+            )
+
+        if isinstance(trial, Trial):
+            self._validate_selected_result_evidence(
+                attempt=source_attempt,
+                result_artifact_id=(
+                    job.reused_result_artifact_id
+                ),
             )
 
         return job.reused_result_artifact_id
@@ -302,6 +583,90 @@ class StudyAggregationService:
             raise StudyAggregationError(
                 "canonical Backtest result artifact "
                 "could not be verified and decoded"
+            ) from error
+
+    def _validate_result_manifest_capital(
+        self,
+        trial: Trial,
+        payload: dict,
+    ) -> None:
+        from core.research.reproducibility import (
+            BACKTEST_RUN_MANIFEST_SCHEMA,
+            decode_canonical_bytes,
+            validate_backtest_result_manifest_capital_binding,
+        )
+
+        # Durable catalog values are canonical Trial objects and
+        # carry immutable ExperimentSpec lineage. Lightweight
+        # aggregation projections without that durable model
+        # cannot prove or contradict cross-artifact capital
+        # authority, so retain their historical aggregation
+        # semantics. Canonical Trials remain fail-closed below.
+        if not isinstance(trial, Trial):
+            return
+
+        if trial.experiment_spec_id is None:
+            raise StudyAggregationError(
+                "result-bearing Trial requires "
+                "authoritative ExperimentSpec lineage"
+            )
+
+        spec = self.catalog_store.load_experiment_spec(
+            trial.experiment_spec_id
+        )
+
+        if spec is None:
+            raise StudyAggregationError(
+                "result-bearing Trial ExperimentSpec "
+                "does not exist"
+            )
+
+        manifest_artifact = (
+            self.catalog_store.load_artifact(
+                spec.manifest_artifact_id
+            )
+        )
+
+        if (
+            manifest_artifact is None
+            or manifest_artifact.artifact_kind
+            is not ResearchArtifactKind.BACKTEST_RUN_MANIFEST
+            or manifest_artifact.schema_id
+            != BACKTEST_RUN_MANIFEST_SCHEMA
+        ):
+            raise StudyAggregationError(
+                "result-bearing Trial requires canonical "
+                "Backtest run manifest artifact"
+            )
+
+        try:
+            raw_manifest = (
+                self.artifact_store.load_bytes(
+                    manifest_artifact.artifact_id
+                )
+            )
+
+            if (
+                len(raw_manifest)
+                != manifest_artifact.byte_count
+            ):
+                raise ValueError(
+                    "manifest byte count mismatch"
+                )
+
+            manifest = decode_canonical_bytes(
+                raw_manifest,
+                schema=BACKTEST_RUN_MANIFEST_SCHEMA,
+            )
+
+            validate_backtest_result_manifest_capital_binding(
+                payload,
+                manifest,
+            )
+        except Exception as error:
+            raise StudyAggregationError(
+                "Backtest result does not match "
+                "authoritative run manifest capital"
             ) from error
 
     @staticmethod
@@ -476,6 +841,35 @@ class StudyAggregationService:
             )
         )
 
+        if isinstance(revision, StudyRevision):
+            validator = getattr(
+                self.catalog_store,
+                "validate_study_revision_population",
+                None,
+            )
+
+            if not callable(validator):
+                raise StudyAggregationError(
+                    "canonical StudyRevision aggregation "
+                    "requires registered Trial "
+                    "population-proof validation"
+                )
+
+            try:
+                validator(
+                    study_revision_id,
+                    tuple(
+                        trial.trial_id
+                        for trial in trials
+                    ),
+                )
+            except Exception as error:
+                raise StudyAggregationError(
+                    "StudyRevision registered Trial "
+                    "population proof does not match "
+                    "persisted Trial denominator"
+                ) from error
+
         counts = {
             disposition: 0
             for disposition in TrialDisposition
@@ -503,6 +897,11 @@ class StudyAggregationService:
 
             payload = self._load_result_payload(
                 artifact_id
+            )
+
+            self._validate_result_manifest_capital(
+                trial,
+                payload,
             )
 
             (

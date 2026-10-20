@@ -91,6 +91,7 @@ def _reused_job():
         ),
         attempt_id=None,
         reused_attempt_id="attempt-reused",
+        reused_evidence_id="evidence-reused",
         reused_result_artifact_id=(
             REUSED_ARTIFACT_ID
         ),
@@ -177,6 +178,60 @@ def _result_bytes(
     )
 
 
+
+def _financial_result_bytes(
+    *,
+    equities,
+):
+    """Economically coherent open long for positive aggregation tests."""
+    values = tuple(float(value) for value in equities)
+    assert len(values) >= 2
+    initial = values[0]
+    assert initial > 1.0
+    assert all(value > 1.0 for value in values)
+
+    records = []
+    peak = initial
+
+    for index, equity in enumerate(values):
+        previous_close = (
+            initial if index == 0 else values[index - 1]
+        )
+        open_price = previous_close
+        close_price = equity
+        peak = max(peak, equity)
+
+        records.append(
+            BarRecord(
+                timestamp=NOW + timedelta(minutes=index),
+                open=open_price,
+                high=max(open_price, close_price) + 1.0,
+                low=min(open_price, close_price) - 1.0,
+                close=close_price,
+                volume=1000.0,
+                strategy="aggregation-financial-control",
+                state=None,
+                signal=None,
+                execution_event="BUY" if index == 1 else None,
+                execution_price=initial if index == 1 else None,
+                execution_quantity=1 if index == 1 else None,
+                decision_snapshot={},
+                equity=equity,
+                cash=initial if index == 0 else 0.0,
+                position_size=0.0 if index == 0 else 1.0,
+                drawdown=(equity - peak) / peak,
+            )
+        )
+
+    return stable_backtest_result_bytes(
+        BacktestResult(
+            trades=[],
+            bar_records=records,
+            session_id="aggregation-financial-control",
+        )
+    )
+
+
 def _mutated_result_bytes(
     mutate,
     *,
@@ -259,6 +314,7 @@ class CatalogStub:
             "attempt-reused": SimpleNamespace(
                 attempt_id="attempt-reused",
                 state=RunAttemptState.SUCCEEDED,
+                evidence_id="evidence-reused",
                 result_artifact_id=REUSED_ARTIFACT_ID,
             ),
         }
@@ -334,10 +390,10 @@ class CatalogStub:
 class ArtifactStoreStub:
     def __init__(self):
         self.payloads = {
-            EXECUTED_ARTIFACT_ID: _result_bytes(
+            EXECUTED_ARTIFACT_ID: _financial_result_bytes(
                 equities=(100.0, 120.0, 108.0),
             ),
-            REUSED_ARTIFACT_ID: _result_bytes(
+            REUSED_ARTIFACT_ID: _financial_result_bytes(
                 equities=(100.0, 95.0, 95.0),
             ),
         }
@@ -437,6 +493,7 @@ def _aggregate_real_executed_payload(
             "attempt-reused": SimpleNamespace(
                 attempt_id="attempt-reused",
                 state=RunAttemptState.SUCCEEDED,
+                evidence_id="evidence-reused",
                 result_artifact_id=artifact.artifact_id,
             ),
         }
@@ -726,7 +783,7 @@ def _aggregate_with_executed_payload(
 
 def test_m94g3_real_canonical_serialized_backtest_result_is_accepted():
     result = _aggregate_with_executed_payload(
-        _result_bytes(
+        _financial_result_bytes(
             equities=(100.0, 120.0, 108.0),
         )
     )
@@ -1222,6 +1279,14 @@ def test_m94m_valid_direct_financial_relationships_are_accepted(
         else:
             raise AssertionError(case)
 
+        if case in {
+            "valid_cost_adjusted_trade",
+            "valid_loss_trade",
+        }:
+            _m94q_reconcile_synthetic_closed_trade(payload)
+        elif case == "valid_close_marked_holding":
+            _m94q_reconcile_synthetic_open_holding(payload)
+
     result = _aggregate_real_executed_payload(
         tmp_path,
         _mutated_result_bytes(mutate),
@@ -1296,6 +1361,12 @@ def test_m94o_canonical_decoder_enforces_trade_prices_with_optional_exit_time(
 
         elif case == "inconsistent_return_pct":
             trade["pnl_pct"] = 99.0
+
+        if case in {
+            "valid_profitable_trade",
+            "valid_losing_trade",
+        }:
+            _m94q_reconcile_synthetic_closed_trade(payload)
 
     payload_bytes = _mutated_result_bytes(mutate)
 
@@ -1399,6 +1470,12 @@ def test_m94o_nullable_exit_time_evidence_aggregation(
         elif case == "inconsistent_return_pct":
             trade["pnl_pct"] = 99.0
 
+        if case in {
+            "valid_cost_adjusted_trade",
+            "valid_losing_trade",
+        }:
+            _m94q_reconcile_synthetic_closed_trade(payload)
+
     payload_bytes = _mutated_result_bytes(mutate)
 
     if case.startswith("inconsistent_"):
@@ -1488,4 +1565,1328 @@ def test_m94o_c01_nonpositive_exit_price_is_never_authoritative(
             tmp_path,
             payload_bytes,
             lineage=lineage,
+        )
+
+
+@pytest.mark.parametrize(
+    "position_size",
+    (
+        0,
+        0.0,
+        1,
+        1.0,
+        2.0,
+    ),
+)
+def test_m94q_position_size_accepts_whole_share_values_without_normalization(
+    position_size,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(300.0,),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = position_size
+
+    if position_size == 0:
+        record["cash"] = record["equity"]
+    else:
+        record["cash"] = (
+            record["equity"]
+            - position_size * record["close"]
+        )
+
+    validated = validate_stable_backtest_result_payload(
+        payload
+    )
+
+    validated_position_size = validated[
+        "bar_records"
+    ][0]["position_size"]
+
+    assert validated_position_size == position_size
+    assert type(validated_position_size) is type(
+        position_size
+    )
+
+
+def test_m94q_zero_cash_fully_funded_whole_share_holding_is_valid():
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(200.0, 210.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = 2.0
+    record["cash"] = 0.0
+
+    assert record["equity"] == (
+        record["cash"]
+        + record["position_size"] * record["close"]
+    )
+
+
+    next_record = payload["bar_records"][1]
+    next_record.update(
+        position_size=2.0,
+        cash=0.0,
+        high=106.0,
+        close=105.0,
+    )
+    validated = validate_stable_backtest_result_payload(
+        payload
+    )
+
+    validated_record = validated["bar_records"][0]
+
+    assert validated_record["cash"] == 0.0
+    assert validated_record["position_size"] == 2.0
+
+    decoded = decode_stable_backtest_result_bytes(
+        canonical_bytes(
+            payload,
+            schema=BACKTEST_RESULT_SCHEMA,
+        )
+    )
+
+    decoded_record = decoded["bar_records"][0]
+
+    assert decoded_record["cash"] == 0.0
+    assert decoded_record["position_size"] == 2.0
+
+
+def test_m94q_negative_cash_with_open_holding_is_rejected():
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = 2.0
+    record["cash"] = -100.0
+
+    assert record["equity"] == (
+        record["cash"]
+        + record["position_size"] * record["close"]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="cash cannot be negative for unlevered research",
+    ):
+        validate_stable_backtest_result_payload(payload)
+
+
+def test_m94q_stable_decoder_rejects_negative_cash_with_open_holding():
+    def mutate(payload):
+        record = payload["bar_records"][0]
+        record["position_size"] = 2.0
+        record["cash"] = -100.0
+
+        assert record["equity"] == (
+            record["cash"]
+            + record["position_size"] * record["close"]
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="cash cannot be negative for unlevered research",
+    ):
+        decode_stable_backtest_result_bytes(
+            _mutated_result_bytes(mutate)
+        )
+
+
+@pytest.mark.parametrize(
+    ("position_size", "message"),
+    (
+        (0.5, "whole-share quantity"),
+        (1.5, "whole-share quantity"),
+        (2.0000001, "whole-share quantity"),
+        (-1.0, "position_size cannot be negative"),
+        (True, "finite numeric value"),
+        (float("nan"), "finite numeric value"),
+        (float("inf"), "finite numeric value"),
+        (float("-inf"), "finite numeric value"),
+    ),
+)
+def test_m94q_position_size_rejects_fractional_and_preserves_numeric_guards(
+    position_size,
+    message,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(300.0, 310.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = position_size
+
+    if (
+        isinstance(position_size, (int, float))
+        and not isinstance(position_size, bool)
+        and position_size > 0
+        and position_size != float("inf")
+    ):
+        record["cash"] = (
+            record["equity"]
+            - position_size * record["close"]
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=message,
+    ):
+        validate_stable_backtest_result_payload(
+            payload
+        )
+
+
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    (
+        "EXECUTED",
+        "REUSED",
+    ),
+)
+def test_m94q_aggregation_accepts_whole_share_position_for_executed_and_reused(
+    tmp_path,
+    lineage,
+):
+    def mutate(payload):
+        record = payload["bar_records"][0]
+        record["position_size"] = 1.0
+        record["cash"] = (
+            record["equity"]
+            - record["position_size"] * record["close"]
+        )
+
+        # Keep the positive whole-share holding open; a
+        # disappearance without a trade is not settlement.
+        followup = payload["bar_records"][1]
+        followup.update(
+            position_size=1.0,
+            cash=record["cash"],
+            close=110.0,
+            high=111.0,
+        )
+
+    result = _aggregate_real_executed_payload(
+        tmp_path,
+        _mutated_result_bytes(mutate),
+        lineage=lineage,
+    )
+
+    assert result.result_bearing_trials == 1
+
+    if lineage == "EXECUTED":
+        assert result.executed_trials == 1
+        assert result.reused_trials == 0
+    else:
+        assert result.executed_trials == 0
+        assert result.reused_trials == 1
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    (
+        "EXECUTED",
+        "REUSED",
+    ),
+)
+def test_m94q_aggregation_rejects_fractional_position_for_executed_and_reused(
+    tmp_path,
+    lineage,
+):
+    def mutate(payload):
+        record = payload["bar_records"][0]
+        record["position_size"] = 1.5
+        record["cash"] = (
+            record["equity"]
+            - record["position_size"] * record["close"]
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            _mutated_result_bytes(mutate),
+            lineage=lineage,
+        )
+
+
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    (
+        "EXECUTED",
+        "REUSED",
+    ),
+)
+def test_m94q_aggregation_rejects_negative_cash_for_executed_and_reused(
+    tmp_path,
+    lineage,
+):
+    def mutate(payload):
+        record = payload["bar_records"][0]
+        record["position_size"] = 2.0
+        record["cash"] = -100.0
+
+        assert record["equity"] == (
+            record["cash"]
+            + record["position_size"] * record["close"]
+        )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            _mutated_result_bytes(mutate),
+            lineage=lineage,
+        )
+
+
+@pytest.mark.parametrize(
+    "quantity",
+    (
+        1.0,
+        True,
+    ),
+)
+def test_m94q_neighboring_trade_quantity_remains_strict_integer(
+    quantity,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["trades"].append(
+        {
+            "symbol": "NSE:A",
+            "entry_time": NOW,
+            "entry_price": 100.0,
+            "exit_time": NOW + timedelta(minutes=1),
+            "exit_price": 101.0,
+            "stop_price": 99.0,
+            "quantity": quantity,
+            "direction": "LONG",
+            "exit_reason": "fixture",
+            "pnl": 1.0,
+            "gross_pnl": 1.0,
+            "transaction_cost": 0.0,
+            "pnl_pct": 1.0,
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="quantity must be an integer",
+    ):
+        validate_stable_backtest_result_payload(
+            payload
+        )
+
+
+@pytest.mark.parametrize(
+    "quantity",
+    (
+        1.0,
+        True,
+    ),
+)
+def test_m94q_neighboring_execution_quantity_remains_strict_integer(
+    quantity,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["execution_event"] = "BUY"
+    record["execution_price"] = 100.0
+    record["execution_quantity"] = quantity
+
+    with pytest.raises(
+        ValueError,
+        match="execution_quantity must be an integer",
+    ):
+        validate_stable_backtest_result_payload(
+            payload
+        )
+
+
+def _m94q_trade_outside_authoritative_bar_history():
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["trades"].append(
+        {
+            "symbol": "NSE:A",
+            "entry_time": NOW,
+            "entry_price": 100.0,
+            "exit_time": NOW + timedelta(minutes=1),
+            "exit_price": 101.0,
+            "stop_price": 99.0,
+            "quantity": 1,
+            "direction": "LONG",
+            "exit_reason": "fixture",
+            "pnl": 1.0,
+            "gross_pnl": 1.0,
+            "transaction_cost": 0.0,
+            "pnl_pct": 1.0,
+        }
+    )
+
+    # An otherwise structurally valid trade fits the bar history.
+
+    _m94q_reconcile_synthetic_closed_trade(payload)
+    validate_stable_backtest_result_payload(payload)
+
+    after_last_bar = (
+        payload["bar_records"][-1]["timestamp"]
+        + timedelta(days=1)
+    )
+
+    payload["trades"][0]["entry_time"] = after_last_bar
+    payload["trades"][0]["exit_time"] = (
+        after_last_bar + timedelta(minutes=1)
+    )
+
+    return payload
+
+
+def test_m94q_trade_outside_bar_history_is_rejected_by_decoder():
+    payload = _m94q_trade_outside_authoritative_bar_history()
+
+    with pytest.raises(
+        ValueError,
+        match="trade|timestamp|bar",
+    ):
+        decode_stable_backtest_result_bytes(
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    (
+        "EXECUTED",
+        "REUSED",
+    ),
+)
+def test_m94q_trade_outside_bar_history_is_rejected_by_aggregation(
+    tmp_path,
+    lineage,
+):
+    payload = _m94q_trade_outside_authoritative_bar_history()
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="canonical Backtest result artifact",
+    ):
+        _aggregate_real_executed_payload(
+            tmp_path,
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            ),
+            lineage=lineage,
+        )
+
+
+def test_m94q_oversized_integer_is_rejected_by_direct_validator():
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["bar_records"][0]["position_size"] = 10 ** 400
+
+    with pytest.raises(
+        ValueError,
+        match="finite numeric",
+    ):
+        validate_stable_backtest_result_payload(payload)
+
+
+def test_m94q_oversized_integer_is_rejected_by_decoder():
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100.0, 110.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["bar_records"][0]["position_size"] = 10 ** 400
+
+    with pytest.raises(
+        ValueError,
+        match="finite numeric",
+    ):
+        decode_stable_backtest_result_bytes(
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            )
+        )
+
+
+def _m94q_followup_valid_closed_trade_payload():
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = _m94q_trade_outside_authoritative_bar_history()
+
+    # Restore a known-valid closed trade to actual observed bars.
+    payload["trades"][0]["entry_time"] = NOW
+    payload["trades"][0]["exit_time"] = (
+        NOW + timedelta(minutes=1)
+    )
+
+    validate_stable_backtest_result_payload(payload)
+    return payload
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    ("direct", "decoder"),
+)
+def test_m94q_followup_trade_quantity_overflow_fails_closed(
+    boundary,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = _m94q_followup_valid_closed_trade_payload()
+    payload["trades"][0]["quantity"] = 10 ** 400
+
+    with pytest.raises(ValueError, match="quantity"):
+        if boundary == "direct":
+            validate_stable_backtest_result_payload(payload)
+        else:
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    payload,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+
+
+@pytest.mark.parametrize(
+    "field",
+    ("entry_time", "exit_time"),
+)
+def test_m94q_followup_trade_timestamp_requires_observed_bar(
+    field,
+):
+    payload = _m94q_followup_valid_closed_trade_payload()
+
+    if field == "entry_time":
+        payload["trades"][0][field] = (
+            NOW + timedelta(seconds=1)
+        )
+    else:
+        payload["trades"][0][field] = (
+            NOW + timedelta(minutes=1, seconds=-1)
+        )
+
+    assert (
+        payload["trades"][0][field]
+        not in {
+            record["timestamp"]
+            for record in payload["bar_records"]
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="trade|timestamp|bar",
+    ):
+        decode_stable_backtest_result_bytes(
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            )
+        )
+
+
+def test_m94q_followup_distribution_mean_large_finite():
+    from math import isfinite
+    from core.research.study_aggregation import (
+        StudyMetricDistribution,
+    )
+
+    result = StudyMetricDistribution.from_values(
+        (1e308, 1e308)
+    )
+
+    assert isfinite(result.mean)
+    assert result.mean == pytest.approx(1e308)
+
+
+def test_m94q_followup_distribution_median_large_finite():
+    from math import isfinite
+    from core.research.study_aggregation import (
+        StudyMetricDistribution,
+    )
+
+    result = StudyMetricDistribution.from_values(
+        (-1.7e308, 1e308, 1e308, 1e308)
+    )
+
+    assert isfinite(result.mean)
+    assert isfinite(result.median)
+    assert result.median == pytest.approx(1e308)
+
+
+@pytest.mark.parametrize(
+    "n",
+    (2, 3, 4, 5, 6, 7, 9),
+)
+def test_m94q_fresh_mean_representable_finite_maximum(n):
+    import sys
+
+    from core.research.study_aggregation import (
+        StudyMetricDistribution,
+    )
+
+    maximum = sys.float_info.max
+    distribution = StudyMetricDistribution.from_values(
+        [maximum] * n
+    )
+
+    assert distribution.mean == maximum
+    assert distribution.median == maximum
+    assert distribution.minimum == maximum
+    assert distribution.maximum == maximum
+    assert distribution.count == n
+
+
+def test_m94q_fresh_mean_preserves_subnormal_remainder():
+    import math
+    import sys
+    from fractions import Fraction
+
+    from core.research.study_aggregation import (
+        StudyMetricDistribution,
+    )
+
+    maximum = sys.float_info.max
+    tiny = math.ulp(0.0)
+
+    values = [
+        maximum,
+        maximum,
+        -maximum,
+        -maximum,
+    ] + [tiny] * 5
+
+    exact = sum(
+        (Fraction.from_float(value) for value in values),
+        start=Fraction(0),
+    )
+
+    expected_mean = float(exact / len(values))
+
+    assert expected_mean == tiny
+
+    distribution = StudyMetricDistribution.from_values(
+        values
+    )
+
+    assert distribution.mean == expected_mean
+    assert distribution.count == 9
+
+
+def test_m94q_fresh_mean_ordinary_positive_control():
+    from core.research.study_aggregation import (
+        StudyMetricDistribution,
+    )
+
+    distribution = StudyMetricDistribution.from_values(
+        [100.0, 120.0, 108.0]
+    )
+
+    assert distribution.count == 3
+    assert distribution.mean == pytest.approx(
+        109.33333333333333
+    )
+    assert distribution.median == 108.0
+    assert distribution.minimum == 100.0
+    assert distribution.maximum == 120.0
+    assert distribution.positive_count == 3
+    assert distribution.positive_proportion == 1.0
+
+
+def _m94q_final_cash_payload(case, *, valid):
+    """Three-bar account histories for cash-conservation tests."""
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        decode_canonical_bytes,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(
+            equities=(100000.0, 100000.0, 100000.0),
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    first, second, third = payload["bar_records"]
+
+    for record in (first, second, third):
+        record.update(
+            open=100.0,
+            high=101.0,
+            low=99.0,
+            close=100.0,
+        )
+
+    if case == "closed_loss":
+        # Accepted M4 same-bar protective-exit shape.
+        second.update(
+            low=97.0,
+            execution_event="PROTECTIVE_EXIT",
+            execution_price=98.0,
+            execution_quantity=1,
+        )
+
+        payload["trades"] = [
+            {
+                "symbol": "NSE:A",
+                "entry_time": second["timestamp"],
+                "exit_time": second["timestamp"],
+                "entry_price": 100.0,
+                "exit_price": 98.0,
+                "stop_price": 98.0,
+                "quantity": 1,
+                "direction": "LONG",
+                "exit_reason": "STOP_LOSS",
+                "pnl": -2.0,
+                "gross_pnl": -2.0,
+                "transaction_cost": 0.0,
+                "pnl_pct": -2.0,
+            }
+        ]
+
+        if valid:
+            second["cash"] = 99998.0
+            third["cash"] = 99998.0
+        else:
+            third["cash"] = 101000.0
+
+    elif case == "closed_profit":
+        second.update(
+            cash=99900.0,
+            position_size=1.0,
+            execution_event="BUY",
+            execution_price=100.0,
+            execution_quantity=1,
+        )
+
+        third.update(
+            open=101.0,
+            high=102.0,
+            low=100.0,
+            close=101.0,
+            execution_event="SELL",
+            execution_price=101.0,
+            execution_quantity=1,
+            cash=(100001.0 if valid else 101000.0),
+        )
+
+        payload["trades"] = [
+            {
+                "symbol": "NSE:A",
+                "entry_time": second["timestamp"],
+                "exit_time": third["timestamp"],
+                "entry_price": 100.0,
+                "exit_price": 101.0,
+                "stop_price": 98.0,
+                "quantity": 1,
+                "direction": "LONG",
+                "exit_reason": "SIGNAL",
+                "pnl": 1.0,
+                "gross_pnl": 1.0,
+                "transaction_cost": 0.0,
+                "pnl_pct": 1.0,
+            }
+        ]
+
+    elif case == "holding_disappears":
+        if valid:
+            # Genuine open holding remains funded and marked.
+            second.update(
+                cash=99900.0,
+                position_size=1.0,
+                execution_event="BUY",
+                execution_price=100.0,
+                execution_quantity=1,
+            )
+            third.update(
+                cash=99900.0,
+                position_size=1.0,
+            )
+        else:
+            second.update(
+                cash=99900.0,
+                position_size=1.0,
+                execution_event="BUY",
+                execution_price=100.0,
+                execution_quantity=1,
+            )
+            third.update(
+                cash=101000.0,
+                position_size=0.0,
+            )
+    else:
+        raise AssertionError("unknown financial case")
+
+    peak = 100000.0
+
+    for record in payload["bar_records"]:
+        record["equity"] = (
+            record["cash"]
+            + record["position_size"] * record["close"]
+        )
+        peak = max(peak, record["equity"])
+        record["drawdown"] = (
+            (record["equity"] - peak) / peak
+        )
+
+    payload["equity_curve"] = [
+        (record["timestamp"], record["equity"])
+        for record in payload["bar_records"]
+    ]
+
+    return payload
+
+
+@pytest.mark.parametrize(
+    "case",
+    ("closed_loss", "closed_profit", "holding_disappears"),
+)
+@pytest.mark.parametrize(
+    "boundary",
+    ("direct", "decoder", "aggregation"),
+)
+def test_m94q_final_cash_unreconciled_is_rejected(
+    tmp_path,
+    case,
+    boundary,
+):
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = _m94q_final_cash_payload(
+        case,
+        valid=False,
+    )
+
+    assert payload["bar_records"][-1]["cash"] == 101000.0
+
+    if boundary == "direct":
+        with pytest.raises(ValueError):
+            validate_stable_backtest_result_payload(payload)
+
+    elif boundary == "decoder":
+        with pytest.raises(ValueError):
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    payload,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+
+    elif boundary == "aggregation":
+        with pytest.raises(StudyAggregationError):
+            _aggregate_real_executed_payload(
+                tmp_path,
+                canonical_bytes(
+                    payload,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                ),
+            )
+
+    else:
+        raise AssertionError("unknown validation boundary")
+
+
+@pytest.mark.parametrize(
+    "case",
+    ("closed_loss", "closed_profit", "holding_disappears"),
+)
+@pytest.mark.parametrize(
+    "boundary",
+    ("direct", "decoder", "aggregation"),
+)
+def test_m94q_final_cash_legitimate_accounts_stay_valid(
+    tmp_path,
+    case,
+    boundary,
+):
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = _m94q_final_cash_payload(
+        case,
+        valid=True,
+    )
+
+    if boundary == "direct":
+        assert validate_stable_backtest_result_payload(
+            payload
+        ) == payload
+
+    elif boundary == "decoder":
+        assert decode_stable_backtest_result_bytes(
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            )
+        ) == payload
+
+    elif boundary == "aggregation":
+        result = _aggregate_real_executed_payload(
+            tmp_path,
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            ),
+        )
+
+        assert result.executed_trials == 1
+        assert result.result_bearing_trials == 1
+
+    else:
+        raise AssertionError("unknown validation boundary")
+
+
+def _m94q_reconcile_synthetic_closed_trade(payload):
+    """Give one completed long trade its own M4-style cash history."""
+    from copy import deepcopy
+
+    assert len(payload["trades"]) == 1
+    assert len(payload["bar_records"]) == 2
+
+    trade = payload["trades"][0]
+    assert trade["direction"] == "LONG"
+    assert trade["entry_time"] == NOW
+    assert trade["exit_time"] in (
+        None,
+        NOW + timedelta(minutes=1),
+    )
+
+    quantity = trade["quantity"]
+    entry_price = trade["entry_price"]
+    exit_price = trade["exit_price"]
+    total_cost = trade["transaction_cost"]
+
+    assert isinstance(quantity, int) and quantity > 0
+    assert 0 <= total_cost < 100000.0
+    assert entry_price * quantity + total_cost < 100000.0
+
+    initial_cash = 100000.0
+    entry_cost = total_cost / 2.0
+
+    first, second = payload["bar_records"]
+    initial = deepcopy(first)
+    entry = deepcopy(first)
+    closed = deepcopy(second)
+
+    initial.update(
+        timestamp=NOW - timedelta(minutes=1),
+        open=100.0,
+        high=100.0,
+        low=100.0,
+        close=100.0,
+        position_size=0.0,
+        cash=initial_cash,
+        equity=initial_cash,
+        drawdown=0.0,
+        execution_event=None,
+        execution_price=None,
+        execution_quantity=None,
+    )
+
+    entry_cash = (
+        initial_cash
+        - entry_price * quantity
+        - entry_cost
+    )
+    entry.update(
+        timestamp=NOW,
+        open=entry_price,
+        high=entry_price,
+        low=entry_price,
+        close=entry_price,
+        position_size=float(quantity),
+        cash=entry_cash,
+        equity=entry_cash + entry_price * quantity,
+        execution_event="BUY",
+        execution_price=entry_price,
+        execution_quantity=quantity,
+    )
+
+    closed_cash = initial_cash + trade["pnl"]
+    closed.update(
+        timestamp=NOW + timedelta(minutes=1),
+        open=exit_price,
+        high=exit_price,
+        low=exit_price,
+        close=exit_price,
+        position_size=0.0,
+        cash=closed_cash,
+        equity=closed_cash,
+        execution_event="SELL",
+        execution_price=exit_price,
+        execution_quantity=quantity,
+    )
+
+    payload["bar_records"] = [initial, entry, closed]
+
+    peak = initial_cash
+    for record in payload["bar_records"]:
+        peak = max(peak, record["equity"])
+        record["drawdown"] = (
+            (record["equity"] - peak) / peak
+        )
+
+    payload["equity_curve"] = [
+        (record["timestamp"], record["equity"])
+        for record in payload["bar_records"]
+    ]
+
+
+def _m94q_reconcile_synthetic_open_holding(payload):
+    """Fund one long holding and retain it at the terminal bar."""
+    assert not payload["trades"]
+    assert len(payload["bar_records"]) == 2
+
+    initial, holding = payload["bar_records"]
+    initial.update(
+        cash=1000.0,
+        equity=1000.0,
+        position_size=0.0,
+        drawdown=0.0,
+        execution_event=None,
+        execution_price=None,
+        execution_quantity=None,
+    )
+    holding.update(
+        cash=900.0,
+        position_size=1.0,
+        open=100.0,
+        high=102.0,
+        low=99.0,
+        close=101.0,
+        equity=1001.0,
+        drawdown=0.0,
+        execution_event="BUY",
+        execution_price=100.0,
+        execution_quantity=1,
+    )
+
+    payload["equity_curve"] = [
+        (record["timestamp"], record["equity"])
+        for record in payload["bar_records"]
+    ]
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    ("direct", "decoder"),
+)
+@pytest.mark.parametrize(
+    "case",
+    (
+        "valid_sell",
+        "valid_stop_exit",
+        "missing_exit_event",
+        "incorrect_buy_event",
+        "incorrect_exit_price",
+        "incorrect_exit_quantity",
+        "forged_terminal_cash",
+        "missing_completed_trade",
+    ),
+)
+def test_m94q_nullable_exit_requires_observed_settlement_evidence(
+    boundary, case,
+):
+    """A nullable exit needs real bar settlement, not merely a trade."""
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    payload = decode_canonical_bytes(
+        _result_bytes(equities=(100.0, 100.0)),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    payload["trades"].append({
+        "symbol": "NSE:A",
+        "entry_time": NOW,
+        "entry_price": 100.0,
+        "exit_time": None,
+        "exit_price": 101.0,
+        "stop_price": 99.0,
+        "quantity": 1,
+        "direction": "LONG",
+        "exit_reason": "fixture",
+        "pnl": 1.0,
+        "gross_pnl": 1.0,
+        "transaction_cost": 0.0,
+        "pnl_pct": 1.0,
+    })
+
+    _m94q_reconcile_synthetic_closed_trade(payload)
+
+    exit_record = payload["bar_records"][-1]
+
+    if case == "valid_stop_exit":
+        exit_record["execution_event"] = "STOP_EXIT"
+
+    elif case == "missing_exit_event":
+        exit_record["execution_event"] = None
+        exit_record["execution_price"] = None
+        exit_record["execution_quantity"] = None
+
+    elif case == "incorrect_buy_event":
+        exit_record["execution_event"] = "BUY"
+
+    elif case == "incorrect_exit_price":
+        exit_record["execution_price"] = 100.5
+
+    elif case == "incorrect_exit_quantity":
+        exit_record["execution_quantity"] = 2
+
+    elif case == "forged_terminal_cash":
+        exit_record["cash"] += 10.0
+        exit_record["equity"] += 10.0
+        payload["equity_curve"][-1] = (
+            exit_record["timestamp"],
+            exit_record["equity"],
+        )
+
+    elif case == "missing_completed_trade":
+        payload["trades"].clear()
+
+    else:
+        assert case == "valid_sell"
+
+    def verify():
+        if boundary == "direct":
+            return validate_stable_backtest_result_payload(
+                payload
+            )
+
+        return decode_stable_backtest_result_bytes(
+            canonical_bytes(
+                payload,
+                schema=BACKTEST_RESULT_SCHEMA,
+            )
+        )
+
+    if case in ("valid_sell", "valid_stop_exit"):
+        verified = verify()
+        assert verified["bar_records"][-1]["cash"] == 100001.0
+        assert verified["trades"][0]["exit_time"] is None
+        assert verified["trades"][0]["pnl"] == 1.0
+    else:
+        expected_message = (
+            "terminal flat cash"
+            if case == "forged_terminal_cash"
+            else "holding decreased without"
+        )
+        with pytest.raises(
+            ValueError,
+            match=expected_message,
+        ):
+            verify()
+
+
+def test_m94q_rereview_reused_evidence_lineage_mismatch_rejected():
+    """REUSED Study evidence must match its source RunAttempt."""
+    catalog = CatalogStub()
+
+    source_attempt = catalog.attempts["attempt-reused"]
+    source_attempt.evidence_id = "evidence-reused"
+
+    original_job = catalog.jobs[REUSED_TRIAL_ID][0]
+
+    tampered_job = SimpleNamespace(
+        **vars(original_job),
+    )
+    tampered_job.reused_evidence_id = "evidence-wrong"
+
+    catalog.jobs[REUSED_TRIAL_ID] = (
+        tampered_job,
+    )
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="evidence|lineage",
+    ):
+        StudyAggregationService(
+            catalog_store=catalog,
+            artifact_store=ArtifactStoreStub(),
+        ).aggregate_revision(
+            REVISION_ID
+        )
+
+
+def test_m94q_rereview_aggregation_rejects_registered_population_denominator_drift(
+    tmp_path,
+):
+    """Study aggregation must preserve the registered Trial denominator."""
+    import runpy
+    import sqlite3
+    from pathlib import Path
+
+    queue_ns = runpy.run_path(
+        str(
+            Path(__file__).with_name(
+                "test_m94c_research_job_queue.py"
+            )
+        )
+    )
+
+    (
+        catalog,
+        registration,
+        _queue,
+        definition,
+        snapshot,
+    ) = queue_ns["_environment"](
+        tmp_path
+    )
+
+    population = queue_ns["_register"](
+        registration,
+        definition,
+        snapshot,
+        intent="aggregation denominator integrity",
+        registered_at=queue_ns["MAR"],
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    service = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=ArtifactStoreStub(),
+    )
+
+    baseline = service.aggregate_revision(
+        revision_id
+    )
+
+    assert baseline.total_registered_trials == 6
+    assert baseline.pending_trials == 6
+
+    victim = population.trials[0]
+
+    with sqlite3.connect(
+        catalog.database_path
+    ) as connection:
+        connection.execute(
+            """
+            DELETE FROM trial_disposition_events
+            WHERE trial_id = ?
+            """,
+            (victim.trial_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM trials
+            WHERE trial_id = ?
+            """,
+            (victim.trial_id,),
+        )
+        connection.commit()
+
+    assert len(
+        catalog.list_trials_for_revision(
+            revision_id
+        )
+    ) == 5
+
+    with pytest.raises(
+        StudyAggregationError,
+        match="population|denominator|proof",
+    ):
+        service.aggregate_revision(
+            revision_id
         )

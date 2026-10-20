@@ -83,7 +83,7 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - M9.4n local corrective checkpoint (2026-10-11); M9.5 BLOCKED** - M9.4m was published at `6e248a2749f162738e75258d8cd972a8e037c6b4` and independently audited. B01 MEDIUM and F03 LOW remain accepted-scope corrective findings. M9.4n B01 fixes and real-artifact/decoder tests passed 70 focused tests locally; F03 documentation synchronization is part of this candidate. Full regression passed 1403 Python tests and 287 repository-wide M9.4 tests across 21 modules; separately approved publication and an exact-HEAD independent `M95_GATE=PASS` are required before fresh M9.5 design. No M9.5 coding is authorized.
+  - **M9.4 - M9.4q SYNCHRONIZATION CANDIDATE LOCALLY GREEN; FINAL CANDIDATE / EXACT-PUBLISHED-HEAD INDEPENDENT GATES PENDING; M9.5 NEXT STEP IS FRESH DESIGN ONLY**
   - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
@@ -701,7 +701,9 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE - M9.1 design baseline accepted; M9.2/M9.3 DONE/CLOSED. M9.4l was published/post-push verified at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. Its local validation included 176 focused tests, 207 research-only M9.4 tests across 13 modules and 1383 complete Python tests. The independent reviewer subsequently discovered 273 repository-wide M9.4 tests across 21 modules and independently ran all 1383 Python tests. The audit returned `M95_GATE=BLOCKED` with A01, A02, A03 and F03. Publication and passing tests did not establish independent acceptance. Local M9.4m validation passed 1394 complete Python tests and 280 repository-wide M9.4 tests across 21 modules; `git diff --check` passed. At the 2026-10-11 pre-publication checkpoint, `M95_GATE=BLOCKED`. The required release sequence is final review, separately approved stage, commit and push, verification of the exact published HEAD, and a fresh independent post-publication M9.4 audit. Only an explicit `M95_GATE=PASS` for the audited published HEAD authorizes fresh M9.5 design; it does not authorize M9.5 implementation.
+**Status:** ACTIVE - M9.4q 2026-10-20 locally corrected post-REVIEW-01 candidate. The fresh independent pre-publication review of the exact post-FRESH-04 candidate found `M94Q-REVIEW-01`: a persisted Trial could retain its original content-addressed `trial_id` while an identity-bearing row field was changed, leaving the ID-only StudyRevision population proof apparently valid. The correction preserves that population-proof format, enforces persisted Trial self-identity at authoritative registered-population reads, and makes registered execution-plan resolution cross that boundary before downstream execution. Validation is 549 repository-wide M9.4 tests across 23 files, 90 preservation controls and 1673 complete Python tests. Candidate remains unstaged, uncommitted and unpublished; fresh independent candidate PASS and later exact-published-HEAD PASS remain required. M9.5 may then begin as fresh design only; M9.5 implementation remains blocked.
+
+M9.4q revised unpublished candidate validation checkpoint (2026-10-15; `KANASU_900150`): The bounded correction addresses M94Q-NEW-01 (trade timestamps outside authoritative bar history), M94Q-NEW-02 (oversized canonical integers raising uncontrolled `OverflowError`), and M94Q-NEW-03 (contradictory current validation evidence). `KANASU_900147` established five permanent RED regression cases. After the production correction, `KANASU_900148` passed those five cases, five reviewer-authored adversarial cases, and 35 focused `m94q_` cases. `KANASU_900150` subsequently passed 134 touched-module tests, 338 M9.4 tests across 21 modules, and 1,462 full Python tests, without failures, errors or skips. The saved validation summary has SHA-256 `6c5fd30e8384993ba81960f6c9b36d6431e403f30411ae62c7cfa4ba7426a04c`. These are local validation results, not independent acceptance. The latest independent pre-publication verdict remains `M94Q_AUDIT_GATE=BLOCKED` for the earlier candidate; the revised candidate still requires a fresh independent PASS. It remains unstaged and unpublished, and substantive M9.5 implementation remains blocked. Protected stage, commit and push operations require separate human approval.
 
 M9 adds the persistent research lifecycle and evidence-governance layer required for a usable V1 research product: Study/trial/job ownership, truthful universe/data identity, robustness and qualification, Candidate-bound WFA, Paper campaigns, complete research UX and final research-ready acceptance.
 
@@ -720,3 +722,190 @@ Future baselined scopes may estimate leaf tasks with 1, 2, 3, 5, 8 or 13 effort 
 ## Historical identifiers
 
 M0–M3 and their existing children are permanent. Old roadmap table serials, Phase 8 and 10.9B/C/D labels are historical terminology, not modern milestone identifiers. Their provenance and crosswalk are retained in the [Legacy Project Snapshot](../archive/LEGACY_PROJECT_SNAPSHOT.md).
+
+### Superseded M9.4q roadmap entry - 2026-10-14
+
+This is the verbatim previous roadmap entry. Its counts and candidate state are historical rather than current acceptance evidence.
+
+~~~text
+  - **M9.4 — M9.4q LOCAL CORRECTED CANDIDATE; PRE-PUBLICATION INDEPENDENT GATE BLOCKED; M9.5 IMPLEMENTATION BLOCKED** — `M94Q-IND-20261020-01` attempt-to-Trial ExperimentSpec lineage and the strict tiny-overspend affordability boundary are corrected locally. Historical validation at that earlier checkpoint: 509 repository-wide M9.4 tests across 22 files, 90 preservation controls and 1633 complete Python tests. Fresh independent candidate PASS, separately approved stage/commit/push and exact-published-HEAD independent PASS remain required.
+~~~
+
+### M9.4q local correction checkpoint - 2026-10-15
+
+Four independent-audit follow-up technical defects are locally corrected:
+oversized numeric quantities, trade fill times not observed in authoritative
+bars, finite Study statistic intermediate overflow, and fresh SQLite
+terminalization before a durable cancellation request.
+
+`KANASU_900168` passed 348 M9.4, 30 replayed independent adversarial, and
+1472 full Python tests. This is **local validation only**. The candidate is
+unstaged/unpublished; fresh independent review is pending and
+`M94Q_AUDIT_GATE=BLOCKED`. After the approved publication and exact
+published-HEAD independent PASS gates are satisfied, M9.5 begins as a fresh
+design exercise only; implementation remains unauthorized until that fresh
+design is separately accepted.
+
+### M9.4q corrective candidate checkpoint - 2026-10-15
+
+M9.4 was previously completed at its accepted scope. Subsequent
+independent M9.4q audits identified additional corrective work.
+The original latest Codex finding `M94Q-FINAL-01` (financial integrity)
+and `M94Q-FINAL-02` (documentation drift) required remediation.
+
+The unpublished candidate now passes 1536/1536 full repository Python
+tests (KANASU_900228), 15/15 original independent financial
+counterexamples, and 38/38 complete original Codex reviewer cases
+(KANASU_900229). Documentation has been synchronized to those facts.
+
+Remaining gates: obtain a FRESH independent audit of the complete
+revised candidate; remedy any new findings; obtain distinct human
+approvals for stage, commit and push; audit the exact published HEAD;
+only then reconsider M9.4q closure and M9.5 implementation readiness.
+
+Historical M9.5 Gate-A/design references are preserved only as historical
+context; they do not control the next milestone. Following exact-published-M9.4
+independent PASS, M9.5 starts as a fresh design exercise.
+`M94Q_AUDIT_GATE=BLOCKED`; M9.5 implementation remains unauthorized.
+
+### M9.4q synchronization-review checkpoint - 2026-10-19
+
+Three additional synchronization-review defects are corrected locally:
+first-bar execution-diagnostic authority, REUSED evidence-source lineage and
+registered-population-proof enforcement during Study aggregation.
+
+The 62/62 fresh-independent, 139/139 Study-aggregation,
+23/23 queue/population, 471/471 explicit-focused M9.4 and 1604/1604 complete
+Python figures are retained as historical synchronization-candidate evidence,
+not current corrected-candidate validation.
+
+The candidate is still unstaged/unpublished. Next gates are exact final
+candidate review, separately approved protected Git operations, publication
+verification and fresh independent audit of the exact published HEAD.
+
+Only an explicit PASS at that exact-published-M9.4 gate opens **fresh M9.5
+design**. It does not authorize M9.5 implementation.
+
+## M9.4q independent-review correction overlay (2026-10-19)
+
+M9.4 remains in corrective pre-publication review despite its earlier historical DONE/CLOSED state.
+
+The 2026-10-19 fresh independent audit found and the local candidate corrected:
+
+- `M94Q-IND-20261019-01` — same-bar entry affordability was not enforced at canonical artifact boundaries;
+- `M94Q-IND-20261019-02` — fixed-denominator progress/public Trial-list reads did not validate immutable population proof from the same snapshot.
+
+Historical local validation at that earlier checkpoint was **509 repository-wide M9.4 tests across 22 files, 90 explicit preservation controls and 1633 complete-suite tests passing**.
+
+The next M9.4 action is **not M9.5**. The corrected exact candidate must first be frozen and subjected to a new fresh independent pre-publication review. If that passes, stage/commit/push still require separate human approvals, followed by an independent exact-published-HEAD audit.
+
+Only after the published M9.4 gate passes may M9.5 begin, and then only as a **fresh design exercise before coding**.
+
+## M9.4q 2026-10-20 corrective checkpoint
+
+The latest fresh independent pre-publication review returned FAIL on new
+MEDIUM finding `M94Q-IND-20261020-01`: result-bearing Study aggregation did
+not prove that the EXECUTED RunAttempt or REUSED source RunAttempt belonged
+to the same ExperimentSpec immutably bound to the Trial.
+
+The local correction now enforces that binding across core, application and
+HTTP reads. The same corrective cycle also removes the approximate-equality
+exception from same-bar entry affordability and adds a permanent
+tiny-overspend regression.
+
+Historical local validation at that earlier checkpoint was 509 repository-wide M9.4 tests across 22 files,
+90 preservation controls and 1633 complete Python tests, with clean
+`git diff --check` and zero staged files.
+
+The next action is a new immutable candidate and fresh independent
+pre-publication review, not M9.5. Protected stage, commit and push remain
+separate human approvals. Exact published M9.4 must independently pass before
+M9.5 may begin as a fresh design exercise.
+
+### M9.4q fresh-review remediation checkpoint - 2026-10-20
+
+At the FRESH-01/02 remediation checkpoint, the local candidate corrected `M94Q-FRESH-20261020-01` and
+`M94Q-FRESH-20261020-02` without changing M4 execution economics or accepted
+M9.4 architecture. Repository-wide validation at that checkpoint was **541 M9.4 / 90
+preservation / 1665 full Python**, all green.
+
+The next gate is a new independent review of this exact corrected candidate.
+Only after that review passes may protected stage, commit and push be
+requested separately. The exact published M9.4 HEAD then requires its own
+independent PASS. M9.5 begins only afterward as a fresh design exercise.
+
+### M9.4q FRESH-03 remediation checkpoint - 2026-10-20
+
+The independent review following the FRESH-01/02 correction found
+`M94Q-FRESH-20261020-03`. The local remediation binds every result-bearing
+EXECUTED/REUSED Study-aggregation result to the authoritative RunAttempt's
+actual ACCEPTED ResearchEvidence, including ExperimentSpec identity, result
+fingerprint and manifest/result references.
+
+FRESH-03 checkpoint evidence comprised 18 isolated evidence-binding cases,
+6 real persisted core/application/FastAPI-ASGI cases, 252 bounded regression
+tests, and broad validation of **541 M9.4 / 90 preservation / 1665 full
+Python**, all green.
+
+This does not supersede historical Roadmap checkpoints as historical evidence;
+at that checkpoint it superseded them only as the then-current candidate state. That FRESH-03
+candidate was unpublished and required independent review of
+that exact working-tree candidate. If that passes, stage, commit and push
+remain separate human approvals, followed by independent review of the exact
+published HEAD. Only that published-head PASS authorizes fresh M9.5 design.
+
+### M9.4q FRESH-04 remediation checkpoint - 2026-10-20
+
+The independent review of the FRESH-03 corrected candidate identified
+`M94Q-FRESH-20261020-04`. The default canonical application path already
+rejected non-ACCEPTED evidence, but direct core construction could explicitly
+inject a second SQLite evidence store and substitute an ACCEPTED copy for the
+canonical database's contradictory evidence.
+
+The local remediation makes the catalog database the sole ResearchEvidence
+authority whenever canonical durable `database_path` authority exists.
+Lightweight/noncanonical injection remains supported separately. M4 execution
+economics, fixed Trial denominators, retry/recovery, independent-account Study
+aggregation and qualification ownership are unchanged.
+
+Permanent regression coverage contains two foreign-database negatives
+(EXECUTED and REUSED) plus two same-database positive controls. FRESH-04 checkpoint
+validation was **4 FRESH-04 targeted / 18 FRESH-03 preservation / 256 bounded /
+545 M9.4 across 23 files / 90 preservation / 1669 full Python**, all green.
+
+The **541 / 90 / 1665** FRESH-03 counts remain historical evidence.
+
+The candidate is still unstaged and unpublished. The next gate is fresh
+independent review of this exact corrected working-tree candidate. Only after
+PASS may stage, commit and push be requested separately. The exact published
+M9.4 HEAD then requires its own independent PASS.
+
+### M9.4q REVIEW-01 Trial identity integrity checkpoint - 2026-10-20
+
+The fresh independent audit of the exact post-FRESH-04 local candidate returned
+BLOCKED on `M94Q-REVIEW-01`. A persisted registered Trial could retain its
+original content-addressed `trial_id` while one of the immutable fields from
+which that ID was derived was changed. ID-set/cardinality population proof alone
+could therefore miss the contradiction.
+
+The local correction preserves the existing StudyRevision population-proof
+format and adds per-Trial self-identity validation to authoritative registered
+population reads. Registered execution-plan resolution must cross that boundary
+before downstream execution work. The four permanent REVIEW-01 adversarial
+cases now pass.
+
+Current authority is **549 repository-wide M9.4 tests across 23 files / 90
+preservation controls / 1673 complete Python tests**, with clean
+`git diff --check`.
+
+Historical validation remains historical rather than being rewritten:
+- FRESH-04: **545 / 90 / 1669**;
+- FRESH-03: **541 / 90 / 1665**;
+- earlier 22-file checkpoint: **509 / 90 / 1633**.
+
+M9.4q remains local, unstaged, uncommitted and unpublished.
+`M94Q_AUDIT_GATE=BLOCKED` pending fresh independent review of this exact
+corrected candidate. If that passes, stage, commit and push still require
+separate human approvals, followed by independent review of the exact published
+M9.4 HEAD. Only that published-head PASS opens fresh M9.5 design; M9.5
+implementation remains blocked pending separate acceptance of that fresh design.

@@ -3424,3 +3424,2693 @@ def test_m94m_concurrent_claimed_job_replay_executes_once(
     assert job.state is ResearchJobState.SUCCEEDED
     assert persisted_trial is not None
     assert persisted_trial.disposition is TrialDisposition.EXECUTED
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    ("SUCCEEDED", "FAILED"),
+)
+def test_m94q_followup_cancel_chronology_claimed_executor(
+    tmp_path,
+    outcome,
+):
+    from datetime import timedelta
+
+    catalog, trial, claimed, executor, retrieval, calls = (
+        _environment(
+            tmp_path,
+            execution_input_resolver=lambda plan: _inputs(),
+        )
+    )
+
+    orchestrator = (
+        executor.successor_coordinator.orchestrator
+    )
+
+    original_execute = orchestrator._execute_candles
+    request_time = TERMINAL_AT + timedelta(seconds=1)
+
+    def execution_with_cancellation_request(**kwargs):
+        catalog.request_running_research_job_cancellation(
+            job_id=claimed.job_id,
+            requested_at=request_time,
+        )
+
+        if outcome == "FAILED":
+            raise ValueError(
+                "m94q clock regression fixture"
+            )
+
+        return original_execute(**kwargs)
+
+    orchestrator._execute_candles = (
+        execution_with_cancellation_request
+    )
+
+    terminal_job = executor.execute(claimed)
+
+    assert terminal_job.cancel_requested_at == request_time
+    assert terminal_job.terminal_at >= request_time
+
+    terminal_attempt = catalog.load_run_attempt(
+        terminal_job.attempt_id
+    )
+    terminal_trial = catalog.load_trial(trial.trial_id)
+
+    assert terminal_attempt.terminal_at >= request_time
+    assert terminal_trial.disposition_at >= request_time
+
+
+# M94Q-FRESH-01: accepted account cash must have an
+# explanation in the authoritative execution history.
+# These tests first establish the original five RED
+# boundaries without modifying the production validator.
+
+def _m94q_fresh_financial_real_result(tmp_path):
+    from core.runtime.backtest_runtime import (
+        execute_backtest_candles,
+    )
+    from core.research.reproducibility import (
+        decode_stable_backtest_result_bytes,
+    )
+
+    environment = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+    )
+    catalog, trial, claimed, executor, _, _ = environment
+    orchestrator = executor.successor_coordinator.orchestrator
+    orchestrator._execute_candles = execute_backtest_candles
+
+    completed = executor.execute(claimed)
+    attempt = catalog.load_run_attempt(completed.attempt_id)
+
+    original = decode_stable_backtest_result_bytes(
+        orchestrator.artifact_store.load_bytes(
+            attempt.result_artifact_id
+        )
+    )
+
+    return environment, orchestrator, completed, original
+
+
+def _m94q_fresh_financial_flat_payload(original, *, gain):
+    import copy
+
+    result = copy.deepcopy(original)
+    result["trades"] = []
+
+    for index, record in enumerate(result["bar_records"]):
+        cash = 100000.0
+        if gain and index == len(result["bar_records"]) - 1:
+            cash += 1000.0
+
+        record.update(
+            cash=cash,
+            equity=cash,
+            position_size=0.0,
+            drawdown=0.0,
+            execution_event=None,
+            execution_price=None,
+            execution_quantity=None,
+            signal=None,
+            state=None,
+            decision_snapshot={},
+        )
+
+    result["equity_curve"] = [
+        (record["timestamp"], record["equity"])
+        for record in result["bar_records"]
+    ]
+
+    return result
+
+
+def _m94q_fresh_financial_install(
+    catalog, artifacts, attempt_id, result,
+):
+    import json
+    import sqlite3
+
+    from core.research.models.research_catalog import (
+        ResearchArtifactKind,
+    )
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+    )
+    from core.research.research_artifact_store import (
+        research_artifact_reference,
+    )
+
+    attempt = catalog.load_run_attempt(attempt_id)
+    payload = canonical_bytes(
+        result,
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    artifact = artifacts.persist_bytes(
+        payload,
+        artifact_kind=ResearchArtifactKind.BACKTEST_RESULT,
+        schema_id=BACKTEST_RESULT_SCHEMA,
+        created_at=TERMINAL_AT,
+    )
+    catalog.save_artifact(artifact)
+
+    with sqlite3.connect(catalog.database_path) as db:
+        current = db.execute(
+            "SELECT artifact_references "
+            "FROM research_evidence WHERE evidence_id=?",
+            (attempt.evidence_id,),
+        ).fetchone()
+
+        references = json.loads(current[0])
+        old_reference = research_artifact_reference(
+            attempt.result_artifact_id
+        )
+        new_reference = research_artifact_reference(
+            artifact.artifact_id
+        )
+        references = [
+            new_reference if ref == old_reference else ref
+            for ref in references
+        ]
+
+        db.execute(
+            "UPDATE run_attempts SET result_artifact_id=? "
+            "WHERE attempt_id=?",
+            (artifact.artifact_id, attempt_id),
+        )
+        db.execute(
+            "UPDATE research_evidence SET "
+            "result_fingerprint=?, artifact_references=? "
+            "WHERE evidence_id=?",
+            (
+                artifact.artifact_id,
+                json.dumps(references, separators=(",", ":")),
+                attempt.evidence_id,
+            ),
+        )
+
+    assert artifacts.load_bytes(artifact.artifact_id) == payload
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "direct",
+        "decoder",
+        "reuse",
+        "aggregation",
+        "registered_reuse",
+    ],
+)
+def test_m94q_fresh_financial_cash_growth_fails_closed(
+    tmp_path, boundary,
+):
+    from core.research.models.registered_study import (
+        EvidenceReusePolicy,
+    )
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        decode_stable_backtest_result_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    environment, orchestrator, completed, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+    catalog, trial = environment[:2]
+
+    impossible = _m94q_fresh_financial_flat_payload(
+        original,
+        gain=True,
+    )
+
+    assert len(impossible["bar_records"]) >= 2
+    assert impossible["trades"] == []
+    assert all(
+        record["position_size"] == 0
+        and record["execution_event"] is None
+        for record in impossible["bar_records"]
+    )
+    assert (
+        impossible["bar_records"][-1]["cash"]
+        - impossible["bar_records"][0]["cash"]
+        == 1000.0
+    )
+
+    if boundary == "direct":
+        with pytest.raises(ValueError):
+            validate_stable_backtest_result_payload(
+                impossible
+            )
+        return
+
+    if boundary == "decoder":
+        with pytest.raises(ValueError):
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    impossible,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+        return
+
+    _m94q_fresh_financial_install(
+        catalog,
+        orchestrator.artifact_store,
+        completed.attempt_id,
+        impossible,
+    )
+
+    if boundary == "reuse":
+        spec = catalog.load_run_attempt(
+            completed.attempt_id
+        ).experiment_spec_id
+
+        assert (
+            orchestrator.find_exact_reusable_execution(spec)
+            is None
+        )
+    elif boundary == "aggregation":
+        from core.research.study_aggregation import (
+            StudyAggregationError,
+            StudyAggregationService,
+        )
+
+        with pytest.raises(StudyAggregationError):
+            StudyAggregationService(
+                catalog_store=catalog,
+                artifact_store=orchestrator.artifact_store,
+            ).aggregate_revision(trial.study_revision_id)
+    else:
+        fresh_environment = _environment(
+            tmp_path,
+            execution_input_resolver=lambda plan: _inputs(),
+            evidence_reuse_policy=(
+                EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            ),
+        )
+
+        # A second catalog instance opens the same database.
+        # The fixture must not restart at its prior attempt ID.
+        fresh_environment[0]._attempt_id_factory = (
+            lambda: "attempt-claimed-job-002"
+        )
+        new_executor = fresh_environment[3]
+        # The second execution must also use a new evidence ID.
+        new_executor.successor_coordinator.orchestrator._evidence_id_factory = (
+            lambda: "evidence-claimed-job-002"
+        )
+        new_claimed = fresh_environment[2]
+        outcome = new_executor.execute(new_claimed)
+
+        assert (
+            outcome.completion_kind.value != "REUSED"
+        ), "Impossible account profit reused in another Trial"
+
+
+def test_m94q_fresh_financial_flat_constant_cash_valid(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+    legitimate = _m94q_fresh_financial_flat_payload(
+        original,
+        gain=False,
+    )
+
+    assert len(legitimate["bar_records"]) >= 2
+    assert (
+        validate_stable_backtest_result_payload(legitimate)
+        is legitimate
+    )
+
+
+def test_m94q_fresh_financial_real_engine_valid(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, result = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+
+    assert (
+        validate_stable_backtest_result_payload(result)
+        is result
+    )
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    ("direct", "decoder"),
+)
+def test_m94q_fresh_financial_phantom_execution_rejected(
+    tmp_path, boundary,
+):
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        decode_stable_backtest_result_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+
+    impossible = _m94q_fresh_financial_flat_payload(
+        original,
+        gain=True,
+    )
+
+    first = impossible["bar_records"][0]
+    first["execution_event"] = "BUY"
+    first["execution_price"] = 100.0
+    first["execution_quantity"] = 1
+
+    assert not impossible["trades"]
+    assert all(
+        record["position_size"] == 0
+        for record in impossible["bar_records"]
+    )
+
+    if boundary == "direct":
+        with pytest.raises(
+            ValueError,
+            match="flat account cash cannot change",
+        ):
+            validate_stable_backtest_result_payload(impossible)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="flat account cash cannot change",
+        ):
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    impossible,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+
+
+def _m94q_fresh_numeric_overflow_payload(original, kind):
+    payload = _m94q_fresh_financial_flat_payload(
+        original,
+        gain=False,
+    )
+
+    if kind == "marked_equity":
+        record = payload["bar_records"][-1]
+        record.update(
+            open=10,
+            high=10,
+            low=10,
+            close=10,
+            cash=10**308,
+            equity=15 * 10**307,
+            position_size=10**308,
+        )
+        payload["equity_curve"][-1] = (
+            record["timestamp"],
+            record["equity"],
+        )
+        return payload
+
+    assert kind in ("gross_product", "net_difference")
+
+    bars = payload["bar_records"]
+    assert len(bars) >= 2
+
+    trade = {
+        "symbol": "ABC",
+        "entry_time": bars[0]["timestamp"],
+        "entry_price": 100.0,
+        "exit_time": bars[-1]["timestamp"],
+        "exit_price": 101.0,
+        "stop_price": 99.0,
+        "quantity": 1,
+        "direction": "LONG",
+        "exit_reason": "fixture",
+        "pnl": 1.0,
+        "gross_pnl": 1.0,
+        "transaction_cost": 0.0,
+        "pnl_pct": 1.0,
+    }
+
+    if kind == "gross_product":
+        trade.update(
+            entry_price=1,
+            exit_price=10**200,
+            quantity=10**200,
+            gross_pnl=0,
+            pnl=0,
+        )
+    else:
+        trade.update(
+            gross_pnl=-(10**308),
+            transaction_cost=10**308,
+            pnl=0,
+        )
+
+    payload["trades"].append(trade)
+    return payload
+
+
+@pytest.mark.parametrize("boundary", ("direct", "decoder"))
+@pytest.mark.parametrize(
+    "kind",
+    ("gross_product", "net_difference", "marked_equity"),
+)
+def test_m94q_fresh_numeric_overflow_fails_closed(
+    tmp_path, kind, boundary,
+):
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        decode_stable_backtest_result_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+    payload = _m94q_fresh_numeric_overflow_payload(
+        original, kind,
+    )
+
+    with pytest.raises(ValueError):
+        if boundary == "direct":
+            validate_stable_backtest_result_payload(payload)
+        else:
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    payload,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+
+
+def test_m94q_fresh_numeric_overflow_exact_reuse_skipped(
+    tmp_path,
+):
+    _, orchestrator, completed, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+
+    catalog = orchestrator.catalog_store
+    payload = _m94q_fresh_numeric_overflow_payload(
+        original, "gross_product",
+    )
+
+    _m94q_fresh_financial_install(
+        catalog,
+        orchestrator.artifact_store,
+        completed.attempt_id,
+        payload,
+    )
+
+    attempt = catalog.load_run_attempt(
+        completed.attempt_id
+    )
+
+    assert orchestrator.find_exact_reusable_execution(
+        attempt.experiment_spec_id
+    ) is None
+
+
+def test_m94q_fresh_numeric_extreme_integer_rejected(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+
+    payload = _m94q_fresh_financial_flat_payload(
+        original, gain=False,
+    )
+
+    record = payload["bar_records"][0]
+    record["cash"] = 10**400
+    record["equity"] = 10**400
+    payload["equity_curve"][0] = (
+        record["timestamp"],
+        record["equity"],
+    )
+
+    with pytest.raises(ValueError):
+        validate_stable_backtest_result_payload(payload)
+
+
+def test_m94q_fresh_numeric_large_finite_integer_valid(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    _, _, _, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+
+    payload = _m94q_fresh_financial_flat_payload(
+        original, gain=False,
+    )
+
+    for index, record in enumerate(payload["bar_records"]):
+        record["cash"] = 10**200
+        record["equity"] = 10**200
+        payload["equity_curve"][index] = (
+            record["timestamp"],
+            record["equity"],
+        )
+
+    assert (
+        validate_stable_backtest_result_payload(payload)
+        is payload
+    )
+
+
+@pytest.mark.parametrize("through_executor", (False, True))
+def test_m94q_fresh_cancel_pre_attempt_request_wins(
+    tmp_path,
+    through_executor,
+):
+    request_at = TERMINAL_AT + timedelta(seconds=1)
+    holder = {}
+
+    def resolver(plan):
+        holder["catalog"].request_running_research_job_cancellation(
+            job_id=holder["job"].job_id,
+            requested_at=request_at,
+        )
+        raise ConnectionError(
+            "preparation failed after durable cancellation"
+        )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            resolver
+            if through_executor
+            else lambda plan: _inputs()
+        ),
+    )
+
+    holder.update(catalog=catalog, job=claimed)
+
+    if through_executor:
+        terminal_job = executor.execute(claimed)
+        terminal_trial = catalog.load_trial(trial.trial_id)
+        event = catalog.load_trial_disposition_events(
+            trial.trial_id
+        )[-1]
+    else:
+        catalog.request_running_research_job_cancellation(
+            job_id=claimed.job_id,
+            requested_at=request_at,
+        )
+        terminal_trial, terminal_job, event = (
+            catalog.fail_running_job_without_attempt(
+                job_id=claimed.job_id,
+                terminal_at=TERMINAL_AT,
+                failure_classification="unknown_failure",
+                failure_message="preparation failed",
+            )
+        )
+
+    assert _attempt_count(catalog) == 0
+    assert execution_calls == []
+    assert retrieval.calls == []
+
+    assert terminal_job.job_id == claimed.job_id
+    assert terminal_job.attempt_id is None
+    assert (
+        terminal_job.cancel_requested_at
+        == request_at
+    )
+
+    # Durable cancellation is authoritative over the
+    # subsequent pre-attempt preparation failure.
+    assert terminal_job.state is ResearchJobState.CANCELLED
+    assert terminal_job.terminal_at >= request_at
+    assert terminal_job.failure_classification is None
+    assert terminal_job.failure_message is None
+
+    assert terminal_trial is not None
+    assert (
+        terminal_trial.disposition
+        is TrialDisposition.CANCELLED
+    )
+    assert terminal_trial.disposition_at >= request_at
+    assert terminal_trial.failure_classification is None
+    assert terminal_trial.failure_message is None
+
+    assert event.new_disposition is TrialDisposition.CANCELLED
+    assert event.causing_job_id == claimed.job_id
+    assert event.occurred_at >= request_at
+    assert (
+        event.reason_classification
+        == "running_cancellation_acknowledged"
+    )
+
+    events = catalog.load_trial_disposition_events(
+        trial.trial_id
+    )
+    assert len(events) == 2
+
+
+def test_m94q_fresh_cancel_pre_attempt_no_request_stays_failure(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        _executor,
+        _retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+    )
+
+    terminal_trial, terminal_job, event = (
+        catalog.fail_running_job_without_attempt(
+            job_id=claimed.job_id,
+            terminal_at=TERMINAL_AT,
+            failure_classification="unknown_failure",
+            failure_message="ordinary preparation failure",
+        )
+    )
+
+    assert _attempt_count(catalog) == 0
+    assert execution_calls == []
+
+    assert terminal_job.state is ResearchJobState.FAILED
+    assert terminal_job.attempt_id is None
+    assert terminal_job.cancel_requested_at is None
+    assert terminal_job.terminal_at == TERMINAL_AT
+    assert (
+        terminal_job.failure_classification
+        == "unknown_failure"
+    )
+
+    assert terminal_trial.disposition is TrialDisposition.FAILED
+    assert terminal_trial.disposition_at == TERMINAL_AT
+    assert event.new_disposition is TrialDisposition.FAILED
+    assert event.occurred_at == TERMINAL_AT
+
+    assert len(
+        catalog.load_trial_disposition_events(
+            trial.trial_id
+        )
+    ) == 2
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    ("reuse", "study"),
+)
+@pytest.mark.parametrize(
+    "result_initial_capital,valid",
+    ((100000.0, True), (200000.0, False)),
+    ids=("matching_manifest", "mismatched_manifest"),
+)
+def test_m94q_fresh_manifest_capital_binding(
+    tmp_path,
+    boundary,
+    result_initial_capital,
+    valid,
+):
+    """Reuse and Study must bind result capital to immutable input."""
+    from core.research.reproducibility import (
+        BACKTEST_RUN_MANIFEST_SCHEMA,
+        decode_canonical_bytes,
+    )
+    from core.research.study_aggregation import (
+        StudyAggregationError,
+        StudyAggregationService,
+    )
+
+    environment, orchestrator, completed, original = (
+        _m94q_fresh_financial_real_result(tmp_path)
+    )
+    catalog, trial = environment[:2]
+
+    attempt = catalog.load_run_attempt(completed.attempt_id)
+    spec = catalog.load_experiment_spec(
+        attempt.experiment_spec_id
+    )
+    manifest = decode_canonical_bytes(
+        orchestrator.artifact_store.load_bytes(
+            spec.manifest_artifact_id
+        ),
+        schema=BACKTEST_RUN_MANIFEST_SCHEMA,
+    )
+    assert manifest["initial_capital"] == 100000.0
+
+    result = _m94q_fresh_financial_flat_payload(
+        original,
+        gain=False,
+    )
+    for record in result["bar_records"]:
+        record["cash"] = result_initial_capital
+        record["equity"] = result_initial_capital
+
+    result["equity_curve"] = [
+        (record["timestamp"], record["equity"])
+        for record in result["bar_records"]
+    ]
+
+    _m94q_fresh_financial_install(
+        catalog,
+        orchestrator.artifact_store,
+        completed.attempt_id,
+        result,
+    )
+
+    if boundary == "reuse":
+        reused = orchestrator.find_exact_reusable_execution(
+            attempt.experiment_spec_id
+        )
+        assert (reused is not None) is valid
+        return
+
+    aggregation = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=orchestrator.artifact_store,
+    )
+
+    if valid:
+        assert (
+            aggregation.aggregate_revision(trial.study_revision_id)
+            is not None
+        )
+    else:
+        with pytest.raises(StudyAggregationError):
+            aggregation.aggregate_revision(trial.study_revision_id)
+
+# M94Q-IND-20261019-01 PERMANENT RED REGRESSION
+#
+# A canonical same-bar flat-to-flat trade must still prove that
+# its entry could be funded from the authoritative pre-bar cash.
+# These tests intentionally fail until the production validator
+# enforces the accepted long-only, unlevered M4 funding invariant.
+
+def _m94q_independent_same_bar_payload(
+    *,
+    first_timestamp,
+    settlement_timestamp,
+    quantity,
+):
+    initial_cash = 100_000.0
+    entry_price = 100.0
+    exit_price = 101.0
+
+    gross_pnl = (
+        exit_price - entry_price
+    ) * quantity
+
+    final_cash = initial_cash + gross_pnl
+
+    first = {
+        "timestamp": first_timestamp,
+        "open": 100.0,
+        "high": 101.0,
+        "low": 99.0,
+        "close": 100.0,
+        "volume": 1_000.0,
+        "strategy": "m94q-independent-same-bar",
+        "state": None,
+        "signal": None,
+        "execution_event": None,
+        "execution_price": None,
+        "execution_quantity": None,
+        "decision_snapshot": {},
+        "equity": initial_cash,
+        "cash": initial_cash,
+        "position_size": 0.0,
+        "drawdown": 0.0,
+    }
+
+    settlement = {
+        "timestamp": settlement_timestamp,
+        "open": 100.0,
+        "high": 102.0,
+        "low": 99.0,
+        "close": 101.0,
+        "volume": 1_000.0,
+        "strategy": "m94q-independent-same-bar",
+        "state": None,
+        "signal": None,
+        "execution_event": "PROTECTIVE_EXIT",
+        "execution_price": exit_price,
+        "execution_quantity": quantity,
+        "decision_snapshot": {},
+        "equity": final_cash,
+        "cash": final_cash,
+        "position_size": 0.0,
+        "drawdown": 0.0,
+    }
+
+    trade = {
+        "symbol": "RELIANCE",
+        "entry_time": settlement_timestamp,
+        "entry_price": entry_price,
+        "exit_time": settlement_timestamp,
+        "exit_price": exit_price,
+        "stop_price": 98.0,
+        "quantity": quantity,
+        "direction": "LONG",
+        "exit_reason": "STOP_LOSS",
+        "gross_pnl": gross_pnl,
+        "transaction_cost": 0.0,
+        "pnl": gross_pnl,
+        "pnl_pct": 1.0,
+    }
+
+    bars = [
+        first,
+        settlement,
+    ]
+
+    return {
+        "trades": [trade],
+        "bar_records": bars,
+        "equity_curve": [
+            (
+                record["timestamp"],
+                record["equity"],
+            )
+            for record in bars
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    (
+        "direct",
+        "decoder",
+        "reuse",
+        "aggregation",
+        "registered_reuse",
+    ),
+)
+def test_m94q_independent_same_bar_unaffordable_entry_fails_closed(
+    tmp_path,
+    boundary,
+):
+    from core.research.models.registered_study import (
+        EvidenceReusePolicy,
+    )
+    from core.research.reproducibility import (
+        BACKTEST_RESULT_SCHEMA,
+        canonical_bytes,
+        decode_stable_backtest_result_bytes,
+        validate_stable_backtest_result_payload,
+    )
+
+    (
+        environment,
+        orchestrator,
+        completed,
+        original,
+    ) = _m94q_fresh_financial_real_result(
+        tmp_path
+    )
+
+    catalog, trial = environment[:2]
+
+    assert len(original["bar_records"]) >= 2
+
+    timestamps = [
+        original["bar_records"][0]["timestamp"],
+        original["bar_records"][1]["timestamp"],
+    ]
+
+    impossible = (
+        _m94q_independent_same_bar_payload(
+            first_timestamp=timestamps[0],
+            settlement_timestamp=timestamps[1],
+            quantity=2_000,
+        )
+    )
+
+    trade = impossible["trades"][0]
+
+    assert (
+        trade["entry_price"]
+        * trade["quantity"]
+        == 200_000.0
+    )
+
+    assert (
+        impossible["bar_records"][0]["cash"]
+        == 100_000.0
+    )
+
+    assert (
+        trade["entry_price"]
+        * trade["quantity"]
+        > impossible["bar_records"][0]["cash"]
+    )
+
+    if boundary == "direct":
+        with pytest.raises(
+            ValueError,
+            match="fund|cash|afford",
+        ):
+            validate_stable_backtest_result_payload(
+                impossible
+            )
+
+        return
+
+    if boundary == "decoder":
+        with pytest.raises(
+            ValueError,
+            match="fund|cash|afford",
+        ):
+            decode_stable_backtest_result_bytes(
+                canonical_bytes(
+                    impossible,
+                    schema=BACKTEST_RESULT_SCHEMA,
+                )
+            )
+
+        return
+
+    _m94q_fresh_financial_install(
+        catalog,
+        orchestrator.artifact_store,
+        completed.attempt_id,
+        impossible,
+    )
+
+    if boundary == "reuse":
+        source_attempt = catalog.load_run_attempt(
+            completed.attempt_id
+        )
+
+        assert (
+            orchestrator.find_exact_reusable_execution(
+                source_attempt.experiment_spec_id
+            )
+            is None
+        )
+
+        return
+
+    if boundary == "aggregation":
+        from core.research.study_aggregation import (
+            StudyAggregationError,
+            StudyAggregationService,
+        )
+
+        with pytest.raises(
+            StudyAggregationError,
+        ):
+            StudyAggregationService(
+                catalog_store=catalog,
+                artifact_store=(
+                    orchestrator.artifact_store
+                ),
+            ).aggregate_revision(
+                trial.study_revision_id
+            )
+
+        return
+
+    fresh_environment = _environment(
+        tmp_path,
+        execution_input_resolver=lambda plan: _inputs(),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        ),
+    )
+
+    fresh_environment[0]._attempt_id_factory = (
+        lambda: "attempt-m94q-ind-01-fresh"
+    )
+
+    new_executor = fresh_environment[3]
+
+    (
+        new_executor
+        .successor_coordinator
+        .orchestrator
+        ._evidence_id_factory
+    ) = lambda: "evidence-m94q-ind-01-fresh"
+
+    outcome = new_executor.execute(
+        fresh_environment[2]
+    )
+
+    assert (
+        outcome.completion_kind.value
+        != "REUSED"
+    ), (
+        "unaffordable same-bar artifact was reused "
+        "into another registered Trial"
+    )
+
+
+def test_m94q_independent_same_bar_exact_cash_affordable_control(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    (
+        _environment_value,
+        _orchestrator,
+        _completed,
+        original,
+    ) = _m94q_fresh_financial_real_result(
+        tmp_path
+    )
+
+    assert len(original["bar_records"]) >= 2
+
+    payload = _m94q_independent_same_bar_payload(
+        first_timestamp=(
+            original["bar_records"][0]["timestamp"]
+        ),
+        settlement_timestamp=(
+            original["bar_records"][1]["timestamp"]
+        ),
+        quantity=1_000,
+    )
+
+    assert (
+        payload["trades"][0]["entry_price"]
+        * payload["trades"][0]["quantity"]
+        == payload["bar_records"][0]["cash"]
+    )
+
+    assert (
+        validate_stable_backtest_result_payload(
+            payload
+        )
+        is payload
+    )
+
+# M94Q-IND-20261019-01 FEE-BOUNDARY POSITIVE CONTROL
+#
+# The canonical artifact exposes total round-trip transaction cost,
+# not an authoritative split between entry-side and exit-side fees.
+# This control therefore proves only an unambiguously affordable
+# envelope: entry notional plus the entire recorded transaction cost
+# fits within the authoritative pre-bar cash.
+
+def test_m94q_independent_same_bar_fee_boundary_affordable_control(
+    tmp_path,
+):
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    (
+        _environment_value,
+        _orchestrator,
+        _completed,
+        original,
+    ) = _m94q_fresh_financial_real_result(
+        tmp_path
+    )
+
+    assert len(original["bar_records"]) >= 2
+
+    payload = _m94q_independent_same_bar_payload(
+        first_timestamp=(
+            original["bar_records"][0]["timestamp"]
+        ),
+        settlement_timestamp=(
+            original["bar_records"][1]["timestamp"]
+        ),
+        quantity=999,
+    )
+
+    trade = payload["trades"][0]
+
+    transaction_cost = 100.0
+
+    trade["transaction_cost"] = (
+        transaction_cost
+    )
+
+    trade["pnl"] = (
+        trade["gross_pnl"]
+        - transaction_cost
+    )
+
+    pre_bar_cash = (
+        payload["bar_records"][0]["cash"]
+    )
+
+    assert (
+        trade["entry_price"]
+        * trade["quantity"]
+        + transaction_cost
+        == pre_bar_cash
+    )
+
+    final_cash = (
+        pre_bar_cash
+        + trade["pnl"]
+    )
+
+    payload["bar_records"][-1]["cash"] = (
+        final_cash
+    )
+
+    payload["bar_records"][-1]["equity"] = (
+        final_cash
+    )
+
+    payload["equity_curve"][-1] = (
+        payload["bar_records"][-1]["timestamp"],
+        final_cash,
+    )
+
+    assert (
+        validate_stable_backtest_result_payload(
+            payload
+        )
+        is payload
+    )
+
+# M94Q-IND-20261020-01 PERMANENT RED REGRESSION
+#
+# A canonical result-bearing Trial must not accept a successful
+# RunAttempt whose durable ExperimentSpec identity differs from the
+# immutable ExperimentSpec bound to that Trial.
+#
+# Permanent coverage is 2 lineages x 3 authoritative read boundaries:
+# EXECUTED / REUSED crossed with core / application / HTTP.
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+@pytest.mark.parametrize(
+    "boundary",
+    ("core", "application", "http"),
+)
+def test_m94q_independent_attempt_spec_mismatch_fails_closed(
+    tmp_path,
+    monkeypatch,
+    lineage,
+    boundary,
+):
+    import asyncio
+    import sqlite3
+    from dataclasses import replace
+
+    from fastapi import FastAPI
+
+    import api.routes.research_routes as research_routes
+
+    from api.research_application import (
+        get_research_aggregation,
+    )
+    from core.research.study_aggregation import (
+        StudyAggregationError,
+        StudyAggregationService,
+    )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        _retrieval,
+        _calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=lambda _plan: _inputs(),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            if lineage == "REUSED"
+            else EvidenceReusePolicy.FORCE_NEW_EXECUTION
+        ),
+    )
+
+    coordinator = executor.successor_coordinator
+
+    # Use the real accepted M4 execution function so only durable
+    # ExperimentSpec lineage is corrupted.
+    coordinator.orchestrator._execute_candles = (
+        execute_backtest_candles
+    )
+
+    def execute_standalone(inputs):
+        return coordinator.execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context,
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+
+    if lineage == "REUSED":
+        execute_standalone(
+            _inputs()
+        )
+
+    terminal = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal.completion_kind.value
+        == lineage
+    )
+
+    source_attempt_id = (
+        terminal.reused_attempt_id
+        if lineage == "REUSED"
+        else terminal.attempt_id
+    )
+
+    assert source_attempt_id is not None
+
+    original_attempt = (
+        catalog.load_run_attempt(
+            source_attempt_id
+        )
+    )
+
+    assert original_attempt is not None
+
+    different = _inputs()
+
+    different.config.strategy_params[
+        "slow_period"
+    ] = 3
+
+    different = replace(
+        different,
+        strategy=create_strategy(
+            different.config
+        ),
+    )
+
+    alternate_execution = (
+        execute_standalone(
+            different
+        )
+    )
+
+    alternate_attempt = (
+        catalog.load_run_attempt(
+            alternate_execution.attempt_id
+        )
+    )
+
+    assert alternate_attempt is not None
+
+    assert (
+        alternate_attempt.experiment_spec_id
+        != original_attempt.experiment_spec_id
+    )
+
+    aggregation = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=(
+            coordinator.orchestrator.artifact_store
+        ),
+    )
+
+    baseline = aggregation.aggregate_revision(
+        trial.study_revision_id
+    )
+
+    assert baseline.result_bearing_trials == 1
+
+    # Preserve every result/evidence/job/event relationship and damage
+    # only the foreign-key-valid attempt -> ExperimentSpec reference.
+    with sqlite3.connect(
+        catalog.database_path
+    ) as connection:
+        connection.execute(
+            "PRAGMA foreign_keys=ON"
+        )
+        connection.execute(
+            """
+            UPDATE run_attempts
+            SET experiment_spec_id = ?
+            WHERE attempt_id = ?
+            """,
+            (
+                alternate_attempt.experiment_spec_id,
+                source_attempt_id,
+            ),
+        )
+
+    persisted_trial = catalog.load_trial(
+        trial.trial_id
+    )
+
+    damaged_attempt = catalog.load_run_attempt(
+        source_attempt_id
+    )
+
+    assert persisted_trial is not None
+    assert damaged_attempt is not None
+
+    assert (
+        persisted_trial.experiment_spec_id
+        == original_attempt.experiment_spec_id
+    )
+
+    assert (
+        damaged_attempt.experiment_spec_id
+        == alternate_attempt.experiment_spec_id
+    )
+
+    config = AppConfig(
+        research_database_path=str(
+            catalog.database_path
+        ),
+        research_artifact_root=str(
+            tmp_path / "artifacts"
+        ),
+    )
+
+    def application():
+        return get_research_aggregation(
+            trial.study_revision_id,
+            app_config=config,
+        )
+
+    if boundary == "core":
+        with pytest.raises(
+            StudyAggregationError,
+            match="ExperimentSpec|lineage|exact",
+        ):
+            aggregation.aggregate_revision(
+                trial.study_revision_id
+            )
+        return
+
+    if boundary == "application":
+        with pytest.raises(
+            StudyAggregationError,
+            match="ExperimentSpec|lineage|exact",
+        ):
+            application()
+        return
+
+    monkeypatch.setattr(
+        research_routes,
+        "get_research_aggregation_application",
+        lambda _revision_id: application(),
+    )
+
+    app = FastAPI()
+
+    app.include_router(
+        research_routes.router,
+        prefix="/api/research",
+    )
+
+    path = (
+        "/api/research/study-revisions/"
+        f"{trial.study_revision_id}/aggregation"
+    )
+
+    messages = []
+
+    async def request():
+        async def receive():
+            return {
+                "type": "http.request",
+                "body": b"",
+                "more_body": False,
+            }
+
+        async def send(message):
+            messages.append(
+                message
+            )
+
+        await app(
+            {
+                "type": "http",
+                "asgi": {
+                    "version": "3.0",
+                },
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": path,
+                "raw_path": path.encode(),
+                "root_path": "",
+                "query_string": b"",
+                "headers": [],
+                "client": (
+                    "m94q-regression",
+                    1,
+                ),
+                "server": (
+                    "m94q-regression",
+                    80,
+                ),
+            },
+            receive,
+            send,
+        )
+
+    asyncio.run(
+        request()
+    )
+
+    status = next(
+        message["status"]
+        for message in messages
+        if message["type"]
+        == "http.response.start"
+    )
+
+    assert status == 500
+
+
+# M94Q-IND-20261019-01 STRICT TINY-OVERSPEND REGRESSION
+#
+# The unlevered funding rule is an exact inequality. A positive
+# overspend must fail even when it is smaller than the numerical
+# tolerance used for ordinary derived-value reconciliation.
+
+def test_m94q_independent_same_bar_tiny_overspend_fails_closed(
+    tmp_path,
+):
+    import math
+
+    from core.research.reproducibility import (
+        validate_stable_backtest_result_payload,
+    )
+
+    (
+        _environment_value,
+        _orchestrator,
+        _completed,
+        original,
+    ) = _m94q_fresh_financial_real_result(
+        tmp_path
+    )
+
+    assert len(
+        original["bar_records"]
+    ) >= 2
+
+    payload = _m94q_independent_same_bar_payload(
+        first_timestamp=(
+            original["bar_records"][0]["timestamp"]
+        ),
+        settlement_timestamp=(
+            original["bar_records"][1]["timestamp"]
+        ),
+        quantity=1_000,
+    )
+
+    trade = payload["trades"][0]
+
+    pre_bar_cash = (
+        payload["bar_records"][0]["cash"]
+    )
+
+    # Smallest representable increase above 100.0. With quantity
+    # 1,000 this creates a positive overspend well below 1e-8.
+    trade["entry_price"] = math.nextafter(
+        trade["entry_price"],
+        math.inf,
+    )
+
+    trade["gross_pnl"] = (
+        (
+            trade["exit_price"]
+            - trade["entry_price"]
+        )
+        * trade["quantity"]
+    )
+
+    trade["pnl"] = (
+        trade["gross_pnl"]
+        - trade["transaction_cost"]
+    )
+
+    trade["pnl_pct"] = (
+        (
+            trade["exit_price"]
+            - trade["entry_price"]
+        )
+        / trade["entry_price"]
+    ) * 100.0
+
+    final_cash = (
+        pre_bar_cash
+        + trade["pnl"]
+    )
+
+    settlement = payload[
+        "bar_records"
+    ][1]
+
+    settlement["cash"] = final_cash
+    settlement["equity"] = final_cash
+
+    payload["equity_curve"][1] = (
+        settlement["timestamp"],
+        final_cash,
+    )
+
+    entry_notional = (
+        trade["entry_price"]
+        * trade["quantity"]
+    )
+
+    overspend = (
+        entry_notional
+        - pre_bar_cash
+    )
+
+    assert overspend > 0.0
+    assert overspend < 1e-8
+
+    with pytest.raises(
+        ValueError,
+        match="funded by pre-bar cash",
+    ):
+        validate_stable_backtest_result_payload(
+            payload
+        )
+# M94Q-FRESH-20261020-03 REAL PERSISTED BOUNDARY REGRESSION
+#
+# The selected result of a result-bearing Trial must remain bound to the
+# actual ACCEPTED ResearchEvidence of its authoritative RunAttempt.
+#
+# Coverage:
+#   EXECUTED / REUSED
+#       x core Study aggregation
+#       x application aggregation
+#       x real FastAPI/ASGI HTTP aggregation
+#
+# Corruption deliberately keeps ordinary attempt/job/event identity
+# internally consistent and changes the selected result to another real
+# canonical Backtest result artifact. The accepted evidence remains bound
+# to the original result, so only the evidence/result authority is false.
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+@pytest.mark.parametrize(
+    "boundary",
+    ("core", "application", "http"),
+)
+def test_m94q_fresh_03_result_evidence_binding_fails_closed_across_real_boundaries(
+    tmp_path,
+    monkeypatch,
+    lineage,
+    boundary,
+):
+    import asyncio
+    import json
+    import sqlite3
+    from dataclasses import replace
+
+    from fastapi import FastAPI
+
+    import api.routes.research_routes as research_routes
+
+    from api.research_application import (
+        get_research_aggregation,
+    )
+    from core.research.sqlite_research_evidence_store import (
+        SQLiteResearchEvidenceStore,
+    )
+    from core.research.study_aggregation import (
+        StudyAggregationError,
+        StudyAggregationService,
+    )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        _retrieval,
+        _calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda _plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            if lineage == "REUSED"
+            else EvidenceReusePolicy.FORCE_NEW_EXECUTION
+        ),
+    )
+
+    coordinator = (
+        executor.successor_coordinator
+    )
+
+    orchestrator = (
+        coordinator.orchestrator
+    )
+
+    # Produce real canonical result/evidence artifacts through
+    # the accepted M4 physical execution path.
+    orchestrator._execute_candles = (
+        execute_backtest_candles
+    )
+
+    def execute_standalone(inputs):
+        return coordinator.execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=(
+                inputs.runtime_context
+            ),
+            dataset_context=(
+                inputs.dataset_context
+            ),
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+
+    # REUSED needs an already accepted exact source.
+    if lineage == "REUSED":
+        execute_standalone(
+            _inputs()
+        )
+
+    terminal = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal.completion_kind.value
+        == lineage
+    )
+
+    source_attempt_id = (
+        terminal.reused_attempt_id
+        if lineage == "REUSED"
+        else terminal.attempt_id
+    )
+
+    assert source_attempt_id is not None
+
+    original_attempt = (
+        catalog.load_run_attempt(
+            source_attempt_id
+        )
+    )
+
+    assert original_attempt is not None
+    assert (
+        original_attempt.evidence_id
+        is not None
+    )
+    assert (
+        original_attempt.result_artifact_id
+        is not None
+    )
+
+    original_evidence = (
+        SQLiteResearchEvidenceStore(
+            catalog.database_path
+        ).load(
+            original_attempt.evidence_id
+        )
+    )
+
+    assert original_evidence is not None
+    assert (
+        original_evidence.result_fingerprint
+        == original_attempt.result_artifact_id
+    )
+
+    # Create another genuine canonical execution/result under a
+    # deliberately different ExperimentSpec. Its result artifact is
+    # valid, but it is not the result authorized by original_evidence.
+    different = _inputs()
+
+    different.config.strategy_params[
+        "slow_period"
+    ] = 3
+
+    different = replace(
+        different,
+        strategy=create_strategy(
+            different.config
+        ),
+    )
+
+    alternate_execution = (
+        execute_standalone(
+            different
+        )
+    )
+
+    alternate_attempt = (
+        catalog.load_run_attempt(
+            alternate_execution.attempt_id
+        )
+    )
+
+    assert alternate_attempt is not None
+    assert (
+        alternate_attempt.result_artifact_id
+        is not None
+    )
+    assert (
+        alternate_attempt.result_artifact_id
+        != original_attempt.result_artifact_id
+    )
+    assert (
+        alternate_attempt.experiment_spec_id
+        != original_attempt.experiment_spec_id
+    )
+
+    aggregation = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=(
+            orchestrator.artifact_store
+        ),
+    )
+
+    # The uncorrupted persisted authority must aggregate.
+    baseline = (
+        aggregation.aggregate_revision(
+            trial.study_revision_id
+        )
+    )
+
+    assert (
+        baseline.result_bearing_trials
+        == 1
+    )
+
+    substituted_result = (
+        alternate_attempt.result_artifact_id
+    )
+
+    # Preserve attempt identity, successful state, ExperimentSpec,
+    # evidence ID and Trial/job/event lineage. Substitute only the
+    # selected canonical result.
+    #
+    # For REUSED, keep the reused job/result IDs mutually consistent
+    # as well, so the pre-existing reused-result lineage check cannot
+    # be the reason for rejection.
+    with sqlite3.connect(
+        catalog.database_path
+    ) as connection:
+        connection.execute(
+            "PRAGMA foreign_keys=ON"
+        )
+
+        connection.execute(
+            """
+            UPDATE run_attempts
+            SET result_artifact_id = ?
+            WHERE attempt_id = ?
+            """,
+            (
+                substituted_result,
+                source_attempt_id,
+            ),
+        )
+
+        if lineage == "REUSED":
+            connection.execute(
+                """
+                UPDATE research_jobs
+                SET reused_result_artifact_id = ?
+                WHERE job_id = ?
+                """,
+                (
+                    substituted_result,
+                    terminal.job_id,
+                ),
+            )
+
+    damaged_attempt = (
+        catalog.load_run_attempt(
+            source_attempt_id
+        )
+    )
+
+    assert damaged_attempt is not None
+
+    # Everything except evidence/result authority remains bound.
+    assert (
+        damaged_attempt.experiment_spec_id
+        == original_attempt.experiment_spec_id
+    )
+    assert (
+        damaged_attempt.evidence_id
+        == original_attempt.evidence_id
+    )
+    assert (
+        damaged_attempt.result_artifact_id
+        == substituted_result
+    )
+
+    persisted_evidence = (
+        SQLiteResearchEvidenceStore(
+            catalog.database_path
+        ).load(
+            damaged_attempt.evidence_id
+        )
+    )
+
+    assert persisted_evidence is not None
+
+    assert (
+        persisted_evidence.result_fingerprint
+        == original_attempt.result_artifact_id
+    )
+
+    assert (
+        persisted_evidence.result_fingerprint
+        != damaged_attempt.result_artifact_id
+    )
+
+    if lineage == "REUSED":
+        damaged_job = (
+            catalog.load_research_job(
+                terminal.job_id
+            )
+        )
+
+        assert damaged_job is not None
+        assert (
+            damaged_job.reused_attempt_id
+            == source_attempt_id
+        )
+        assert (
+            damaged_job.reused_evidence_id
+            == damaged_attempt.evidence_id
+        )
+        assert (
+            damaged_job.reused_result_artifact_id
+            == damaged_attempt.result_artifact_id
+        )
+
+    # Exact-reuse lookup already has the accepted evidence contract.
+    # The damaged source must therefore no longer be reusable.
+    assert (
+        orchestrator.find_exact_reusable_execution(
+            original_attempt.experiment_spec_id
+        )
+        is None
+    )
+
+    config = AppConfig(
+        research_database_path=str(
+            catalog.database_path
+        ),
+        research_artifact_root=str(
+            tmp_path / "artifacts"
+        ),
+    )
+
+    def application():
+        return get_research_aggregation(
+            trial.study_revision_id,
+            app_config=config,
+        )
+
+    if boundary == "core":
+        with pytest.raises(
+            StudyAggregationError,
+            match=(
+                "evidence|Evidence|"
+                "authoritative|result"
+            ),
+        ):
+            aggregation.aggregate_revision(
+                trial.study_revision_id
+            )
+
+        return
+
+    if boundary == "application":
+        with pytest.raises(
+            StudyAggregationError,
+            match=(
+                "evidence|Evidence|"
+                "authoritative|result"
+            ),
+        ):
+            application()
+
+        return
+
+    # Use the real route and ASGI stack. Only the route's application
+    # function reference is rebound so this request uses the same
+    # temporary persisted database rather than global configuration.
+    monkeypatch.setattr(
+        research_routes,
+        "get_research_aggregation_application",
+        lambda _revision_id: application(),
+    )
+
+    app = FastAPI()
+
+    app.include_router(
+        research_routes.router,
+        prefix="/api/research",
+    )
+
+    path = (
+        "/api/research/study-revisions/"
+        f"{trial.study_revision_id}/aggregation"
+    )
+
+    messages = []
+
+    async def request():
+        request_sent = False
+
+        async def receive():
+            nonlocal request_sent
+
+            if not request_sent:
+                request_sent = True
+
+                return {
+                    "type": "http.request",
+                    "body": b"",
+                    "more_body": False,
+                }
+
+            return {
+                "type": "http.disconnect",
+            }
+
+        async def send(message):
+            messages.append(
+                message
+            )
+
+        await app(
+            {
+                "type": "http",
+                "asgi": {
+                    "version": "3.0",
+                },
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": path,
+                "raw_path": path.encode(),
+                "root_path": "",
+                "query_string": b"",
+                "headers": [],
+                "client": (
+                    "m94q-fresh-03",
+                    1,
+                ),
+                "server": (
+                    "m94q-fresh-03",
+                    80,
+                ),
+            },
+            receive,
+            send,
+        )
+
+    asyncio.run(
+        request()
+    )
+
+    status = next(
+        message["status"]
+        for message in messages
+        if message["type"]
+        == "http.response.start"
+    )
+
+    body = b"".join(
+        message.get(
+            "body",
+            b"",
+        )
+        for message in messages
+        if message["type"]
+        == "http.response.body"
+    )
+
+    assert status == 500
+
+    assert json.loads(
+        body
+    ) == {
+        "code": "research_aggregation_failed",
+        "message": (
+            "Research aggregation could not be loaded"
+        ),
+    }
+
+# M94Q-FRESH-20261020-04 PERMANENT CROSS-DATABASE RED REGRESSION
+#
+# For canonical persisted Trials, the research catalog database is the
+# authoritative ResearchEvidence database. An injected evidence store from
+# another SQLite database must never override contradictory canonical
+# evidence.
+#
+# Negative coverage:
+#   EXECUTED / REUSED x foreign ACCEPTED evidence vs canonical INCOMPLETE.
+#
+# Positive control:
+#   EXECUTED / REUSED x explicit same-database ACCEPTED evidence store.
+
+
+def _m94q_fresh_04_completed_trial(
+    tmp_path,
+    lineage,
+):
+    from core.research.models.registered_study import (
+        EvidenceReusePolicy,
+    )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        _retrieval,
+        _calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda _plan: _inputs()
+        ),
+        evidence_reuse_policy=(
+            EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+            if lineage == "REUSED"
+            else EvidenceReusePolicy.FORCE_NEW_EXECUTION
+        ),
+    )
+
+    coordinator = (
+        executor.successor_coordinator
+    )
+
+    orchestrator = (
+        coordinator.orchestrator
+    )
+
+    orchestrator._execute_candles = (
+        execute_backtest_candles
+    )
+
+    def execute_standalone(inputs):
+        return coordinator.execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=(
+                inputs.runtime_context
+            ),
+            dataset_context=(
+                inputs.dataset_context
+            ),
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+
+    if lineage == "REUSED":
+        execute_standalone(
+            _inputs()
+        )
+
+    terminal = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal.completion_kind.value
+        == lineage
+    )
+
+    source_attempt_id = (
+        terminal.reused_attempt_id
+        if lineage == "REUSED"
+        else terminal.attempt_id
+    )
+
+    assert source_attempt_id is not None
+
+    attempt = catalog.load_run_attempt(
+        source_attempt_id
+    )
+
+    assert attempt is not None
+    assert attempt.evidence_id is not None
+    assert (
+        attempt.result_artifact_id
+        is not None
+    )
+
+    return (
+        catalog,
+        trial,
+        orchestrator,
+        attempt,
+    )
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+def test_m94q_fresh_04_foreign_evidence_store_cannot_override_catalog_database(
+    tmp_path,
+    lineage,
+):
+    import sqlite3
+
+    from core.research.models.research_evidence import (
+        ResearchEvidenceStatus,
+    )
+    from core.research.sqlite_research_evidence_store import (
+        SQLiteResearchEvidenceStore,
+    )
+    from core.research.study_aggregation import (
+        StudyAggregationError,
+        StudyAggregationService,
+    )
+
+    (
+        catalog,
+        trial,
+        orchestrator,
+        attempt,
+    ) = _m94q_fresh_04_completed_trial(
+        tmp_path,
+        lineage,
+    )
+
+    canonical_store = (
+        SQLiteResearchEvidenceStore(
+            catalog.database_path
+        )
+    )
+
+    accepted = canonical_store.load(
+        attempt.evidence_id
+    )
+
+    assert accepted is not None
+    assert (
+        accepted.status
+        is ResearchEvidenceStatus.ACCEPTED
+    )
+
+    foreign_store = (
+        SQLiteResearchEvidenceStore(
+            tmp_path
+            / (
+                "m94q-fresh-04-"
+                + lineage.lower()
+                + "-foreign.sqlite3"
+            )
+        )
+    )
+
+    foreign_store.save(
+        accepted
+    )
+
+    with sqlite3.connect(
+        catalog.database_path
+    ) as connection:
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET status = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                ResearchEvidenceStatus.INCOMPLETE.value,
+                accepted.evidence_id,
+            ),
+        )
+
+    canonical_after = (
+        canonical_store.load(
+            attempt.evidence_id
+        )
+    )
+
+    foreign_after = (
+        foreign_store.load(
+            attempt.evidence_id
+        )
+    )
+
+    assert canonical_after is not None
+    assert foreign_after is not None
+
+    assert (
+        canonical_after.status
+        is ResearchEvidenceStatus.INCOMPLETE
+    )
+
+    assert (
+        foreign_after.status
+        is ResearchEvidenceStatus.ACCEPTED
+    )
+
+    # Existing exact-reuse authority correctly follows the canonical
+    # database and must reject the damaged source.
+    assert (
+        orchestrator.find_exact_reusable_execution(
+            attempt.experiment_spec_id
+        )
+        is None
+    )
+
+    # Default aggregation must reject canonical INCOMPLETE evidence.
+    with pytest.raises(
+        StudyAggregationError,
+        match=(
+            "evidence|Evidence|"
+            "authoritative|result"
+        ),
+    ):
+        StudyAggregationService(
+            catalog_store=catalog,
+            artifact_store=(
+                orchestrator.artifact_store
+            ),
+        ).aggregate_revision(
+            trial.study_revision_id
+        )
+
+    # An explicit store for the SAME canonical database must reject too.
+    with pytest.raises(
+        StudyAggregationError,
+        match=(
+            "evidence|Evidence|"
+            "authoritative|result"
+        ),
+    ):
+        StudyAggregationService(
+            catalog_store=catalog,
+            artifact_store=(
+                orchestrator.artifact_store
+            ),
+            evidence_store=canonical_store,
+        ).aggregate_revision(
+            trial.study_revision_id
+        )
+
+    # Critical FRESH-04 assertion:
+    # a foreign ACCEPTED copy must not override the catalog database.
+    with pytest.raises(
+        StudyAggregationError,
+        match=(
+            "evidence|Evidence|"
+            "authoritative|database|result"
+        ),
+    ):
+        StudyAggregationService(
+            catalog_store=catalog,
+            artifact_store=(
+                orchestrator.artifact_store
+            ),
+            evidence_store=foreign_store,
+        ).aggregate_revision(
+            trial.study_revision_id
+        )
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    ("EXECUTED", "REUSED"),
+)
+def test_m94q_fresh_04_same_database_evidence_store_positive_control(
+    tmp_path,
+    lineage,
+):
+    from core.research.models.research_evidence import (
+        ResearchEvidenceStatus,
+    )
+    from core.research.sqlite_research_evidence_store import (
+        SQLiteResearchEvidenceStore,
+    )
+    from core.research.study_aggregation import (
+        StudyAggregationService,
+    )
+
+    (
+        catalog,
+        trial,
+        orchestrator,
+        attempt,
+    ) = _m94q_fresh_04_completed_trial(
+        tmp_path,
+        lineage,
+    )
+
+    canonical_store = (
+        SQLiteResearchEvidenceStore(
+            catalog.database_path
+        )
+    )
+
+    evidence = canonical_store.load(
+        attempt.evidence_id
+    )
+
+    assert evidence is not None
+    assert (
+        evidence.status
+        is ResearchEvidenceStatus.ACCEPTED
+    )
+
+    aggregation = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=(
+            orchestrator.artifact_store
+        ),
+        evidence_store=canonical_store,
+    ).aggregate_revision(
+        trial.study_revision_id
+    )
+
+    assert (
+        aggregation.result_bearing_trials
+        == 1
+    )
+
+# M94Q-REVIEW-20261020-01 PERMANENT RED REGRESSION
+#
+# Persisted Trial identity fields are immutable registered truth.
+# A row retaining its original trial_id must not be executable or
+# authoritative if instrument/membership identity has diverged from
+# the canonical identity frozen at registration.
+
+_M94Q_REVIEW01_FOREIGN_INSTRUMENT = (
+    "NSE-EQ-OUTSIDE-FROZEN-PLAN"
+)
+
+
+def _m94q_review01_corrupt_trial_instrument(
+    catalog,
+    trial,
+):
+    with closing(
+        sqlite3.connect(
+            catalog.database_path
+        )
+    ) as connection:
+        connection.execute(
+            "PRAGMA foreign_keys = ON"
+        )
+
+        cursor = connection.execute(
+            """
+            UPDATE trials
+            SET instrument_id = ?
+            WHERE trial_id = ?
+            """,
+            (
+                _M94Q_REVIEW01_FOREIGN_INSTRUMENT,
+                trial.trial_id,
+            ),
+        )
+
+        assert cursor.rowcount == 1
+
+        connection.commit()
+
+    corrupted = catalog.load_trial(
+        trial.trial_id
+    )
+
+    assert corrupted is not None
+
+    # The corruption deliberately preserves the durable primary
+    # identity while changing one field from which that identity was
+    # canonically derived.
+    assert corrupted.trial_id == trial.trial_id
+
+    assert (
+        corrupted.instrument_id
+        == _M94Q_REVIEW01_FOREIGN_INSTRUMENT
+    )
+
+    assert (
+        corrupted.instrument_id
+        != trial.instrument_id
+    )
+
+    # Membership evidence remains the evidence registered for the
+    # original instrument, creating the exact contradiction under
+    # review.
+    assert (
+        corrupted.membership_evidence_fingerprint
+        == trial.membership_evidence_fingerprint
+    )
+
+    assert (
+        corrupted.membership_evidence_artifact_id
+        == trial.membership_evidence_artifact_id
+    )
+
+    return corrupted
+
+
+def test_m94q_review_01_registered_population_read_rejects_trial_identity_corruption(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        _executor,
+        _retrieval,
+        _execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda _plan: _inputs()
+        ),
+        claim_job=False,
+    )
+
+    assert claimed is None
+
+    _m94q_review01_corrupt_trial_instrument(
+        catalog,
+        trial,
+    )
+
+    # Authoritative registered-population reads must validate more
+    # than the surviving set of trial_id values.
+    with pytest.raises(ValueError):
+        catalog.list_registered_trials_for_revision(
+            trial.study_revision_id
+        )
+
+
+def test_m94q_review_01_claimed_execution_rejects_trial_identity_corruption_before_retrieval(
+    tmp_path,
+):
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        retrieval,
+        execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda _plan: _inputs()
+        ),
+    )
+
+    assert claimed is not None
+
+    _m94q_review01_corrupt_trial_instrument(
+        catalog,
+        trial,
+    )
+
+    # The immutable registered execution plan must not be reconstructed
+    # from corrupted mutable Trial-row fields. Integrity failure must
+    # propagate before retrieval, RunAttempt creation or financial
+    # execution.
+    with pytest.raises(ValueError):
+        executor.execute(
+            claimed
+        )
+
+    assert retrieval.calls == []
+    assert execution_calls == []
+    assert _attempt_count(catalog) == 0
+
+    persisted_job = (
+        catalog.load_research_job(
+            claimed.job_id
+        )
+    )
+
+    assert persisted_job is not None
+    assert (
+        persisted_job.state
+        is ResearchJobState.RUNNING
+    )
+    assert persisted_job.attempt_id is None
+    assert persisted_job.reused_attempt_id is None
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    (
+        "EXECUTED",
+        "REUSED",
+    ),
+)
+def test_m94q_review_01_aggregation_rejects_result_bearing_trial_identity_corruption(
+    tmp_path,
+    lineage,
+):
+    from core.research.study_aggregation import (
+        StudyAggregationError,
+        StudyAggregationService,
+    )
+
+    policy = (
+        EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED
+        if lineage == "REUSED"
+        else EvidenceReusePolicy.FORCE_NEW_EXECUTION
+    )
+
+    (
+        catalog,
+        trial,
+        claimed,
+        executor,
+        _retrieval,
+        _execution_calls,
+    ) = _environment(
+        tmp_path,
+        execution_input_resolver=(
+            lambda _plan: _inputs()
+        ),
+        evidence_reuse_policy=policy,
+    )
+
+    assert claimed is not None
+
+    coordinator = (
+        executor.successor_coordinator
+    )
+
+    # Use accepted M4 execution so aggregation starts from one valid,
+    # result-bearing canonical Trial before corruption.
+    coordinator.orchestrator._execute_candles = (
+        execute_backtest_candles
+    )
+
+    if lineage == "REUSED":
+        inputs = _inputs()
+
+        prior = coordinator.execute(
+            strategy=inputs.strategy,
+            config=inputs.config,
+            runtime_context=(
+                inputs.runtime_context
+            ),
+            dataset_context=(
+                inputs.dataset_context
+            ),
+            instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider,
+            price_adjustment_basis=(
+                inputs.price_adjustment_basis
+            ),
+        )
+
+        assert prior.attempt_id is not None
+
+    terminal = executor.execute(
+        claimed
+    )
+
+    assert (
+        terminal.completion_kind.value
+        == lineage
+    )
+
+    aggregation = StudyAggregationService(
+        catalog_store=catalog,
+        artifact_store=(
+            coordinator.orchestrator.artifact_store
+        ),
+    )
+
+    baseline = aggregation.aggregate_revision(
+        trial.study_revision_id
+    )
+
+    assert baseline.result_bearing_trials == 1
+
+    _m94q_review01_corrupt_trial_instrument(
+        catalog,
+        trial,
+    )
+
+    # Both EXECUTED and REUSED authoritative reads must fail closed;
+    # retained trial_id/population cardinality is not enough.
+    with pytest.raises(
+        StudyAggregationError
+    ):
+        aggregation.aggregate_revision(
+            trial.study_revision_id
+        )

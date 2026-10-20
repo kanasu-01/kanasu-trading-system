@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; M9.4m PUBLISHED AT 6e248a2 AND INDEPENDENTLY BLOCKED; M9.4n LOCAL CORRECTIVE CHECKPOINT 2026-10-11; M95_GATE=BLOCKED**
+**ACCEPTED DESIGN BASELINE; M9.4q REVIEW-01 CORRECTION LOCALLY VALIDATED; THE FRESH INDEPENDENT PRE-PUBLICATION REVIEW OF THE POST-FRESH-04 CANDIDATE FOUND PERSISTED TRIAL SELF-IDENTITY CORRUPTION COULD EVADE THE ID-ONLY POPULATION PROOF; REVIEW-01 PRESERVES THE EXISTING POPULATION-PROOF FORMAT, RECOMPUTES CONTENT-ADDRESSED TRIAL IDENTITY AT AUTHORITATIVE REGISTERED-POPULATION READS, AND REQUIRES EXECUTION-PLAN RESOLUTION TO CROSS THAT BOUNDARY BEFORE DOWNSTREAM EXECUTION; 549 M9.4 / 90 PRESERVATION / 1673 FULL PYTHON GREEN; CORRECTED CANDIDATE UNSTAGED, UNCOMMITTED AND UNPUBLISHED PENDING FRESH INDEPENDENT RE-REVIEW; M9.5 IMPLEMENTATION BLOCKED**
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -1611,7 +1611,7 @@ The following decisions are normative for the accepted M9.4 design baseline.
 
 10. **Explicit retry with append-only history.** Retry keeps the same Trial and creates a new ResearchJob. Initial ordinary retry is allowed only when current Trial disposition is FAILED, CANCELLED, or INTERRUPTED. Retry atomically returns the Trial to PENDING, appends a disposition event, and creates one new QUEUED ResearchJob. EXECUTED and REUSED are not ordinary retry candidates; INVALID and INSUFFICIENT are not silently reopened. Duplicate retry requests cannot create simultaneous retry jobs. A simple retry cannot silently change an already-bound ExperimentSpec.
 
-11. **Truthful cancellation.** A QUEUED job may atomically become CANCELLED and cannot later be claimed. A RUNNING job is not force-killed; cancellation is durably requested and acted on at safe cooperative checkpoints. Until cancellation completes, the job remains RUNNING with cancellation-request metadata. If computation truthfully completes before cancellation takes effect, the successful result is retained and the cancellation request remains auditable. Terminal jobs are never retrospectively cancelled.
+11. **Truthful cancellation.** A QUEUED job may atomically become CANCELLED and cannot later be claimed. A RUNNING job is not force-killed; cancellation is durably requested and acted on at safe cooperative checkpoints. Until cancellation completes, the job remains RUNNING with cancellation-request metadata. If computation truthfully completes before cancellation takes effect, the successful result is retained and the cancellation request remains auditable. For the narrower unlinked pre-attempt branch, if a durable cancellation request already exists before a subsequent preparation failure is terminalized, cancellation takes precedence: the ResearchJob and Trial become CANCELLED, failure classification/message are cleared, the event is `running_cancellation_acknowledged`, and no RunAttempt is fabricated. Without such a request, the pre-attempt failure remains FAILED with its supplied failure metadata. This pre-attempt rule does not replace linked/in-flight computation semantics after RunAttempt or reuse lineage exists. Terminal jobs are never retrospectively cancelled.
 
 12. **Restart recovery separate from resume.** Existing QUEUED ResearchJobs remain queued after restart. Stale RUNNING work is reconciled against durable evidence and, absent a proven completed outcome, becomes INTERRUPTED with corresponding truthful Trial/RunAttempt history. Startup does not automatically resume queued work and does not create retries. Explicit RESUME processes already-existing queued jobs only; failed, cancelled, and interrupted Trials require explicit Retry.
 
@@ -1735,3 +1735,286 @@ Local M9.4m validation passed 1394 complete Python tests and 280 repository-wide
 M9.4m was published at `6e248a2749f162738e75258d8cd972a8e037c6b4`, after M9.4l at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. The independent M9.4m review returned `M95_GATE=BLOCKED`: B01 MEDIUM reproduced hash-valid closed-trade gross-PnL and percentage-return contradictions crossing canonical decoding, exact reuse and Study aggregation; F03 LOW found an obsolete introductory publication/test-count claim. Previously reported A01, A02 and A03 were independently assessed as corrected.
 
 At the 2026-10-11 M9.4n local checkpoint, B01 correction validates the existing TradeBuilder gross-PnL and percentage-return relationships for closed LONG trades without changing the Backtest financial engine. Real persisted-artifact reuse, aggregation and direct decoder regressions have 70 focused passing tests. The F03 introduction is corrected in this candidate. Full regression passed 1403 Python tests and 287 repository-wide M9.4 tests across 21 modules; git diff --check passed. Separately approved stage, commit, push and independent audit of the eventual published HEAD remain pending. `M95_GATE=BLOCKED`.
+
+## M9.4o exact-head audit and M9.4q whole-share correction
+
+M9.4q second corrective checkpoint (2026-10-14): the first M9.4q candidate corrected M94-AUD-01 by enforcing whole-share bar-record `position_size` and reconciled most M94-AUD-02 documentation. A fresh independent candidate audit then returned `M94Q_AUDIT_GATE=BLOCKED`. M94Q-AUD-01 found that hash-valid canonical results could still contain negative authoritative cash with positive whole-share holdings and pass decoding, exact reuse and Study aggregation, despite AD-018's unlevered available-cash affordability contract. M94Q-AUD-02 found the AD-025 current status stale. M94Q-AUD-03 found the required M9.4q categorical behavior-impact declaration missing. M94Q-AUD-04 found review-bundle patch/exclusion reproducibility defects; that bundle issue did not invalidate the repository-backed audit but must be repaired before the next handoff. The current committed branch HEAD remains `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; the second M9.4q correction is local, unstaged and unpublished. The shared canonical Backtest-result validator now rejects `cash < 0` without normalization or tolerance, preserves exactly zero cash for fully funded whole-share holdings, and retains the whole-share `position_size` correction. Regression evidence covers real M4 canonical boundaries, direct and stable-decoder validation, hash-valid persisted exact-reuse rejection without a fabricated RunAttempt, subsequent fresh execution, and both EXECUTED and REUSED Study aggregation. Current second-correction validation passes 30 focused `m94q_` tests, 129 complete tests across the three touched modules, 333 exact repository-wide M9.4 tests across the established 21 modules, and 1457 complete Python tests; `git diff --check` is clean. The earlier 328/1451 counts remain historical evidence for the first M9.4q candidate, not current closure proof. M9.5 Gate A design remains accepted/frozen, but substantive M9.5 implementation remains blocked until the locally validated corrected candidate is separately independently reviewed, is published only through the protected Git approval gates, and the exact published HEAD receives the required independent PASS.
+
+### M9.4q behavior-impact declaration
+
+BEHAVIOR IMPACT: CHANGED
+
+BEHAVIOR IDS: `BT-RULE-002`; `RESEARCH-RULE-009`; `RESEARCH-RULE-014`; `RESEARCH-RULE-004`.
+
+BEHAVIOR BEFORE: the shared canonical Backtest-result boundary checked financial structure and, after the first M9.4q correction, whole-share `position_size`, but it could still accept a hash-valid bar record with negative authoritative cash and a positive holding when the close-marked equity equation balanced. Such a result could therefore remain eligible for exact-reuse lookup and result-bearing Study aggregation. The 2026-10-14 independent audit additionally found that hash-valid trades outside authoritative bar history could be accepted, while oversized canonical integers could propagate OverflowError instead of controlled invalid-result rejection.
+
+BEHAVIOR AFTER: canonical Backtest-result validation rejects any bar record with `cash < 0` for the accepted unlevered research scope, without normalizing stored values or introducing a tolerance. Exactly zero cash remains valid for a fully funded whole-share holding. Whole-share `position_size`, strict neighboring quantity types, evidence identity, reuse lineage and independent-account aggregation semantics are preserved. Exact reuse and aggregation fail closed because they consume the same validated canonical result boundary. The 2026-10-15 corrective iteration additionally requires trade entry_time and any non-null exit_time to fall within the authoritative first-to-last bar timestamp interval, and converts integer overflow during finite-number validation to ValueError without normalizing stored values. Valid same-bar trades and nullable exit_time remain supported.
+
+RATIONALE: align research-result authority with accepted AD-018/M4 economics, where available-cash affordability is the final unlevered safety boundary and an accepted long entry cannot create negative authoritative cash. The subsequent corrections prevent impossible hash-valid trade chronology from crossing canonical reuse and Study aggregation, and route oversized numeric evidence through the controlled invalid-result rejection path.
+
+USER/RESEARCH IMPACT: impossible leveraged/borrowed canonical results cannot be accepted, reused or counted as result-bearing Study evidence while valid fully funded whole-share results remain usable. Out-of-range trade artifacts cannot be accepted as result-bearing evidence, and unrepresentable numeric artifacts no longer abort exact-reuse validation with an uncontrolled OverflowError.
+
+IMPLEMENTATION PATHS: `core/research/reproducibility.py::validate_stable_backtest_result_payload`; executable evidence in `tests/backtest/test_m4_7_backtest_validity_integration.py`, `tests/research/test_backtest_research_orchestrator.py`, and `tests/research/test_m94f_study_aggregation.py`.
+
+TEST/EVIDENCE: `test_m94q_real_m4_open_holding_survives_canonical_result_boundary`; `test_m94q_real_m4_same_bar_protective_exit_survives_canonical_result_boundary`; `test_m94q_zero_cash_fully_funded_whole_share_holding_is_valid`; `test_m94q_negative_cash_with_open_holding_is_rejected`; `test_m94q_stable_decoder_rejects_negative_cash_with_open_holding`; `test_m94q_negative_cash_result_is_not_reused_and_fresh_execution_remains_available`; `test_m94q_aggregation_rejects_negative_cash_for_executed_and_reused`; plus the existing fractional and neighboring-quantity M9.4q regressions. At the 2026-10-14 second-corrective checkpoint, 30 focused `m94q_` tests passed. The prior candidate then passed 129 touched-module tests, 333 M9.4 tests across 21 modules, and 1,457 full Python tests. Those broader results were independently repeated in the 2026-10-14 audit, which nevertheless returned `M94Q_AUDIT_GATE=BLOCKED` because of M94Q-NEW-01, M94Q-NEW-02 and M94Q-NEW-03. For the revised unpublished 2026-10-15 candidate, `KANASU_900147` confirmed five permanent RED cases; `KANASU_900148` confirmed five permanent GREEN cases, five reviewer-authored adversarial GREEN cases, and 35 focused `m94q_` GREEN cases. The new permanent coverage includes `test_m94q_trade_outside_bar_history_is_rejected_by_decoder`, `test_m94q_trade_outside_bar_history_is_rejected_by_aggregation`, `test_m94q_oversized_integer_is_rejected_by_direct_validator` and `test_m94q_oversized_integer_is_rejected_by_decoder`. Broader regression on this revised candidate passed at `KANASU_900150` (2026-10-15): 134 touched-module tests, 338 M9.4 tests across 21 modules, and 1,462 complete Python tests with zero failures, errors or skips. Evidence: `VALIDATION_SUMMARY.json` SHA-256 `6c5fd30e8384993ba81960f6c9b36d6431e403f30411ae62c7cfa4ba7426a04c`. At that checkpoint, a fresh independent pre-publication review remained pending. That review subsequently occurred on 2026-10-15 and returned FAIL with four HIGH and two MEDIUM findings; the remediated candidate now requires a new independent re-review. No local regression result authorizes publication or M9.5 implementation.
+
+UNCHANGED ADJACENT INVARIANTS: M4 execution/sizing/cost/timing/accounting code is unchanged; M5 WFA mathematics, M6/M7 Paper causality, M8 application authority, M9.2 evidence identity, M9.3 data truth, fixed Trial denominators, explicit retry/recovery semantics, no-fake-RunAttempt reuse, independent-account aggregation basis, no qualification authority in M9.4, and no live-money authority remain unchanged.
+
+## M9.4q follow-up corrective checkpoint - 2026-10-15
+
+The repository-first independent adversarial review of the previous
+unpublished M9.4q candidate reported additional technical defects
+`M94Q-NEW-02`, `M94Q-NEW-04`, `M94Q-NEW-05` and `M94Q-NEW-06`.
+Their reproduced RED cases were retained as ten permanent regression
+cases, comprising quantity overflow, missing observed-bar timestamps,
+Study statistic arithmetic, and direct/executor cancellation chronology.
+
+The current local candidate enforces finite representability after strict
+integer validation, exact observed-bar membership for trade timestamps,
+overflow-safe finite mean/median distribution calculations, and an atomic
+cancellation-request time floor shared by RunAttempt, ResearchJob, Trial
+disposition and disposition event writes. Existing M4 execution and
+financial ownership, append-only attempt lineage, immutable artifacts,
+fixed StudyRevision Trial populations, and cooperative cancellation outcome
+semantics remain authoritative.
+
+`KANASU_900168` passed 348 M9.4 tests across 21 modules, all 30 replayed
+independent adversarial tests, and 1472 full Python tests. These are local
+validation results for an unstaged candidate, not a new reviewer PASS.
+A fresh repository-first independent candidate audit must PASS before
+requesting separate human stage/commit/push approvals; the resulting
+exact published HEAD also requires independent re-audit PASS before
+substantive M9.5 implementation.
+
+At that checkpoint, fresh repository-first independent review remained pending. That review subsequently occurred on 2026-10-15 and returned FAIL with four HIGH and two MEDIUM findings. The current remediated candidate therefore requires a new independent re-review before any publication request. `M94Q_AUDIT_GATE=BLOCKED` remains in force; substantive M9.5 implementation remains blocked until the later protected publication gates and exact published-HEAD independent PASS are complete.
+
+### M9.4q financial-integrity audit follow-up - 2026-10-15
+
+Registered Study execution and Trial reuse must not trust a hash-valid
+canonical result that contradicts its authoritative portfolio evidence.
+The shared decoder now checks flat-account cash against settled trade net
+P&L and requires supported exits for decreases in recorded holdings.
+Historically nullable completed-trade exit timestamps require compatible
+observed exit diagnostics rather than automatic acceptance.
+
+The original independent Codex cases passed at the direct validator,
+decoder, persisted exact-reuse lookup, Study aggregation and registered
+Trial-reuse boundaries (15/15 financial; 38/38 full original reviewer,
+KANASU_900229). Local repository tests passed 1536/1536
+(KANASU_900228). No registered Trial lineage or M4 settlement ownership
+has been deliberately changed.
+
+Prior RED audit evidence remains authoritative as historical evidence.
+A fresh independent Codex audit of the then-current candidate subsequently
+returned FAIL with four HIGH findings (`M94Q-FRESH-INDEP-01` through `04`)
+and two MEDIUM findings (`05` and `06`). Current local remediation evidence
+is GREEN for findings `01` through `05`. Finding `06` identified a distinct
+documentation gap: the already-implemented pre-attempt cancellation
+precedence, failure-metadata clearing, `running_cancellation_acknowledged`
+event, linked/in-flight distinction, and permanent tests were not explicitly
+traced.
+
+The local documentation candidate now records that contract and cites
+`test_m94q_fresh_cancel_pre_attempt_request_wins` and
+`test_m94q_fresh_cancel_pre_attempt_no_request_stays_failure`. This is
+post-audit remediation evidence, not a new independent PASS. M9.4q remains
+unpublished and unstaged; `M94Q_AUDIT_GATE=BLOCKED`; M9.5 implementation
+remains BLOCKED pending fresh independent re-review and the later protected
+publication/verification gates.
+
+## M9.4q synchronization-review overlay - 2026-10-19
+
+This synchronization-review correction does not redesign M9.4. The accepted
+Registered Studies/bounded batch-execution architecture remains in force.
+
+The current local candidate additionally fails closed when the initial
+BarRecord claims impossible execution settlement diagnostics, when REUSED
+Study evidence disagrees with the source RunAttempt evidence identity, or
+when the durable registered Trial population no longer matches its immutable
+population proof.
+
+The 471/471 explicit-focused, 1604/1604 complete-suite and 62/62
+fresh-independent figures are historical synchronization-candidate evidence.
+The current corrected candidate remains unstaged/unpublished and
+`M94Q_AUDIT_GATE=BLOCKED`.
+
+Any historical M9.5 design material is reference context only. After exact
+published-M9.4 independent PASS, M9.5 must start as a fresh design exercise
+before any implementation.
+
+## M9.4q independent-review correction overlay (2026-10-19)
+
+Two additional fail-closed requirements apply to registered Study execution evidence and read models.
+
+### Same-bar completed-trade funding
+
+When canonical result evidence contains a completed trade whose entry and exit settle on the same bar while holdings are flat before and after that bar, the retained exit diagnostic does not by itself prove that the entry was possible. Validation therefore derives entry notional from the completed trade's authoritative entry price and whole-share quantity and requires that notional to be fundable from the authoritative pre-bar cash checkpoint. This preserves the established M4 final-diagnostic same-bar contract and does not introduce a new execution or fee-allocation model.
+
+### Authoritative fixed-denominator reads
+
+A denominator-bearing read must not infer the registered population solely from surviving Trial rows. Queue progress and the public registered-Trial list load the observed population and validate count plus canonical population fingerprint against the immutable registration proof from the same SQLite snapshot. Missing proof, missing rows, or identity substitution fail closed. The generic low-level Trial persistence list remains separate for workflows that do not yet claim an authoritative registered denominator.
+
+Historical correction evidence at the pre-FRESH-04 checkpoint: **541 repository-wide M9.4 tests across 23 files, 90 preservation controls and 1665 complete-suite tests pass**, including explicit HTTP integrity propagation.
+
+Current gate after these local corrections:
+
+- the corrections are **not published**;
+- the M9.4q pre-publication gate remains **blocked pending a new fresh independent review of the exact corrected candidate**;
+- staging, commit and push remain separately human-approved protected operations;
+- the final M9.4 audit gate remains blocked until publication and an independent review of the exact published HEAD;
+- M9.5 may begin only after that published M9.4 gate passes, and its next authority is **fresh design only**;
+- M9.5 implementation is not authorized by this correction.
+
+## M9.4q 2026-10-20 result-lineage correction
+
+`M94Q-IND-20261020-01` adds a fail-closed RunAttempt-to-Trial
+ExperimentSpec requirement to result-bearing Study aggregation.
+
+For `EXECUTED`, the linked successful result-bearing RunAttempt must have
+`experiment_spec_id == trial.experiment_spec_id`.
+
+For `REUSED`, the successful reused source RunAttempt must have
+`experiment_spec_id == trial.experiment_spec_id` in addition to the existing
+source attempt/evidence/result identity requirements.
+
+A foreign-key-valid substitution to a different ExperimentSpec is therefore
+durable lineage corruption and cannot contribute result-bearing Study
+statistics.
+
+The same corrective checkpoint makes same-bar unlevered affordability exact.
+Derived entry notional must be less than or equal to authoritative pre-bar
+cash; the generic financial `isclose` tolerance does not apply to this
+borrowing boundary. Exact cash remains valid, and no entry-side fee allocation
+is invented from round-trip transaction cost.
+
+Historical checkpoint local evidence: 541 repository-wide M9.4 tests across 23 files,
+90 preservation controls and 1665 complete Python tests. Fresh independent
+pre-publication review is still required.
+
+## M9.4q 2026-10-20 fresh-review evidence correction
+
+The preceding fresh independent review found two additional canonical
+result-evidence gaps without changing the accepted Registered Studies design.
+
+`M94Q-FRESH-20261020-01` requires ordinary flat-to-long BUY authority to
+prove exact pre-entry affordability. A derived entry notional greater than
+authoritative pre-entry cash is invalid even when the difference would fall
+inside generic numerical reconciliation tolerance.
+
+`M94Q-FRESH-20261020-02` requires unique completed-trade entry settlement
+allocation. One observed BUY settlement cannot establish the entry lineage
+of more than one completed trade.
+
+Both checks live at the canonical research-result evidence boundary.
+They do not change M4 physical execution semantics, Study/Trial identity,
+the immutable registered population denominator, ResearchJob retry policy,
+recovery, cancellation, exact-reuse RunAttempt semantics, Study aggregation
+basis, or M9.5 qualification ownership.
+
+Historical checkpoint local evidence was **541 repository-wide M9.4 tests across 23 files,
+90 preservation controls and 1665 complete Python tests**, all passing.
+The corrected candidate remains unpublished and requires another fresh
+independent pre-publication PASS.
+
+## M9.4q FRESH-03 Study-aggregation evidence authority
+
+The subsequent independent review identified
+`M94Q-FRESH-20261020-03`: persisted Study aggregation could select a
+RunAttempt result that contradicted that RunAttempt's already accepted
+ResearchEvidence.
+
+The accepted Registered Studies design requires one evidence authority, not
+separate exact-reuse and aggregation interpretations. Therefore a
+result-bearing EXECUTED or REUSED Trial now contributes a result only after
+its authoritative RunAttempt evidence is loaded and proves:
+
+1. ACCEPTED evidence status;
+2. dataset, configuration and repository identity equal to the bound
+   ExperimentSpec;
+3. result fingerprint equal to the selected canonical Backtest result;
+4. evidence references to both the ExperimentSpec manifest and selected
+   result artifact.
+
+The evidence store is resolved from the same durable research SQLite database.
+No application public call contract, M4 physical execution economics, Trial
+population semantics, retry/recovery, cancellation or Study-account basis
+changes.
+
+Permanent coverage is 18 isolated cases plus 6 real persisted
+EXECUTED/REUSED core/application/HTTP cases. FRESH-03 checkpoint broad evidence was
+**541 repository-wide M9.4 tests across 23 files, 90 preservation controls
+and 1665 complete Python tests**, all passing.
+
+The candidate remains unpublished. A new fresh independent pre-publication
+PASS is required before protected publication can be requested.
+
+## M9.4q FRESH-04 canonical evidence-database authority
+
+The post-FRESH-03 independent review identified
+`M94Q-FRESH-20261020-04`: the optional Study-aggregation evidence dependency
+could point at a different SQLite database and substitute foreign ACCEPTED
+evidence for contradictory evidence in the canonical catalog database.
+
+The accepted Registered Studies design is unchanged. For a canonical persisted
+catalog, durable ResearchEvidence authority belongs to the same research
+database as `catalog_store.database_path`. The service does not permit an
+injected foreign SQLite store to replace that authority. Lightweight
+noncanonical catalogs without durable database authority retain explicit
+evidence-store compatibility.
+
+Permanent real-SQLite coverage proves foreign-store rejection and same-database
+control behavior for both EXECUTED and REUSED Trial lineage.
+
+FRESH-04 checkpoint validation:
+
+- FRESH-04 targeted authority cases: **4 passed**;
+- FRESH-03 preservation suite: **18 passed**;
+- bounded regression: **256 passed**;
+- repository-wide M9.4 discovery: **545 passed across 23 files**;
+- preservation controls: **90 passed**;
+- complete Python suite: **1669 passed**;
+- `git diff --check`: PASS.
+
+The prior **541 / 90 / 1665** result remains historical FRESH-03 checkpoint
+evidence. The candidate remains unstaged, uncommitted and unpublished.
+
+## M9.4q REVIEW-01 Trial identity integrity correction - 2026-10-20
+
+The independent review of the exact post-FRESH-04 candidate found a new
+accepted-scope integrity defect: the StudyRevision population proof could still
+match when a persisted Trial retained its original `trial_id` but an
+identity-bearing field used to derive that ID had been altered.
+
+The accepted design already treats `trial_id` as content-addressed immutable
+Trial identity and the StudyRevision proof as the fixed finite denominator.
+REVIEW-01 therefore requires both truths to hold. The durable population-proof
+format itself is unchanged. Authoritative registered-population reads now
+recompute each persisted Trial's canonical `trial_id` from its immutable
+registration fields and reject contradictions.
+
+Registered execution-plan resolution retains its established parameter and
+membership-range checks, then crosses the authoritative population boundary
+before execution-input resolution, retrieval, RunAttempt creation or financial
+execution. Study aggregation consumes the same authoritative registered
+population and fails closed for corrupted EXECUTED and REUSED Trial lineage.
+
+Validation evidence:
+
+- permanent REVIEW-01 adversarial regressions: **4 passed**;
+- repository-wide M9.4 discovery: **549 passed across 23 files**;
+- preservation controls: **90 passed**;
+- complete Python suite: **1673 passed**;
+- `git diff --check`: PASS.
+
+The prior **545 / 90 / 1669** validation remains historical FRESH-04 evidence.
+The prior **541 / 90 / 1665** validation remains historical FRESH-03 evidence.
+
+No M4 financial semantics, queue/retry/recovery semantics, exact-reuse
+RunAttempt rules, independent-account aggregation basis, qualification authority
+or live-money boundary changed.
+
+The candidate remains unstaged, uncommitted and unpublished. A fresh
+independent pre-publication PASS is required before any protected publication
+request. Stage, commit and push remain separate human approvals. The exact
+published M9.4 HEAD must then independently PASS. M9.5 begins only as fresh
+design after that gate; M9.5 implementation remains unauthorized.

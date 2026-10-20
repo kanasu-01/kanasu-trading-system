@@ -38,8 +38,10 @@ from core.research.reproducibility import (
     backtest_run_manifest_bytes,
     build_backtest_run_manifest,
     dataset_fingerprint,
+    decode_canonical_bytes,
     decode_stable_backtest_result_bytes,
     stable_backtest_result_fingerprint,
+    validate_backtest_result_manifest_capital_binding,
     BACKTEST_RESULT_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
 )
@@ -853,8 +855,18 @@ class BacktestResearchOrchestrator:
                 continue
 
             try:
-                decode_stable_backtest_result_bytes(
-                    payload
+                manifest = decode_canonical_bytes(
+                    manifest_payload,
+                    schema=BACKTEST_RUN_MANIFEST_SCHEMA,
+                )
+                result_payload = (
+                    decode_stable_backtest_result_bytes(
+                        payload
+                    )
+                )
+                validate_backtest_result_manifest_capital_binding(
+                    result_payload,
+                    manifest,
                 )
             except (TypeError, ValueError):
                 continue

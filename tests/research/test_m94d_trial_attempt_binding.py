@@ -3013,3 +3013,81 @@ def test_m94j_trial_detail_snapshot_uses_one_read_transaction(
         .new_disposition
         is TrialDisposition.PENDING
     )
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    ("SUCCEEDED", "FAILED"),
+)
+def test_m94q_followup_cancel_chronology_direct(
+    tmp_path,
+    outcome,
+):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    catalog, trial, job, spec = _environment(
+        tmp_path,
+        attempt_id_factory=lambda: "m94q-cancel-direct-attempt",
+    )
+
+    _, _, attempt = (
+        catalog._bind_trial_spec_create_attempt_for_running_job(
+            job_id=job.job_id,
+            experiment_spec_id=spec.experiment_spec_id,
+            attempt_created_at=MAY,
+        )
+    )
+
+    request_time = JUN + timedelta(hours=1)
+
+    catalog.request_running_research_job_cancellation(
+        job_id=job.job_id,
+        requested_at=request_time,
+    )
+
+    evidence, artifact = _fresh_success_material(
+        tmp_path,
+        spec,
+    )
+
+    state = RunAttemptState(outcome)
+    kwargs = {}
+
+    if outcome == "FAILED":
+        evidence = replace(
+            evidence,
+            status=ResearchEvidenceStatus.FAILED,
+            result_fingerprint=None,
+            artifact_references=(),
+        )
+        artifact = None
+        kwargs = {
+            "failure_classification": (
+                "financial_computation_failure"
+            ),
+            "failure_message": (
+                "m94q clock regression fixture"
+            ),
+        }
+
+    catalog._terminalize_running_job_attempt_with_evidence(
+        attempt.attempt_id,
+        job_id=job.job_id,
+        state=state,
+        terminal_at=JUN,
+        evidence=evidence,
+        result_artifact=artifact,
+        **kwargs,
+    )
+
+    terminal_job = catalog.load_research_job(job.job_id)
+    terminal_attempt = catalog.load_run_attempt(
+        attempt.attempt_id
+    )
+    terminal_trial = catalog.load_trial(trial.trial_id)
+
+    assert terminal_job.cancel_requested_at == request_time
+    assert terminal_job.terminal_at >= request_time
+    assert terminal_attempt.terminal_at >= request_time
+    assert terminal_trial.disposition_at >= request_time

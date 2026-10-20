@@ -442,6 +442,27 @@ class RegisteredTrialExecutionPlanResolver:
                 "the registered StudyRevision research range"
             )
 
+        registered_trials = (
+            self.catalog_store
+            .list_registered_trials_for_revision(
+                trial.study_revision_id
+            )
+        )
+
+        matching_trials = tuple(
+            registered_trial
+            for registered_trial in registered_trials
+            if registered_trial.trial_id == trial_id
+        )
+
+        if len(matching_trials) != 1:
+            raise ValueError(
+                "Trial does not belong to exactly one "
+                "authoritative registered population"
+            )
+
+        trial = matching_trials[0]
+
         initial_capital = plan.get(
             "initial_capital"
         )

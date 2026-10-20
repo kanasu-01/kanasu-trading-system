@@ -176,6 +176,14 @@ class RecordingStore:
         )
         return self.trials
 
+    def list_registered_trials_for_revision(
+        self,
+        study_revision_id,
+    ):
+        return self.list_trials_for_revision(
+            study_revision_id
+        )
+
     def cancel_study_revision_batch(
         self,
         *,

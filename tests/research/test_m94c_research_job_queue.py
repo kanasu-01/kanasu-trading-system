@@ -1905,3 +1905,358 @@ def test_m94g2_public_initial_job_insert_cannot_bypass_start(
     assert started.total_registered_trials == expected_trials
     assert started.total_jobs == expected_trials
     assert started.queued_jobs == expected_trials
+
+# M94Q-IND-20261019-02 PERMANENT RED REGRESSION
+#
+# The immutable registration proof is authoritative for the
+# StudyRevision denominator. Progress and Trial-list reads must
+# fail closed when the persisted population no longer matches
+# that proof. Validation must include both count and identity.
+
+def _m94q_independent_corrupt_registered_population(
+    catalog,
+    population,
+    corruption,
+):
+    import sqlite3
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    victim = population.trials[0]
+
+    with sqlite3.connect(
+        catalog.database_path
+    ) as connection:
+        if corruption == "row_loss":
+            connection.execute(
+                """
+                DELETE FROM trial_disposition_events
+                WHERE trial_id = ?
+                """,
+                (victim.trial_id,),
+            )
+
+            connection.execute(
+                """
+                DELETE FROM trials
+                WHERE trial_id = ?
+                """,
+                (victim.trial_id,),
+            )
+
+        elif corruption == "missing_proof":
+            connection.execute(
+                """
+                DELETE FROM
+                    study_revision_population_registrations
+                WHERE study_revision_id = ?
+                """,
+                (revision_id,),
+            )
+
+        elif corruption == "identity_substitution":
+            replacement = (
+                "sha256:"
+                + "f" * 64
+            )
+
+            assert replacement != victim.trial_id
+
+            connection.execute(
+                """
+                UPDATE trial_disposition_events
+                SET trial_id = ?
+                WHERE trial_id = ?
+                """,
+                (
+                    replacement,
+                    victim.trial_id,
+                ),
+            )
+
+            connection.execute(
+                """
+                UPDATE trials
+                SET trial_id = ?
+                WHERE trial_id = ?
+                """,
+                (
+                    replacement,
+                    victim.trial_id,
+                ),
+            )
+
+        else:
+            raise AssertionError(
+                "unknown corruption"
+            )
+
+        connection.commit()
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    (
+        "catalog_progress",
+        "application_progress",
+        "application_list",
+    ),
+)
+@pytest.mark.parametrize(
+    "corruption",
+    (
+        "row_loss",
+        "missing_proof",
+        "identity_substitution",
+    ),
+)
+def test_m94q_independent_registered_population_reads_fail_closed(
+    tmp_path,
+    corruption,
+    boundary,
+):
+    from core.config.app_config import AppConfig
+    from api.research_application import (
+        get_research_progress,
+        list_research_trials,
+    )
+
+    (
+        catalog,
+        registration,
+        _queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent=(
+            "m94q independent population "
+            f"read integrity {corruption} {boundary}"
+        ),
+        registered_at=MAR,
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    baseline_progress = (
+        catalog.load_research_queue_snapshot(
+            revision_id
+        )
+    )
+
+    assert (
+        baseline_progress.total_registered_trials
+        == 6
+    )
+
+    assert len(
+        catalog.list_trials_for_revision(
+            revision_id
+        )
+    ) == 6
+
+    _m94q_independent_corrupt_registered_population(
+        catalog,
+        population,
+        corruption,
+    )
+
+    app_config = AppConfig(
+        research_database_path=str(
+            catalog.database_path
+        )
+    )
+
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match="population|denominator|proof",
+    ):
+        if boundary == "catalog_progress":
+            catalog.load_research_queue_snapshot(
+                revision_id
+            )
+
+        elif boundary == "catalog_list":
+            catalog.list_trials_for_revision(
+                revision_id
+            )
+
+        elif boundary == "application_progress":
+            get_research_progress(
+                revision_id,
+                app_config=app_config,
+            )
+
+        elif boundary == "application_list":
+            list_research_trials(
+                revision_id,
+                app_config=app_config,
+            )
+
+        else:
+            raise AssertionError(
+                "unknown read boundary"
+            )
+
+# M94Q-IND-20261019-02 HTTP INTEGRITY PROPAGATION
+#
+# Real registered-population corruption must not become a successful
+# HTTP progress/list response. The production application boundary
+# performs the same-snapshot proof check; the HTTP route must convert
+# that controlled integrity failure into its stable 500 contract.
+
+@pytest.mark.parametrize(
+    "route_boundary",
+    (
+        "progress",
+        "trial_list",
+    ),
+)
+@pytest.mark.parametrize(
+    "corruption",
+    (
+        "row_loss",
+        "missing_proof",
+        "identity_substitution",
+    ),
+)
+def test_m94q_independent_registered_population_http_reads_fail_closed(
+    tmp_path,
+    monkeypatch,
+    corruption,
+    route_boundary,
+):
+    import asyncio
+    import json
+
+    import api.routes.research_routes as routes
+
+    from api.research_application import (
+        get_research_progress,
+        list_research_trials,
+    )
+    from core.config.app_config import (
+        AppConfig,
+    )
+
+    (
+        catalog,
+        registration,
+        _queue,
+        definition,
+        snapshot,
+    ) = _environment(
+        tmp_path
+    )
+
+    population = _register(
+        registration,
+        definition,
+        snapshot,
+        intent=(
+            "m94q HTTP population integrity "
+            f"{corruption} {route_boundary}"
+        ),
+        registered_at=MAR,
+    )
+
+    revision_id = (
+        population.revision.study_revision_id
+    )
+
+    assert (
+        catalog.load_research_queue_snapshot(
+            revision_id
+        ).total_registered_trials
+        == 6
+    )
+
+    _m94q_independent_corrupt_registered_population(
+        catalog,
+        population,
+        corruption,
+    )
+
+    app_config = AppConfig(
+        research_database_path=str(
+            catalog.database_path
+        )
+    )
+
+    if route_boundary == "progress":
+        def application_call(
+            requested_revision_id,
+        ):
+            return get_research_progress(
+                requested_revision_id,
+                app_config=app_config,
+            )
+
+        monkeypatch.setattr(
+            routes,
+            "get_research_progress_application",
+            application_call,
+        )
+
+        response = asyncio.run(
+            routes.get_research_progress(
+                revision_id
+            )
+        )
+
+        expected = {
+            "code": "research_progress_failed",
+            "message": (
+                "Research progress could not be loaded"
+            ),
+        }
+
+    elif route_boundary == "trial_list":
+        def application_call(
+            requested_revision_id,
+        ):
+            return list_research_trials(
+                requested_revision_id,
+                app_config=app_config,
+            )
+
+        monkeypatch.setattr(
+            routes,
+            "list_research_trials_application",
+            application_call,
+        )
+
+        response = asyncio.run(
+            routes.list_research_trials(
+                revision_id
+            )
+        )
+
+        expected = {
+            "code": "research_trial_list_failed",
+            "message": (
+                "Research trials could not be loaded"
+            ),
+        }
+
+    else:
+        raise AssertionError(
+            "unknown HTTP read boundary"
+        )
+
+    assert response.status_code == 500
+
+    assert (
+        json.loads(response.body)
+        == expected
+    )

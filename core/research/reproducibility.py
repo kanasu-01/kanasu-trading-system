@@ -161,7 +161,7 @@ def _decode_canonical_value(value: Any) -> Any:
             )
         try:
             decoded = float.fromhex(payload)
-        except ValueError as error:
+        except (ValueError, OverflowError) as error:
             raise ValueError(
                 "canonical float payload is invalid"
             ) from error
@@ -775,8 +775,19 @@ def _require_result_finite_number(
             value,
             (int, float),
         )
-        or not isfinite(value)
     ):
+        raise ValueError(
+            f"{label} must be a finite numeric value"
+        )
+
+    try:
+        finite = isfinite(value)
+    except OverflowError as exc:
+        raise ValueError(
+            f"{label} must be a finite numeric value"
+        ) from exc
+
+    if not finite:
         raise ValueError(
             f"{label} must be a finite numeric value"
         )
@@ -798,6 +809,42 @@ def _require_result_integer(
         )
 
     return value
+
+
+
+def _result_financial_isclose(
+    observed: int | float,
+    derived: int | float,
+    *,
+    rel_tol: float,
+    abs_tol: float,
+) -> bool:
+    """Compare finite derived financial values safely.
+
+    Individual canonical values can be finite while
+    derived products, differences, or sums exceed
+    the representable floating-point range.
+    """
+    try:
+        if (
+            not math.isfinite(observed)
+            or not math.isfinite(derived)
+        ):
+            raise ValueError(
+                "Backtest derived financial values must be finite"
+            )
+
+        return math.isclose(
+            observed,
+            derived,
+            rel_tol=rel_tol,
+            abs_tol=abs_tol,
+        )
+    except OverflowError as error:
+        raise ValueError(
+            "Backtest derived financial values exceed "
+            "the finite numeric range"
+        ) from error
 
 
 def validate_stable_backtest_result_payload(
@@ -911,7 +958,7 @@ def validate_stable_backtest_result_payload(
                 "cannot be negative"
             )
 
-        if not math.isclose(
+        if not _result_financial_isclose(
             trade["pnl"],
             (
                 trade["gross_pnl"]
@@ -926,6 +973,10 @@ def validate_stable_backtest_result_payload(
             )
 
         _require_result_integer(
+            trade["quantity"],
+            label=f"Backtest trade {index} quantity",
+        )
+        _require_result_finite_number(
             trade["quantity"],
             label=f"Backtest trade {index} quantity",
         )
@@ -957,7 +1008,7 @@ def validate_stable_backtest_result_payload(
             (trade["exit_price"] - entry_price)
             * trade["quantity"]
         )
-        if not math.isclose(
+        if not _result_financial_isclose(
             trade["gross_pnl"],
             expected_gross_pnl,
             rel_tol=1e-12,
@@ -972,7 +1023,7 @@ def validate_stable_backtest_result_payload(
             (trade["exit_price"] - entry_price)
             / entry_price
         ) * 100
-        if not math.isclose(
+        if not _result_financial_isclose(
             trade["pnl_pct"],
             expected_pnl_pct,
             rel_tol=1e-12,
@@ -1015,7 +1066,6 @@ def validate_stable_backtest_result_payload(
 
         previous_timestamp = timestamp
         bar_timestamps.append(timestamp)
-
         for field in (
             "open",
             "high",
@@ -1079,11 +1129,24 @@ def validate_stable_backtest_result_payload(
                 "volume cannot be negative"
             )
 
+        if record["cash"] < 0:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "cash cannot be negative for unlevered research"
+            )
+
         if record["position_size"] < 0:
             raise ValueError(
                 f"Backtest bar record {index} "
                 "position_size cannot be negative "
                 "for long-only research"
+            )
+
+        position_size = record["position_size"]
+        if int(position_size) != position_size:
+            raise ValueError(
+                f"Backtest bar record {index} "
+                "position_size must be a whole-share quantity"
             )
 
         if record["drawdown"] > 0:
@@ -1122,7 +1185,7 @@ def validate_stable_backtest_result_payload(
 
         if (
             record["position_size"] > 0
-            and not math.isclose(
+            and not _result_financial_isclose(
                 record["equity"],
                 (
                     record["cash"]
@@ -1190,6 +1253,14 @@ def validate_stable_backtest_result_payload(
                     f"Backtest bar record {index} "
                     "execution_quantity must be positive"
                 )
+
+            _require_result_finite_number(
+                record["execution_quantity"],
+                label=(
+                    f"Backtest bar record {index} "
+                    "execution_quantity"
+                ),
+            )
 
         execution_field_presence = (
             record["execution_event"] is not None,
@@ -1265,6 +1336,61 @@ def validate_stable_backtest_result_payload(
                 "authoritative bar_records"
             )
 
+    # Canonical trade times must be compatible with the
+    # authoritative result history, including valid same-bar fills.
+    # A nullable exit_time remains supported.
+    if bar_timestamps:
+        first_bar_timestamp = bar_timestamps[0]
+        last_bar_timestamp = bar_timestamps[-1]
+
+        for index, trade in enumerate(trades):
+            entry_time = trade["entry_time"]
+            exit_time = trade["exit_time"]
+
+            try:
+                entry_outside = (
+                    entry_time < first_bar_timestamp
+                    or entry_time > last_bar_timestamp
+                )
+                exit_outside = (
+                    exit_time is not None
+                    and (
+                        exit_time < first_bar_timestamp
+                        or exit_time > last_bar_timestamp
+                    )
+                )
+            except TypeError as exc:
+                raise ValueError(
+                    f"Backtest trade {index} timestamps "
+                    "must be comparable with authoritative "
+                    "bar timestamps"
+                ) from exc
+
+            if entry_outside or exit_outside:
+                raise ValueError(
+                    f"Backtest trade {index} timestamps "
+                    "must fall within authoritative "
+                    "bar history"
+                )
+
+    if bar_timestamps:
+        observed_bar_timestamps = set(bar_timestamps)
+        for index, trade in enumerate(trades):
+            if (
+                trade["entry_time"]
+                not in observed_bar_timestamps
+                or (
+                    trade["exit_time"] is not None
+                    and trade["exit_time"]
+                    not in observed_bar_timestamps
+                )
+            ):
+                raise ValueError(
+                    f"Backtest trade {index} timestamps "
+                    "must correspond to an observed "
+                    "authoritative bar"
+                )
+
     if not bar_records:
         if trades:
             raise ValueError(
@@ -1278,7 +1404,789 @@ def validate_stable_backtest_result_payload(
                 "authoritative bar_records"
             )
 
+    # Audit completed-trade settlements against the authoritative
+    # post-execution BarRecord sequence. BarRecord exposes the final
+    # execution diagnostic for a bar, so a genuine M4 same-bar entry
+    # followed by protective exit may be flat before/after while the
+    # retained diagnostic is the exit. Every completed trade must bind
+    # to exactly one compatible observed exit settlement, and one
+    # observed settlement cannot be consumed by multiple trades.
+    exit_events = {
+        "SELL",
+        "STOP_EXIT",
+        "PROTECTIVE_EXIT",
+    }
+
+    bar_index_by_timestamp = {
+        record["timestamp"]: index
+        for index, record in enumerate(bar_records)
+    }
+
+    if len(bar_index_by_timestamp) != len(bar_records):
+        raise ValueError(
+            "Backtest bar timestamps must be unique"
+        )
+
+    settlement_bar_by_trade_index = {}
+    consumed_entry_bar_indexes = set()
+    consumed_exit_bar_indexes = set()
+
+    def _compatible_exit_record(
+        *,
+        bar_index: int,
+        trade: dict[str, Any],
+    ) -> bool:
+        record = bar_records[bar_index]
+
+        if (
+            record["execution_event"] not in exit_events
+            or record["execution_quantity"] != trade["quantity"]
+            or not _result_financial_isclose(
+                record["execution_price"],
+                trade["exit_price"],
+                rel_tol=1e-12,
+                abs_tol=1e-8,
+            )
+        ):
+            return False
+
+        previous_quantity = (
+            bar_records[bar_index - 1]["position_size"]
+            if bar_index > 0
+            else 0
+        )
+        current_quantity = record["position_size"]
+
+        reduced_quantity = (
+            previous_quantity - current_quantity
+        )
+
+        if reduced_quantity > 0:
+            return reduced_quantity == trade["quantity"]
+
+        # M4 may enter and then protectively exit on one bar.
+        # The post-bar account is flat and BarRecord retains only
+        # the final exit diagnostic, so no net holdings reduction
+        # is observable across the two snapshots.
+        return (
+            previous_quantity == 0
+            and current_quantity == 0
+            and trade["entry_time"] == record["timestamp"]
+        )
+
+    # Preserve the established reduction-level rejection contract
+    # before assigning unique trade settlements. This is only a
+    # fail-closed diagnostic guard: unique allocation below remains
+    # authoritative and still prevents evidence reuse.
+    for index in range(1, len(bar_records)):
+        previous = bar_records[index - 1]
+        current = bar_records[index]
+        reduced_quantity = (
+            previous["position_size"]
+            - current["position_size"]
+        )
+
+        if reduced_quantity <= 0:
+            continue
+
+        compatible_recorded_quantity = sum(
+            trade["quantity"]
+            for trade in trades
+            if (
+                trade["exit_time"] in {
+                    None,
+                    current["timestamp"],
+                }
+                and trade["entry_time"]
+                <= current["timestamp"]
+                and current["execution_event"] in exit_events
+                and current["execution_quantity"]
+                == trade["quantity"]
+                and _result_financial_isclose(
+                    current["execution_price"],
+                    trade["exit_price"],
+                    rel_tol=1e-12,
+                    abs_tol=1e-8,
+                )
+            )
+        )
+
+        if compatible_recorded_quantity < reduced_quantity:
+            raise ValueError(
+                "Backtest holding decreased without "
+                "a recorded completed exit "
+                f"(bar record {index})"
+            )
+
+    for trade_index, trade in enumerate(trades):
+        entry_index = bar_index_by_timestamp.get(
+            trade["entry_time"]
+        )
+
+        if entry_index is None:
+            raise ValueError(
+                f"Backtest trade {trade_index} entry timestamp "
+                "must correspond to an observed authoritative bar"
+            )
+
+        # Under accepted M4 next-bar execution semantics, the first
+        # BarRecord is the initialized pre-execution account state.
+        if entry_index == 0:
+            raise ValueError(
+                f"Backtest trade {trade_index} cannot begin on "
+                "the first recorded pre-execution snapshot"
+            )
+
+        exit_time = trade["exit_time"]
+
+        if exit_time is not None:
+            candidate_indexes = [
+                bar_index_by_timestamp[exit_time]
+            ]
+        else:
+            later_entry_times = [
+                other["entry_time"]
+                for other_index, other in enumerate(trades)
+                if (
+                    other_index != trade_index
+                    and other["entry_time"]
+                    > trade["entry_time"]
+                )
+            ]
+
+            next_entry_time = (
+                min(later_entry_times)
+                if later_entry_times
+                else None
+            )
+
+            candidate_indexes = [
+                bar_index
+                for bar_index, record in enumerate(bar_records)
+                if (
+                    record["timestamp"]
+                    >= trade["entry_time"]
+                    and (
+                        next_entry_time is None
+                        or record["timestamp"] < next_entry_time
+                    )
+                )
+            ]
+
+        compatible_indexes = [
+            bar_index
+            for bar_index in candidate_indexes
+            if (
+                bar_index not in consumed_exit_bar_indexes
+                and _compatible_exit_record(
+                    bar_index=bar_index,
+                    trade=trade,
+                )
+            )
+        ]
+
+        if len(compatible_indexes) != 1:
+            raise ValueError(
+                "Backtest completed trade requires unique "
+                "observed exit settlement evidence"
+            )
+
+        settlement_index = compatible_indexes[0]
+
+        if settlement_index < entry_index:
+            raise ValueError(
+                f"Backtest trade {trade_index} exit settlement "
+                "cannot precede entry"
+            )
+
+        if settlement_index == entry_index:
+            settlement_record = bar_records[
+                settlement_index
+            ]
+            previous_quantity = (
+                bar_records[settlement_index - 1][
+                    "position_size"
+                ]
+            )
+
+            if (
+                previous_quantity != 0
+                or settlement_record["position_size"] != 0
+            ):
+                raise ValueError(
+                    "Backtest same-bar completed trade "
+                    "requires a flat-to-flat M4 settlement"
+                )
+
+            try:
+                entry_notional = (
+                    trade["entry_price"]
+                    * trade["quantity"]
+                )
+            except OverflowError as error:
+                raise ValueError(
+                    "Backtest same-bar entry notional exceeds "
+                    "the finite numeric range"
+                ) from error
+
+            entry_notional = (
+                _require_result_finite_number(
+                    entry_notional,
+                    label=(
+                        f"Backtest trade {trade_index} "
+                        "same-bar entry notional"
+                    ),
+                )
+            )
+
+            available_cash = bar_records[
+                settlement_index - 1
+            ]["cash"]
+
+            if entry_notional > available_cash:
+                raise ValueError(
+                    "Backtest same-bar completed trade "
+                    "entry cannot be funded by pre-bar cash"
+                )
+        else:
+            if entry_index in consumed_entry_bar_indexes:
+                raise ValueError(
+                    "Backtest completed trade requires unique "
+                    "observed entry settlement evidence"
+                )
+
+            entry_record = bar_records[entry_index]
+
+            if (
+                entry_record["execution_event"] != "BUY"
+                or entry_record["execution_quantity"]
+                != trade["quantity"]
+                or not _result_financial_isclose(
+                    entry_record["execution_price"],
+                    trade["entry_price"],
+                    rel_tol=1e-12,
+                    abs_tol=1e-8,
+                )
+            ):
+                raise ValueError(
+                    f"Backtest trade {trade_index} entry claim "
+                    "does not match observed BUY settlement"
+                )
+
+            consumed_entry_bar_indexes.add(
+                entry_index
+            )
+
+        settlement_bar_by_trade_index[
+            trade_index
+        ] = settlement_index
+
+        consumed_exit_bar_indexes.add(
+            settlement_index
+        )
+
+    if bar_records:
+        starting_cash = bar_records[0]["cash"]
+
+        # Reconcile every observed flat account checkpoint from
+        # uniquely allocated completed net P&L, including runs that
+        # subsequently re-enter and finish with an open holding.
+        for index, record in enumerate(
+            bar_records[1:], start=1
+        ):
+            if record["position_size"] != 0:
+                continue
+
+            completed_pnl_values = [
+                trade["pnl"]
+                for trade_index, trade in enumerate(trades)
+                if (
+                    settlement_bar_by_trade_index[
+                        trade_index
+                    ]
+                    <= index
+                )
+            ]
+
+            try:
+                completed_pnl = math.fsum(
+                    completed_pnl_values
+                )
+                expected_cash = (
+                    starting_cash + completed_pnl
+                )
+
+                if not math.isfinite(expected_cash):
+                    raise OverflowError(
+                        "nonfinite expected cash"
+                    )
+            except (
+                OverflowError,
+                ValueError,
+                TypeError,
+            ) as exc:
+                raise ValueError(
+                    "Backtest completed settlement "
+                    "cannot be reconciled safely"
+                ) from exc
+
+            if not _result_financial_isclose(
+                record["cash"],
+                expected_cash,
+                rel_tol=1e-12,
+                abs_tol=1e-7,
+            ):
+                if (
+                    not trades
+                    and all(
+                        bar["position_size"] == 0
+                        for bar in bar_records
+                    )
+                ):
+                    raise ValueError(
+                        "Backtest flat account cash cannot change "
+                        "without a recorded completed trade "
+                        f"or holding (bar record {index})"
+                    )
+
+                if index == len(bar_records) - 1:
+                    raise ValueError(
+                        "Backtest terminal flat cash must "
+                        "equal initial cash plus completed "
+                        "trade net P&L"
+                    )
+
+                raise ValueError(
+                    "Backtest flat account cash must "
+                    "reconcile with uniquely allocated "
+                    "completed trade net P&L "
+                    f"(bar record {index})"
+                )
+
+    # M9.4q stage 1: observable cash and share conservation.
+
+    # This is a necessary check, not a new fill or fee engine.
+
+    # Actual M4 execution fees are nonnegative and may
+
+    # reduce cash beyond the gross entry/exit notional.
+
+    for index in range(1, len(bar_records)):
+
+        previous = bar_records[index - 1]
+
+        current = bar_records[index]
+
+        before_quantity = previous["position_size"]
+
+        after_quantity = current["position_size"]
+
+        execution_event = current["execution_event"]
+
+
+
+        if after_quantity > before_quantity:
+
+            if (
+
+                before_quantity != 0
+
+                or execution_event != "BUY"
+
+                or current["execution_quantity"] != after_quantity
+
+            ):
+
+                raise ValueError(
+
+                    "Backtest holding increased without a "
+
+                    "compatible BUY execution "
+
+                    f"(bar record {index})"
+
+                )
+
+
+
+            try:
+
+                entry_notional = (
+
+                    current["execution_price"] * after_quantity
+
+                )
+
+                maximum_cash = previous["cash"] - entry_notional
+
+                if (
+
+                    not math.isfinite(entry_notional)
+
+                    or not math.isfinite(maximum_cash)
+
+                ):
+
+                    raise OverflowError(
+
+                        "nonfinite entry funding"
+
+                    )
+
+            except (
+
+                OverflowError, ValueError, TypeError
+
+            ) as exc:
+
+                raise ValueError(
+
+                    "Backtest entry funding cannot be "
+
+                    "reconciled safely"
+
+                ) from exc
+
+
+
+            if entry_notional > previous["cash"]:
+                raise ValueError(
+                    "Backtest new holdings require a "
+                    "funded BUY from pre-entry cash "
+                    f"(bar record {index})"
+                )
+
+            if (
+
+                current["cash"] > maximum_cash
+
+                and not _result_financial_isclose(
+
+                    current["cash"],
+
+                    maximum_cash,
+
+                    rel_tol=1e-12,
+
+                    abs_tol=1e-7,
+
+                )
+
+            ):
+
+                raise ValueError(
+
+                    "Backtest new holdings require a "
+
+                    "funded BUY (bar record "
+
+                    f"{index})"
+
+                )
+
+
+
+        elif after_quantity < before_quantity:
+
+            reduced_quantity = (
+
+                before_quantity - after_quantity
+
+            )
+
+
+
+            if (
+
+                execution_event not in {
+
+                    "SELL", "STOP_EXIT", "PROTECTIVE_EXIT"
+
+                }
+
+                or current["execution_quantity"]
+
+                != reduced_quantity
+
+            ):
+
+                raise ValueError(
+
+                    "Backtest holding reduction requires "
+
+                    "compatible exit evidence "
+
+                    f"(bar record {index})"
+
+                )
+
+
+
+            try:
+
+                gross_proceeds = (
+
+                    current["execution_price"] * reduced_quantity
+
+                )
+
+                maximum_cash = (
+
+                    previous["cash"] + gross_proceeds
+
+                )
+
+                if (
+
+                    not math.isfinite(gross_proceeds)
+
+                    or not math.isfinite(maximum_cash)
+
+                ):
+
+                    raise OverflowError(
+
+                        "nonfinite exit proceeds"
+
+                    )
+
+            except (
+
+                OverflowError, ValueError, TypeError
+
+            ) as exc:
+
+                raise ValueError(
+
+                    "Backtest exit proceeds cannot be "
+
+                    "reconciled safely"
+
+                ) from exc
+
+
+
+            if (
+
+                current["cash"] > maximum_cash
+
+                and not _result_financial_isclose(
+
+                    current["cash"],
+
+                    maximum_cash,
+
+                    rel_tol=1e-12,
+
+                    abs_tol=1e-7,
+
+                )
+
+            ):
+
+                raise ValueError(
+
+                    "Backtest exit cannot create cash "
+
+                    "beyond gross proceeds "
+
+                    f"(bar record {index})"
+
+                )
+
+
+
+        else:
+
+            same_bar_trade_indexes = [
+                trade_index
+                for trade_index, settlement_index
+                in settlement_bar_by_trade_index.items()
+                if (
+                    settlement_index == index
+                    and trades[trade_index]["entry_time"]
+                    == current["timestamp"]
+                )
+            ]
+
+            if same_bar_trade_indexes:
+                if (
+                    before_quantity != 0
+                    or after_quantity != 0
+                    or execution_event not in exit_events
+                ):
+                    raise ValueError(
+                        "Backtest same-bar completed settlement "
+                        "requires compatible flat-to-flat exit "
+                        f"evidence (bar record {index})"
+                    )
+
+                try:
+                    same_bar_net_pnl = math.fsum(
+                        trades[trade_index]["pnl"]
+                        for trade_index
+                        in same_bar_trade_indexes
+                    )
+                    expected_cash = (
+                        previous["cash"]
+                        + same_bar_net_pnl
+                    )
+
+                    if not math.isfinite(expected_cash):
+                        raise OverflowError(
+                            "nonfinite same-bar cash"
+                        )
+                except (
+                    OverflowError,
+                    ValueError,
+                    TypeError,
+                ) as exc:
+                    raise ValueError(
+                        "Backtest same-bar settlement "
+                        "cannot be reconciled safely"
+                    ) from exc
+
+                if not _result_financial_isclose(
+                    current["cash"],
+                    expected_cash,
+                    rel_tol=1e-12,
+                    abs_tol=1e-7,
+                ):
+                    raise ValueError(
+                        "Backtest same-bar completed settlement "
+                        "must reconcile with trade net P&L "
+                        f"(bar record {index})"
+                    )
+
+            else:
+                if execution_event is not None:
+                    raise ValueError(
+                        "Backtest unchanged holdings cannot "
+                        "carry unmatched execution evidence "
+                        f"(bar record {index})"
+                    )
+
+                if not _result_financial_isclose(
+                    current["cash"],
+                    previous["cash"],
+                    rel_tol=1e-12,
+                    abs_tol=1e-7,
+                ):
+                    raise ValueError(
+                        "Backtest cash changed without "
+                        "recorded execution "
+                        f"(bar record {index})"
+                    )
+
+
+
+    # Under accepted M4 next-bar execution semantics, the first
+    # BarRecord cannot itself contain an execution settlement because
+    # no prior-bar execution intent exists yet. Do not require the
+    # generic stable-result boundary to begin flat: historical/legacy
+    # structural payloads may legitimately carry an opening holding.
+    if bar_records:
+        first_record = bar_records[0]
+
+        if any(
+            first_record[field] is not None
+            for field in (
+                "execution_event",
+                "execution_price",
+                "execution_quantity",
+            )
+        ):
+            raise ValueError(
+                "Backtest first recorded pre-execution snapshot "
+                "cannot contain execution settlement evidence"
+            )
+
     return result
+
+
+def validate_backtest_result_manifest_capital_binding(
+    result: dict[str, Any],
+    manifest: dict[str, Any],
+) -> None:
+    """
+    Bind observable Backtest account capital to its immutable run manifest.
+
+    Empty Backtest results contain no account snapshot and therefore make
+    no observable capital claim. Once at least one bar is recorded, M4
+    next-bar execution semantics mean the first recorded account snapshot
+    still represents the initialized account before any execution.
+    """
+
+    if not isinstance(result, dict):
+        raise TypeError(
+            "Backtest result must be a mapping for manifest binding"
+        )
+
+    if not isinstance(manifest, dict):
+        raise TypeError(
+            "Backtest run manifest must be a mapping"
+        )
+
+    if "initial_capital" not in manifest:
+        raise ValueError(
+            "Backtest run manifest requires initial_capital"
+        )
+
+    initial_capital = _require_result_finite_number(
+        manifest["initial_capital"],
+        label="Backtest run manifest initial_capital",
+    )
+
+    if initial_capital <= 0:
+        raise ValueError(
+            "Backtest run manifest initial_capital "
+            "must be strictly positive"
+        )
+
+    bar_records = result.get("bar_records")
+
+    if not isinstance(bar_records, list):
+        raise ValueError(
+            "Backtest result bar_records must be a list "
+            "for manifest binding"
+        )
+
+    if not bar_records:
+        return
+
+    first_record = bar_records[0]
+
+    if not isinstance(first_record, dict):
+        raise ValueError(
+            "Backtest first bar record must be a mapping "
+            "for manifest binding"
+        )
+
+    for field in ("cash", "equity"):
+        if field not in first_record:
+            raise ValueError(
+                "Backtest first bar record lacks "
+                f"{field} for manifest binding"
+            )
+
+        observed = _require_result_finite_number(
+            first_record[field],
+            label=(
+                "Backtest first bar record "
+                f"{field}"
+            ),
+        )
+
+        if not _result_financial_isclose(
+            observed,
+            initial_capital,
+            rel_tol=1e-12,
+            abs_tol=1e-7,
+        ):
+            raise ValueError(
+                "Backtest observable initial account capital "
+                "does not match authoritative run manifest"
+            )
 
 
 def decode_stable_backtest_result_bytes(

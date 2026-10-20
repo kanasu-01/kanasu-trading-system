@@ -1870,3 +1870,522 @@ def test_m94m_stale_internal_supplied_attempt_cannot_reexecute(
 
     assert len(execution_calls) == 1
     assert row_count(database, "run_attempts") == 1
+
+
+
+
+def test_m94q_fractional_result_is_not_reused_and_fresh_execution_remains_available(
+    tmp_path,
+):
+    database = tmp_path / "research.sqlite3"
+
+    attempt_ids = iter(
+        (
+            "attempt-m94q-source",
+            "attempt-m94q-fresh",
+        )
+    )
+    evidence_ids = iter(
+        (
+            "evidence-m94q-source",
+            "evidence-m94q-fresh",
+        )
+    )
+
+    catalog = SQLiteResearchCatalogStore(
+        database,
+        attempt_id_factory=lambda: next(attempt_ids),
+    )
+    evidence_store = SQLiteResearchEvidenceStore(
+        database
+    )
+    artifact_store = ContentAddressedResearchArtifactStore(
+        tmp_path / "artifacts"
+    )
+
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[
+                BarRecord(
+                    timestamp=START,
+                    open=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0,
+                    volume=1000.0,
+                    strategy="m94q-reuse-fixture",
+                    state=None,
+                    signal=None,
+                    execution_event=None,
+                    execution_price=None,
+                    execution_quantity=None,
+                    decision_snapshot={},
+                    equity=100_000.0,
+                    cash=100_000.0,
+                    position_size=0.0,
+                    drawdown=0.0,
+                ),
+            ],
+            session_id=(
+                "runtime-m94q-"
+                + str(len(execution_calls))
+            ),
+        )
+
+    service = BacktestResearchOrchestrator(
+        catalog_store=catalog,
+        evidence_store=evidence_store,
+        artifact_store=artifact_store,
+        software_identity_provider=StaticIdentityProvider(
+            SoftwareIdentity(
+                REVISION,
+                True,
+            )
+        ),
+        evidence_id_factory=lambda: next(
+            evidence_ids
+        ),
+        clock=lambda: CREATED_AT,
+        retrieve_candles=lambda **kwargs: candles(),
+        execute_candles=execute,
+    )
+
+    source = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        source.attempt_id
+    )
+
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+    assert source_attempt.result_artifact_id is not None
+
+    source_result_id = (
+        source_attempt.result_artifact_id
+    )
+
+    payload = decode_canonical_bytes(
+        artifact_store.load_bytes(
+            source_result_id
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = 1.5
+    record["cash"] = (
+        record["equity"]
+        - record["position_size"] * record["close"]
+    )
+
+    fractional_bytes = canonical_bytes(
+        payload,
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    fractional_artifact = (
+        artifact_store.persist_bytes(
+            fractional_bytes,
+            artifact_kind=(
+                ResearchArtifactKind.BACKTEST_RESULT
+            ),
+            schema_id=BACKTEST_RESULT_SCHEMA,
+            created_at=CREATED_AT,
+        )
+    )
+
+    catalog.save_artifact(
+        fractional_artifact
+    )
+
+    old_reference = research_artifact_reference(
+        source_result_id
+    )
+    new_reference = research_artifact_reference(
+        fractional_artifact.artifact_id
+    )
+
+    with sqlite3.connect(database) as connection:
+        row = connection.execute(
+            """
+            SELECT artifact_references
+            FROM research_evidence
+            WHERE evidence_id = ?
+            """,
+            (source_attempt.evidence_id,),
+        ).fetchone()
+
+        assert row is not None
+
+        references = json.loads(
+            row[0]
+        )
+
+        references = [
+            (
+                new_reference
+                if reference == old_reference
+                else reference
+            )
+            for reference in references
+        ]
+
+        connection.execute(
+            """
+            UPDATE run_attempts
+            SET result_artifact_id = ?
+            WHERE attempt_id = ?
+            """,
+            (
+                fractional_artifact.artifact_id,
+                source_attempt.attempt_id,
+            ),
+        )
+
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET
+                result_fingerprint = ?,
+                artifact_references = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                fractional_artifact.artifact_id,
+                json.dumps(
+                    references,
+                    separators=(",", ":"),
+                ),
+                source_attempt.evidence_id,
+            ),
+        )
+
+        connection.commit()
+
+    before_reuse_lookup = row_count(
+        database,
+        "run_attempts",
+    )
+
+    assert before_reuse_lookup == 1
+
+    reusable = service.find_exact_reusable_execution(
+        source_attempt.experiment_spec_id
+    )
+
+    assert reusable is None
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == before_reuse_lookup
+    )
+
+    fresh = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert fresh.attempt_id == "attempt-m94q-fresh"
+    assert len(execution_calls) == 2
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == 2
+    )
+
+    fresh_attempt = catalog.load_run_attempt(
+        fresh.attempt_id
+    )
+
+    assert fresh_attempt is not None
+    assert (
+        fresh_attempt.state
+        is RunAttemptState.SUCCEEDED
+    )
+    assert (
+        fresh_attempt.experiment_spec_id
+        == source_attempt.experiment_spec_id
+    )
+
+
+
+def test_m94q_negative_cash_result_is_not_reused_and_fresh_execution_remains_available(
+    tmp_path,
+):
+    database = tmp_path / "research.sqlite3"
+
+    attempt_ids = iter(
+        (
+            "attempt-m94q-negative-cash-source",
+            "attempt-m94q-negative-cash-fresh",
+        )
+    )
+    evidence_ids = iter(
+        (
+            "evidence-m94q-negative-cash-source",
+            "evidence-m94q-negative-cash-fresh",
+        )
+    )
+
+    catalog = SQLiteResearchCatalogStore(
+        database,
+        attempt_id_factory=lambda: next(attempt_ids),
+    )
+    evidence_store = SQLiteResearchEvidenceStore(
+        database
+    )
+    artifact_store = ContentAddressedResearchArtifactStore(
+        tmp_path / "artifacts"
+    )
+
+    execution_calls = []
+
+    def execute(**kwargs):
+        execution_calls.append(kwargs)
+        return BacktestResult(
+            trades=[],
+            bar_records=[
+                BarRecord(
+                    timestamp=START,
+                    open=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0,
+                    volume=1000.0,
+                    strategy="m94q-reuse-fixture",
+                    state=None,
+                    signal=None,
+                    execution_event=None,
+                    execution_price=None,
+                    execution_quantity=None,
+                    decision_snapshot={},
+                    equity=100_000.0,
+                    cash=100_000.0,
+                    position_size=0.0,
+                    drawdown=0.0,
+                ),
+            ],
+            session_id=(
+                "runtime-m94q-"
+                + str(len(execution_calls))
+            ),
+        )
+
+    service = BacktestResearchOrchestrator(
+        catalog_store=catalog,
+        evidence_store=evidence_store,
+        artifact_store=artifact_store,
+        software_identity_provider=StaticIdentityProvider(
+            SoftwareIdentity(
+                REVISION,
+                True,
+            )
+        ),
+        evidence_id_factory=lambda: next(
+            evidence_ids
+        ),
+        clock=lambda: CREATED_AT,
+        retrieve_candles=lambda **kwargs: candles(),
+        execute_candles=execute,
+    )
+
+    source = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    source_attempt = catalog.load_run_attempt(
+        source.attempt_id
+    )
+
+    assert source_attempt is not None
+    assert source_attempt.evidence_id is not None
+    assert source_attempt.result_artifact_id is not None
+
+    source_result_id = (
+        source_attempt.result_artifact_id
+    )
+
+    payload = decode_canonical_bytes(
+        artifact_store.load_bytes(
+            source_result_id
+        ),
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    record = payload["bar_records"][0]
+    record["position_size"] = 2000.0
+    record["cash"] = -100_000.0
+
+    assert record["equity"] == (
+        record["cash"]
+        + record["position_size"] * record["close"]
+    )
+
+    negative_cash_bytes = canonical_bytes(
+        payload,
+        schema=BACKTEST_RESULT_SCHEMA,
+    )
+
+    negative_cash_artifact = (
+        artifact_store.persist_bytes(
+            negative_cash_bytes,
+            artifact_kind=(
+                ResearchArtifactKind.BACKTEST_RESULT
+            ),
+            schema_id=BACKTEST_RESULT_SCHEMA,
+            created_at=CREATED_AT,
+        )
+    )
+
+    catalog.save_artifact(
+        negative_cash_artifact
+    )
+
+    old_reference = research_artifact_reference(
+        source_result_id
+    )
+    new_reference = research_artifact_reference(
+        negative_cash_artifact.artifact_id
+    )
+
+    with sqlite3.connect(database) as connection:
+        row = connection.execute(
+            """
+            SELECT artifact_references
+            FROM research_evidence
+            WHERE evidence_id = ?
+            """,
+            (source_attempt.evidence_id,),
+        ).fetchone()
+
+        assert row is not None
+
+        references = json.loads(
+            row[0]
+        )
+
+        references = [
+            (
+                new_reference
+                if reference == old_reference
+                else reference
+            )
+            for reference in references
+        ]
+
+        connection.execute(
+            """
+            UPDATE run_attempts
+            SET result_artifact_id = ?
+            WHERE attempt_id = ?
+            """,
+            (
+                negative_cash_artifact.artifact_id,
+                source_attempt.attempt_id,
+            ),
+        )
+
+        connection.execute(
+            """
+            UPDATE research_evidence
+            SET
+                result_fingerprint = ?,
+                artifact_references = ?
+            WHERE evidence_id = ?
+            """,
+            (
+                negative_cash_artifact.artifact_id,
+                json.dumps(
+                    references,
+                    separators=(",", ":"),
+                ),
+                source_attempt.evidence_id,
+            ),
+        )
+
+        connection.commit()
+
+    before_reuse_lookup = row_count(
+        database,
+        "run_attempts",
+    )
+
+    assert before_reuse_lookup == 1
+
+    reusable = service.find_exact_reusable_execution(
+        source_attempt.experiment_spec_id
+    )
+
+    assert reusable is None
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == before_reuse_lookup
+    )
+
+    fresh = service.execute(
+        historical_source=object(),
+        strategy=create_strategy(config()),
+        config=config(),
+        runtime_context=RuntimeContext(
+            risk_per_trade_pct=1.0
+        ),
+        dataset_context=context(),
+    )
+
+    assert fresh.attempt_id == "attempt-m94q-negative-cash-fresh"
+    assert len(execution_calls) == 2
+
+    assert (
+        row_count(
+            database,
+            "run_attempts",
+        )
+        == 2
+    )
+
+    fresh_attempt = catalog.load_run_attempt(
+        fresh.attempt_id
+    )
+
+    assert fresh_attempt is not None
+    assert (
+        fresh_attempt.state
+        is RunAttemptState.SUCCEEDED
+    )
+    assert (
+        fresh_attempt.experiment_spec_id
+        == source_attempt.experiment_spec_id
+    )

@@ -532,7 +532,7 @@ def list_research_trials(
     )
 
     trials = tuple(
-        store.list_trials_for_revision(
+        store.list_registered_trials_for_revision(
             study_revision_id
         )
     )
