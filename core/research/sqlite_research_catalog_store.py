@@ -3340,13 +3340,6 @@ class SQLiteResearchCatalogStore:
                     (study_revision_id,),
                 ).fetchall()
 
-                # Reject corruption before writing jobs or Start metadata.
-                self._validate_study_revision_population_in_connection(
-                    connection,
-                    study_revision_id,
-                    tuple(row[0] for row in trial_rows),
-                )
-
                 actual_population_fingerprint = (
                     _registered_trial_population_fingerprint(
                         study_revision_id,
@@ -3367,6 +3360,14 @@ class SQLiteResearchCatalogStore:
                         "does not match its persisted Trial "
                         "denominator"
                     )
+
+                # Keep the established proof-mismatch error contract,
+                # then verify each immutable Trial identity before writes.
+                self._validate_study_revision_population_in_connection(
+                    connection,
+                    study_revision_id,
+                    tuple(row[0] for row in trial_rows),
+                )
 
                 expected_initial_jobs = tuple(
                     (

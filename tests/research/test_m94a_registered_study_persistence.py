@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import sqlite3
 
@@ -5,6 +6,7 @@ import pytest
 
 from core.research.models.registered_study import (
     STUDY_REVISION_SCHEMA_ID,
+    TRIAL_IDENTITY_SCHEMA_ID,
     EvidenceReusePolicy,
     ResearchJob,
     ResearchJobState,
@@ -18,6 +20,7 @@ from core.research.models.research_catalog import (
     ResearchArtifact,
     ResearchArtifactKind,
 )
+from core.research.reproducibility import canonical_fingerprint
 from core.research.sqlite_research_catalog_store import (
     SQLiteResearchCatalogStore,
 )
@@ -662,8 +665,32 @@ def _m94g2_complete_registered_store(tmp_path):
     authoritative_revision_id = (
         registered_revision.plan_artifact_id
     )
-    registered_trial = trial(
+    # This authoritative Start fixture must have a genuinely
+    # content-addressed Trial ID. Earlier storage-only fixtures may use
+    # placeholder IDs, but they cannot obtain registered authority.
+    trial_template = trial(
         study_revision_id=authoritative_revision_id,
+    )
+    canonical_trial_id = canonical_fingerprint(
+        {
+            "study_revision_id": trial_template.study_revision_id,
+            "instrument_id": trial_template.instrument_id,
+            "membership_episode": {
+                "start": trial_template.membership_episode_start,
+                "end": trial_template.membership_episode_end,
+            },
+            "membership_evidence_fingerprint": (
+                trial_template.membership_evidence_fingerprint
+            ),
+            "parameter_configuration_fingerprint": (
+                trial_template.parameter_configuration_fingerprint
+            ),
+        },
+        schema=TRIAL_IDENTITY_SCHEMA_ID,
+    )
+    registered_trial = replace(
+        trial_template,
+        trial_id=canonical_trial_id,
     )
     event = initial_event(
         trial_id=registered_trial.trial_id,

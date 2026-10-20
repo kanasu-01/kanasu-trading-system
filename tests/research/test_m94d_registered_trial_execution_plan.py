@@ -243,8 +243,8 @@ def test_fails_closed_when_trial_parameter_fingerprint_is_not_in_plan(
     with pytest.raises(
         ValueError,
         match=(
-            "parameter configuration fingerprint "
-            "is not present"
+            "registered Trial population proof does not match "
+            "persisted immutable Trial identity"
         ),
     ):
         resolver.resolve(
@@ -283,8 +283,8 @@ def test_fails_closed_when_membership_episode_exceeds_registered_range(
     with pytest.raises(
         ValueError,
         match=(
-            "membership episode is outside "
-            "the registered StudyRevision research range"
+            "registered Trial population proof does not match "
+            "persisted immutable Trial identity"
         ),
     ):
         resolver.resolve(
