@@ -580,7 +580,17 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED M9.4 DESIGN; CURRENT M9.4q LOCAL POST-REVIEW-01 CORRECTED CANDIDATE UNSTAGED, UNCOMMITTED AND UNPUBLISHED; THE FRESH INDEPENDENT PRE-PUBLICATION REVIEW OF THE POST-FRESH-04 CANDIDATE FOUND `M94Q-REVIEW-01`, A PERSISTED TRIAL SELF-IDENTITY INTEGRITY GAP; THE LOCAL CORRECTION PRESERVES THE EXISTING POPULATION-PROOF FORMAT, RECOMPUTES CONTENT-ADDRESSED TRIAL IDENTITY AT AUTHORITATIVE REGISTERED-POPULATION READS AND REQUIRES REGISTERED EXECUTION-PLAN RESOLUTION TO CROSS THAT BOUNDARY BEFORE DOWNSTREAM EXECUTION; 549 REPOSITORY-WIDE M9.4 TESTS ACROSS 23 FILES, 90 PRESERVATION CONTROLS AND 1673 COMPLETE PYTHON TESTS PASS; M94Q_AUDIT_GATE=BLOCKED PENDING FRESH REVIEW OF THIS EXACT CORRECTED CANDIDATE AND LATER EXACT PUBLISHED-HEAD INDEPENDENT PASS; M9.5 MAY BEGIN ONLY AS FRESH DESIGN AFTER THAT PASS; M9.5 IMPLEMENTATION NOT AUTHORIZED.
+**Status:** ACCEPTED M9.4 DESIGN; reviewed correction integrated into audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`. Technical carry-forward PASS; DOCUMENTATION FAIL; historical human integration approval NOT_VERIFIED; overall gate VERIFIED_FAIL. M9.4q closure and M9.5 formal admission/implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
+
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
+
+Historical pre-IND REVIEW-01 status snapshot:
+> **Status:** ACCEPTED M9.4 DESIGN; CURRENT M9.4q LOCAL POST-REVIEW-01 CORRECTED CANDIDATE UNSTAGED, UNCOMMITTED AND UNPUBLISHED; THE FRESH INDEPENDENT PRE-PUBLICATION REVIEW OF THE POST-FRESH-04 CANDIDATE FOUND `M94Q-REVIEW-01`, A PERSISTED TRIAL SELF-IDENTITY INTEGRITY GAP; THE LOCAL CORRECTION PRESERVES THE EXISTING POPULATION-PROOF FORMAT, RECOMPUTES CONTENT-ADDRESSED TRIAL IDENTITY AT AUTHORITATIVE REGISTERED-POPULATION READS AND REQUIRES REGISTERED EXECUTION-PLAN RESOLUTION TO CROSS THAT BOUNDARY BEFORE DOWNSTREAM EXECUTION; 549 REPOSITORY-WIDE M9.4 TESTS ACROSS 23 FILES, 90 PRESERVATION CONTROLS AND 1673 COMPLETE PYTHON TESTS PASS; M94Q_AUDIT_GATE=BLOCKED PENDING FRESH REVIEW OF THIS EXACT CORRECTED CANDIDATE AND LATER EXACT PUBLISHED-HEAD INDEPENDENT PASS; M9.5 MAY BEGIN ONLY AS FRESH DESIGN AFTER THAT PASS; M9.5 IMPLEMENTATION NOT AUTHORIZED.
 
 **Target:** M9.4
 
@@ -841,8 +851,9 @@ REUSED Study aggregation consume the validated registered population.
 
 Permanent REVIEW-01 evidence is four adversarial regressions spanning
 registered-population read, claimed execution, EXECUTED aggregation and REUSED
-aggregation. Broad validation is now **549 M9.4 / 90 preservation / 1673
-complete Python**, all green with clean `git diff --check`.
+aggregation. Historical pre-IND REVIEW-01 validation was **549 M9.4 / 90
+reported preservation / 1673 complete Python**. The 90-control selector remains
+independently unidentified; these counts are not the published-head CI result.
 
 The **545 / 90 / 1669** figures are historical FRESH-04 evidence and the
 **541 / 90 / 1665** figures are historical FRESH-03 evidence. The correction
@@ -850,13 +861,12 @@ does not alter M4 execution economics, fixed Trial count, retry/recovery,
 exact-reuse lineage, independent-account aggregation, M9.5 qualification
 ownership or the no-live-money boundary.
 
-Historical REVIEW-01 checkpoint only: that candidate was subsequently
-published at `9f41a54c` and independently FAILED (IND-01–04).
-ChatGPT's isolated development correction at `e6002758` independently
-PASSED the accepted-scope technical audit (1684 full-suite and 122 reviewer
-probes), but has not been integrated into the milestone branch. Final human
-integration approval and exact-published-HEAD independent PASS remain
-required; M9.5 design and implementation are still blocked.
+Historical REVIEW-01 checkpoint only: that candidate was published at
+`9f41a54c` and independently FAILED (IND-01–04). The correction reviewed at
+`e6002758` was subsequently integrated into audited published baseline
+`929db5d6`. Its parent review/probes and published-SHA CI have distinct
+attribution. Current documentation and historical human-approval gates are
+recorded in [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
 
 ### AD-025 follow-up - M9.4q IND-01–04 transaction and snapshot enforcement
 
@@ -880,5 +890,7 @@ Accepted prior-M9.4 semantics, independent-account aggregation and exact
 evidence lineage are preserved. GitHub run `39482590794`: 1684 passed.
 Independent audit of exact SHA `e6002758f22e0bb07d0886dcc1603eba21e6e501`:
 122 reviewer cases passed, no runtime blocker, candidate-level PASS.
-Human-approved milestone integration and independent published-HEAD PASS are
-distinct remaining gates; M9.5 remains blocked.
+The reviewed correction is integrated into audited published baseline
+`929db5d6`; historical human integration approval remains NOT_VERIFIED.
+Current documentation and final acceptance gates are owned by
+[Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21); M9.4q closure and M9.5 formal admission/implementation remain blocked.

@@ -120,6 +120,13 @@ product-owner behavioral review
 
 Exact test names and symbol-level references should be tightened whenever a row is independently audited or affected by an implementation change.
 
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
+
 ## M9.4l independent audit and M9.4m local corrective evidence
 
 M9.4l was published/post-push verified at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. Its local validation included 176 focused tests, 207 research-only M9.4 tests across 13 modules and 1383 complete Python tests. The independent reviewer subsequently discovered 273 repository-wide M9.4 tests across 21 modules and independently ran all 1383 Python tests. The audit returned `M95_GATE=BLOCKED` with A01, A02, A03 and F03. Publication and passing tests did not establish independent acceptance.
@@ -435,10 +442,10 @@ semantics, retry/recovery, no-fake-RunAttempt reuse, independent-account
 aggregation, M9.5 qualification ownership and the no-live-money boundary.
 
 The preceding REVIEW-01 narrative is a historical pre-IND-01–04 checkpoint.
-That earlier published correction at `9f41a54c` independently failed. The
-subsequent isolated development correction passed an independent runtime audit
-of exact SHA `e6002758`; the milestone branch is not yet integrated.
-M9.5 remains blocked pending final milestone-head acceptance.
+The earlier published correction at `9f41a54c` independently failed.
+The correction reviewed at `e6002758` is integrated into audited published
+baseline `929db5d6`. Its technical carry-forward does not resolve the
+documentation or historical human-approval gates; see [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
 
 
 ## M9.4q IND-01–04 corrected authority trace — 2026-10-21
@@ -474,7 +481,10 @@ independently isolated; complete repository regression is the confirmed
 preservation evidence. The audit reported documentation follow-up
 `M94Q-COR-DOC-01` and one whitespace error, with no runtime blocker.
 
-**Gate:** development-candidate independent PASS only. Further documentation
-synchronization creates a different commit and therefore requires exact-final
-candidate identity and mechanical verification. No milestone integration,
-M9.4 closure or M9.5 design authorization is implied.
+**Gate:** the independent review/probes above belong to development candidate
+`e6002758`. Technical PASS was carried forward to audited published baseline
+`929db5d6` after executable-invariance and exact-SHA CI checks; documentation
+remains FAIL and historical human integration approval NOT_VERIFIED.
+Further documentation publication requires fresh independent verification of
+its new exact SHA. No M9.4q closure or M9.5 formal admission/implementation
+is authorized; current gate details are owned by [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).

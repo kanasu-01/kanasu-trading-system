@@ -11,15 +11,15 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest M9.4 corrective validation | Corrected isolated development candidate `e6002758f22e0bb07d0886dcc1603eba21e6e501` independently passed Codex's exact-SHA runtime audit: 1684 full Python tests, 560 M9.4 tests across 24 modules and 122 reviewer-authored probes passed. GitHub Actions run `39482590794` also passed 1684 tests. No runtime blocker remains. Remaining low-severity traceability/whitespace follow-up is documentation-only; M9.4q is not closed. |
+| Latest M9.4 corrective validation | Audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`: TECHNICAL PASS by verified carry-forward from direct parent `e6002758f22e0bb07d0886dcc1603eba21e6e501`; exact published-SHA CI run `39527603226` collected and passed 1684 Python tests. Parent reviewer probes remain separately attributed. |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.4q IND-01 through IND-04 independently CLOSED for development candidate `e6002758`; nonblocking DOC-01 cleanup, final independent candidate identity, human-approved milestone integration and published-HEAD review remain. |
-| Lifecycle | M0-M8 complete; M9.2/M9.3 closed; M9.4q isolated development candidate independent audit PASS at `e6002758` with 1684 repository tests and 122 reviewer probes, but milestone branch remains on independently FAILED `9f41a54c`. M9.4q remains OPEN; M9.5 design and implementation BLOCKED pending approved integration and exact published-HEAD independent PASS. |
-| Gate to M9.5 | Exact published M9.4 independent PASS authorizes fresh M9.5 design only; M9.5 implementation requires a separately accepted fresh M9.5 design |
+| Step | M9.4q published-HEAD documentation reconciliation: `M94Q-PH-DOC-01` and `M94Q-PH-DOC-02` remain open for audited baseline `929db5d6`. |
+| Lifecycle | M0-M8 complete; M9.2/M9.3 closed; M9.4q OPEN. Published technical correction is integrated; DOCUMENTATION FAIL; historical human integration approval NOT_VERIFIED; overall published-head gate VERIFIED_FAIL. M9.5 formal admission and implementation remain BLOCKED. |
+| Gate to M9.5 | Requires independent technical and documentation acceptance of the exact final published HEAD and the required attributable human acceptance/authority records. Reported M9.5 Draft v0.3 design-review PASS WITH NONBLOCKING OBSERVATIONS does not grant admission or implementation authority. |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
 
@@ -27,6 +27,9 @@ M9.2 is DONE/CLOSED at its accepted implementation and validation scope. It impl
 
 M9.2 began from the clean 111-focused / 792-full-test baseline. The accepted implementation chain is `07f4be1` M9.2a, `24cdf67` M9.2b, `ba2129f` M9.2c, `d21c204` M9.2d, `0f4cc98` M9.2e and `4b44050` M9.2f after design baseline `4eb28d8`. Final committed-head closure validation at `4b44050` passed 198 focused research/API tests and 897 complete Python tests with `git diff --check` clean.
 M9.3 is DONE/CLOSED at its accepted instrument, universe and dataset-truthfulness scope. M9.3a established canonical instrument/provider-binding contracts (`5543b30`); M9.3b immutable/effective-dated universe snapshots (`61ec27c`); M9.3c successor dataset identity/provenance (`1505141`); M9.3d AngelOne binding/wall-time behavior (`27baa26`); and M9.3e completed acquisition-stream persistence, binding-aware historical retrieval, durable DatasetReference evidence and an explicit opt-in Backtest application path through published head `8d70d1e`. The legacy/default Backtest path remains unchanged because Kanasu does not manufacture canonical instrument or effective-dated provider truth from the temporary RELIANCE token map. M9.3f closes validation, behavioral traceability and authoritative-document synchronization. The complete Python regression is 1078 passing tests and `git diff --check` is clean. DW-019 remains resolved at its bounded M9.3d adapter scope.
+Historical M9.4 publication and correction sequence follows; its intermediate
+publication and gate statements are not the current dashboard.
+
 M9.4 was historically published DONE/CLOSED against accepted design baseline `9b7ab42`, with M9.4f at `b93ae6a`. M9.4g corrected the first independent-audit findings and was historically re-closed at `68df76b`. M9.4h then corrected residual N01-N07 findings and was published through h4 at `306c156a5b58edb8a4dd6331409d473bc08af98b`. The independent re-review of that exact head returned `M95_GATE=BLOCKED` with H01-H05. M9.4i addresses H01 canonical executable procedure authority, H02 supported exact-reuse artifact authority, H03 fail-closed authoritative filesystem failures, H04 complete-population proof authority, and H05 validation-evidence precision. The corrective candidate is published at `eab3c742ca5fbe0d7e058bb4cc8db758803848ab` and post-push verification confirmed local and remote HEAD equality plus the exact 17-file committed manifest. Validation evidence is 153 H01-H04 focused tests, 245 repository-wide `test_m94*.py` tests, 251 semantic `-k m94` tests with 1098 deselected, 1349 complete Python tests, and clean `git diff --check`. This publication is not proof that the independent re-review passed. M9.5 remains blocked until the independent review of `eab3c742ca5fbe0d7e058bb4cc8db758803848ab` returns `M95_GATE=PASS`. A subsequent independent post-publication audit identified R01-R06. M9.4j preserves the accepted M9.4 architecture while correcting complete frozen Backtest financial configuration identity; strict separation between standalone M9.2 RunAttempt lifecycle authority and ResearchJob-owned attempt authority; canonical Backtest-result validation before exact reuse; rejection of obviously impossible finite result states; one-transaction Trial-detail lineage snapshots; and current-state documentation drift. M9.4j is published and post-push verified at `7f123daa135be4009294f5197676dc5153261255`. The subsequent independent audit returned `M95_GATE=BLOCKED`: F01 found that an empty or incomplete registered data-treatment mapping could bypass explicit price-adjustment authority; F02 found that canonical Backtest-result validation still admitted several impossible long-only states; and F03 identified current-state documentation drift. M9.4k preserves the accepted architecture while requiring explicit `raw` / `adjusted` / `unknown` price-adjustment registration, failing incomplete historical plans closed, strengthening only direct long-only canonical-result invariants, adding real registration/execution and canonical reuse/aggregation counterexample tests, correcting stale historical test fixtures, and synchronizing current-state documentation. M9.4k was subsequently separately reviewed, staged, committed and pushed at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`, with local/remote post-push equality verified. The fresh independent audit of that exact published head returned `M95_GATE=BLOCKED`: F05 found that public raw registered fresh-execution persistence phases could bypass frozen StudyRevision semantics; F04 found remaining impossible canonical-result states; F06 found inconsistent restart-recovery chronology when RunAttempt creation post-dated the supplied recovery clock; and F03 found current-state documentation drift. M9.4l preserves the accepted architecture by keeping raw registered fresh-execution persistence phases internal behind the validated claimed-job authority, requiring nonnegative transaction cost, a `[-1, 0]` stored drawdown bound when equity is nonnegative, complete execution event/price/quantity tuples, and one coherent restart-recovery terminal timestamp. M9.4l was published/post-push verified at `d26d3d62b6e7cced738bdbf260269497e0e70d5d`. Its local validation included 176 focused tests, 207 research-only M9.4 tests across 13 modules and 1383 complete Python tests. The independent reviewer subsequently discovered 273 repository-wide M9.4 tests across 21 modules and independently ran all 1383 Python tests. The audit returned `M95_GATE=BLOCKED` with A01, A02, A03 and F03. Publication and passing tests did not establish independent acceptance. At the 2026-10-11 pre-publication validation checkpoint, M9.4m was a local, unstaged and unpublished corrective candidate. This is a historical checkpoint statement, not an assertion about its eventual publication state. A01 adds direct canonical financial consistency checks for net/gross/cost and single-symbol close-marked equity. A02 includes durable cancellation-request time in the shared restart-recovery terminal timestamp. A03 separates public standalone prepared execution from internal supplied-RunAttempt execution and rejects stale attempts before computation; a concurrent claimed-job test verifies one physical execution through that supported entry path. Existing M4 Backtest economics, M5 WFA, M6/M7 Paper causality, M8 application authority, M9.3 data truth and the no-live-order boundary are retained.
 
 The V1 research target remains single-user NSE cash-equity research with long-only, unlevered simulated execution. The supported V1 execution timeframes remain 5m and 15m. Universe research means independent per-instrument simulated accounts plus research aggregation; it does not establish shared-capital multi-symbol portfolio economics.
@@ -317,6 +320,18 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 - Independent `git diff --check`: clean
 
 ## Current work
+
+Reconcile published-head documentation under the approved v0.1 specification. See the [current published-head reconciliation](#current-published-head-reconciliation--2026-10-21).
+The exact diff requires separate human approval before application.
+
+## Historical work records
+
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
 
 M9.4q second corrective checkpoint (2026-10-14): the first M9.4q candidate corrected M94-AUD-01 by enforcing whole-share bar-record `position_size` and reconciled most M94-AUD-02 documentation. A fresh independent candidate audit then returned `M94Q_AUDIT_GATE=BLOCKED`. M94Q-AUD-01 found that hash-valid canonical results could still contain negative authoritative cash with positive whole-share holdings and pass decoding, exact reuse and Study aggregation, despite AD-018's unlevered available-cash affordability contract. M94Q-AUD-02 found the AD-025 current status stale. M94Q-AUD-03 found the required M9.4q categorical behavior-impact declaration missing. M94Q-AUD-04 found review-bundle patch/exclusion reproducibility defects; that bundle issue did not invalidate the repository-backed audit but must be repaired before the next handoff. The current committed branch HEAD remains `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; the second M9.4q correction is local, unstaged and unpublished. The shared canonical Backtest-result validator now rejects `cash < 0` without normalization or tolerance, preserves exactly zero cash for fully funded whole-share holdings, and retains the whole-share `position_size` correction. Regression evidence covers real M4 canonical boundaries, direct and stable-decoder validation, hash-valid persisted exact-reuse rejection without a fabricated RunAttempt, subsequent fresh execution, and both EXECUTED and REUSED Study aggregation. Current second-correction validation passes 30 focused `m94q_` tests, 129 complete tests across the three touched modules, 333 exact repository-wide M9.4 tests across the established 21 modules, and 1457 complete Python tests; `git diff --check` is clean. The earlier 328/1451 counts remain historical evidence for the first M9.4q candidate, not current closure proof. M9.5 Gate A design remains accepted/frozen, but substantive M9.5 implementation remains blocked until the locally validated corrected candidate is separately independently reviewed, is published only through the protected Git approval gates, and the exact published HEAD receives the required independent PASS.
 
@@ -701,10 +716,11 @@ authoritative registered-population boundary now additionally recomputes each
 persisted Trial's canonical content-addressed `trial_id` from its immutable
 identity fields and fails closed on contradiction. Membership evidence artifact
 identity is also required to remain consistent with its canonical evidence
-fingerprint. `RegisteredTrialExecutionPlanResolver` crosses that authoritative
-population boundary after preserving its established specific parameter/range
-validation errors and before downstream execution-input resolution, retrieval,
-RunAttempt creation or financial execution.
+fingerprint. The original REVIEW-01 description placed specific parameter/range
+checks before registered-population validation. IND-01 supersedes that ordering:
+the resolver consumes the authoritatively validated registered Trial before
+deriving Trial-dependent plan values. Valid Trial identities retain their
+ordinary parameter/range checks; downstream execution remains gated.
 
 Permanent REVIEW-01 regression covers four cases: authoritative registered
 population read, claimed execution before retrieval, EXECUTED aggregation and
@@ -827,3 +843,45 @@ identity must be verified before any acceptance request.
 **No M9.4q closure or M9.5 authorization is implied by this PASS.**
 Human approval is still required for milestone integration, followed by
 a separate independent PASS on the exact published milestone HEAD.
+## Current published-head reconciliation — 2026-10-21
+
+**Audited source baseline:** branch `m9-v1-research-platform`,
+commit `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`,
+tree `d5e7e66c68158a4abe1293210c6510bb7fc47077`.
+Its direct parent is `e6002758f22e0bb07d0886dcc1603eba21e6e501`.
+The correction is integrated into the published branch; its historical
+human integration/protected-operation approvals remain **NOT_VERIFIED**.
+
+The published commit changed six documentation files and only the opening
+module docstring of `tests/research/test_m94q_ind_identity_authority.py`.
+Production subtrees and the remaining test-module source are unchanged.
+Technical PASS is a bounded carry-forward from the independently reviewed
+parent, supported by those checks and exact published-SHA
+[CI run 39527603226](https://github.com/kanasu-01/kanasu-trading-system/actions/runs/39527603226):
+Python 3.11, **1684 collected and passed**.
+
+Parent [CI run 39482590794](https://github.com/kanasu-01/kanasu-trading-system/actions/runs/39482590794),
+the reported Python 3.12 reviewer run, 560 M9.4 cases across 24 modules and
+122 reviewer-authored probes belong to `e6002758`; they are not claimed as
+new reviewer runs at `929db5d6`. The historical 90-control selector remains
+independently unidentified.
+
+| Audit axis at the source baseline | Disposition |
+|---|---|
+| Technical | PASS by verified carry-forward |
+| Documentation | FAIL: `M94Q-PH-DOC-01` publication/status contradictions and `M94Q-PH-DOC-02` superseded validation-order wording |
+| Human integration approval | `M94Q-PH-EVID-01 = NOT_VERIFIED`; unavailable records are not proof of absent or unauthorized approval |
+| Overall published-head gate | `M94Q_PUBLISHED_HEAD_GATE=VERIFIED_FAIL` |
+
+M9.4q is not DONE/CLOSED. M9.5 Draft v0.3 has a separately reported design-level
+PASS WITH NONBLOCKING OBSERVATIONS; formal admission and implementation remain
+blocked. Original attributable approvals must be supplied and assessed.
+
+This documentation reconciliation grants no retrospective approval, repository
+edit authority or Git authority. A later separately approved documentation
+commit will have a different, presently unknown SHA. Its technical and
+documentation verdicts require fresh independent exact-published-HEAD review;
+this source-baseline audit does not automatically cover it. Required human
+approval of the exact diff, applied-diff verification, and separately authorized
+stage, commit, push and integration remain distinct gates.
+

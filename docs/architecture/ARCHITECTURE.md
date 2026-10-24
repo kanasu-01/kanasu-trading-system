@@ -561,6 +561,13 @@ Live paper uses real market data but simulated execution and authoritative simul
 
 The decision register is [DECISIONS.md](DECISIONS.md). AD-001 through AD-007 retrospectively document architecture already established by M1–M3.6a. Later decisions retain their recorded status until explicitly accepted or superseded.
 
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
+
 ## M9.4q canonical whole-share result boundary
 
 M9.4q second corrective checkpoint (2026-10-14): the first M9.4q candidate corrected M94-AUD-01 by enforcing whole-share bar-record `position_size` and reconciled most M94-AUD-02 documentation. A fresh independent candidate audit then returned `M94Q_AUDIT_GATE=BLOCKED`. M94Q-AUD-01 found that hash-valid canonical results could still contain negative authoritative cash with positive whole-share holdings and pass decoding, exact reuse and Study aggregation, despite AD-018's unlevered available-cash affordability contract. M94Q-AUD-02 found the AD-025 current status stale. M94Q-AUD-03 found the required M9.4q categorical behavior-impact declaration missing. M94Q-AUD-04 found review-bundle patch/exclusion reproducibility defects; that bundle issue did not invalidate the repository-backed audit but must be repaired before the next handoff. The current committed branch HEAD remains `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; the second M9.4q correction is local, unstaged and unpublished. The shared canonical Backtest-result validator now rejects `cash < 0` without normalization or tolerance, preserves exactly zero cash for fully funded whole-share holdings, and retains the whole-share `position_size` correction. Regression evidence covers real M4 canonical boundaries, direct and stable-decoder validation, hash-valid persisted exact-reuse rejection without a fabricated RunAttempt, subsequent fresh execution, and both EXECUTED and REUSED Study aggregation. Current second-correction validation passes 30 focused `m94q_` tests, 129 complete tests across the three touched modules, 333 exact repository-wide M9.4 tests across the established 21 modules, and 1457 complete Python tests; `git diff --check` is clean. The earlier 328/1451 counts remain historical evidence for the first M9.4q candidate, not current closure proof. M9.5 Gate A design remains accepted/frozen, but substantive M9.5 implementation remains blocked until the locally validated corrected candidate is separately independently reviewed, is published only through the protected Git approval gates, and the exact published HEAD receives the required independent PASS.
@@ -775,24 +782,39 @@ therefore validates both the fixed denominator and each persisted row's
 self-consistency with its own canonical `trial_id`. Count-preserving mutation of
 an identity-bearing Trial field fails closed.
 
-Registered execution-plan resolution retains its existing parameter-plan and
-membership-range validation semantics, then crosses the authoritative
-registered-population integrity boundary before any execution input, retrieval,
-RunAttempt creation or financial execution. Study aggregation already consumes
-the authoritative registered population, so both EXECUTED and REUSED
-result-bearing paths reject corrupted Trial identity.
+The original REVIEW-01 description put plan-specific checks before the
+registered-population integrity boundary. IND-01 supersedes that ordering:
+the resolver consumes the authoritatively validated registered Trial before
+deriving Trial-dependent plan values. Corrupt immutable identity fails before
+later parameter/membership-specific validation; valid identities retain those
+ordinary plan checks. Canonical EXECUTED and REUSED Study aggregation consumes
+the validated registered population.
+
+Relevant fresh RunAttempt binding, exact-reuse and attempt/evidence
+terminalization transactions revalidate immutable Trial identity/population
+inside their SQLite authority transaction. Start rejects corrupt identity before
+durable queue or Start-timestamp writes, retaining established population-proof
+mismatch precedence. Trial detail validates registered population identity
+inside its coherent read transaction before returning lineage.
+
+These are the accepted IND-01–04 boundaries in
+[AD-025](DECISIONS.md#ad-025-follow-up---m94q-ind-0104-transaction-and-snapshot-enforcement)
+and [Traceability](../behavior/TRACEABILITY.md#m94q-ind-0104-corrected-authority-trace--2026-10-21).
+They do not change Trial/population fingerprint formats or financial economics.
 
 This adds no new trading economics, pooled-capital portfolio model, provider
 mapping, qualification authority or live-order authority. M4 Backtest
 semantics, M5 WFA mathematics, M6/M7 paper causality, M8 application authority,
 M9.2 evidence lineage and M9.3 canonical data truth remain authoritative.
 
-Current local validation is **549 repository-wide M9.4 tests across 23 files,
-90 preservation controls and 1673 complete Python tests**. The **545 / 90 /
-1669** FRESH-04 and **541 / 90 / 1665** FRESH-03 checkpoints are historical.
+Historical pre-IND REVIEW-01 validation was **549 M9.4 tests across 23 files,
+90 reported preservation controls and 1673 complete Python tests**. The
+90-control selector remains independently unidentified. FRESH-04 **545 / 90 /
+1669** and FRESH-03 **541 / 90 / 1665** remain historical checkpoints.
 
-The candidate is unstaged, uncommitted and unpublished. Fresh independent
-pre-publication review, separately approved stage/commit/push operations, and
-an independent exact-published-HEAD PASS remain mandatory. M9.5 begins only as
-fresh design after that published-head PASS; M9.5 implementation remains
-unauthorized.
+The correction is integrated into audited published baseline `929db5d6`.
+Exact published-SHA CI run `39527603226` collected and passed 1684 tests;
+the parent review and its 122 probes remain separately attributed to `e6002758`.
+Technical carry-forward PASS, documentation failure and missing historical
+human-approval evidence are separate axes. Current gate details are owned by
+[Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21); no closure, M9.5 implementation or Git authority follows.

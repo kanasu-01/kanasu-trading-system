@@ -1125,7 +1125,7 @@ M9.3 closure establishes and preserves the following validated instrument, unive
 The accepted detailed design and closure record is `docs/design/INSTRUMENT_UNIVERSE_DATASET_TRUTH.md`. M9.3a-M9.3e are implemented and published through `8d70d1ea5fd65ecee8b9fa76868a640a99131ad3`; M9.3f changes no production behavior and owns final validation, traceability and documentation synchronization. Closure evidence includes the M9.3e focused correction suite at 25 passed, research regression at 300 passed, final complete Python regression at 1078 passed and `git diff --check` clean. The successor application path remains explicit opt-in because no authoritative default canonical instrument/effective-dated binding source is configured. This is an accepted truthfulness boundary, not permission to derive canonical identity from the temporary RELIANCE/2885 mapping.
 ### M9.4 - Registered Studies and bounded local batch execution
 
-**Status:** Published milestone baseline `9f41a54c` independently FAILED; isolated correction `e6002758f22e0bb07d0886dcc1603eba21e6e501` received exact-candidate independent Codex technical PASS: 1684 full repository tests, 560 M9.4 cases across 24 modules, and 122 reviewer-authored probes passed. GitHub Actions run `39482590794` at that exact SHA passed 1684 Python tests. Nonblocking `M94Q-COR-DOC-01` traceability/whitespace follow-up remains. This is NOT an exact published milestone PASS; no integration has occurred. `M95_GATE=BLOCKED`, M9.4q not closed.
+**Status:** Audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a` includes the independently reviewed `e6002758` correction. Published-SHA CI run `39527603226` collected and passed 1684 Python tests. Technical carry-forward PASS does not close the documentation or historical human-approval gates; M9.4q closure and M9.5 formal admission/implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
 
 M9.4 closure evidence establishes the following accepted boundaries:
 
@@ -1228,6 +1228,13 @@ A refactor may declare `BEHAVIOR IMPACT: NONE`, but that declaration must be ind
 - **Regression and acceptance:** deterministic Python regression, frontend tests/build/lint and representative end-to-end/browser evidence pass on the actual release candidate.
 
 Progress in one gate cannot compensate for a failed mandatory gate. A complete Study may produce no eligible Candidate and still demonstrate a successful research product.
+
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
 
 ## M9.4m independent review and M9.4n validation checkpoint
 
@@ -1549,10 +1556,10 @@ Acceptance behavior for the local correction is:
 3. identity contradiction fails closed;
 4. membership evidence artifact identity remains consistent with canonical
    evidence identity;
-5. registered execution-plan resolution retains established specific
-   parameter/range errors and then crosses the authoritative population
-   boundary before execution-input resolution, retrieval, RunAttempt creation
-   or financial execution;
+5. the original plan-first description is superseded by IND-01: registered
+   execution-plan resolution consumes the authoritatively validated registered
+   Trial before deriving Trial-dependent plan values; valid identities retain
+   their ordinary parameter/range checks;
 6. result-bearing EXECUTED and REUSED aggregation rejects the same corrupted
    Trial identity;
 7. M4-M9.3 authority and no-live-money scope remain unchanged.

@@ -83,8 +83,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - M9.4q SYNCHRONIZATION CANDIDATE LOCALLY GREEN; FINAL CANDIDATE / EXACT-PUBLISHED-HEAD INDEPENDENT GATES PENDING; M9.5 NEXT STEP IS FRESH DESIGN ONLY**
-  - **M9.5 ? PLANNED** ? Robustness evidence and versioned qualification.
+  - **M9.4 - M9.4q OPEN; PUBLISHED TECHNICAL PASS; DOCUMENTATION FAIL; HISTORICAL HUMAN INTEGRATION APPROVAL NOT_VERIFIED; OVERALL GATE VERIFIED_FAIL** — See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
+  - **M9.5 - PLANNED; FORMAL ADMISSION AND IMPLEMENTATION BLOCKED** - Robustness evidence and versioned qualification. Draft v0.3 has a separately reported design-level PASS WITH NONBLOCKING OBSERVATIONS; it does not satisfy the M9.4q closure or human-approval gates.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
   - **M9.8 ? PLANNED** ? Complete research-workspace integration.
@@ -701,7 +701,14 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE — M9.4q isolated development candidate `e6002758f22e0bb07d0886dcc1603eba21e6e501` independently PASSED the Codex technical audit: IND-01 through IND-04 CLOSED; 1684 repository tests plus 122 independent reviewer probes passed. Github Actions run `39482590794` also passed 1684 tests. Nonblocking documentation/traceability and trailing-whitespace cleanup remains. This PASS applies to the isolated development candidate only; milestone branch remains at `9f41a54c`, independently failed. M9.4q closure and M9.5 design/implementation remain BLOCKED pending human-approved milestone integration and exact published-HEAD audit PASS.
+**Status:** ACTIVE — Audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a` includes the reviewed `e6002758` correction. Technical carry-forward PASS is separate from DOCUMENTATION FAIL and historical human integration approval NOT_VERIFIED. M9.4q closure and M9.5 formal admission/implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
+
+> Historical record scope: M9.4q review and checkpoint records below describe
+> their recorded candidates, including then-current publication claims, test
+> counts and reported authorizations. They are not current branch-state or
+> original human-approval evidence. Current status is owned by
+> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> the IND-01 correction supersedes earlier plan-first resolver wording.
 
 M9.4q revised unpublished candidate validation checkpoint (2026-10-15; `KANASU_900150`): The bounded correction addresses M94Q-NEW-01 (trade timestamps outside authoritative bar history), M94Q-NEW-02 (oversized canonical integers raising uncontrolled `OverflowError`), and M94Q-NEW-03 (contradictory current validation evidence). `KANASU_900147` established five permanent RED regression cases. After the production correction, `KANASU_900148` passed those five cases, five reviewer-authored adversarial cases, and 35 focused `m94q_` cases. `KANASU_900150` subsequently passed 134 touched-module tests, 338 M9.4 tests across 21 modules, and 1,462 full Python tests, without failures, errors or skips. The saved validation summary has SHA-256 `6c5fd30e8384993ba81960f6c9b36d6431e403f30411ae62c7cfa4ba7426a04c`. These are local validation results, not independent acceptance. The latest independent pre-publication verdict remains `M94Q_AUDIT_GATE=BLOCKED` for the earlier candidate; the revised candidate still requires a fresh independent PASS. It remains unstaged and unpublished, and substantive M9.5 implementation remains blocked. Protected stage, commit and push operations require separate human approval.
 
