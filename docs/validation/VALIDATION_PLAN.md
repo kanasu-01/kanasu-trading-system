@@ -667,10 +667,10 @@ This parent status change created no new technical acceptance claim. M4 owns Bac
 
 ## 9. M4 — Backtest Validity
 
-**Status:** IN_PROGRESS / partially validated through completed M4.2, M4.3, M4.4 and M4.5
+**Current status:** DONE/CLOSED at the accepted M4 scope, as recorded in [Project Status](../PROJECT_STATUS.md#completed-foundation). The detailed M4.1–M4.7 design/validation checkpoints below retain their historical scopes and evidence; their checkpoint status labels do not describe the present-day parent milestone.
 
 M4 requires deterministic evidence that bar-based execution, strategy/execution state, portfolio economics, risk controls, account metrics and reproducibility identity satisfy the accepted AD-011, AD-016 and AD-018 contracts. M4.2 through M4.5 are validated at their accepted scopes.
-M4.6–M4.7 remain unvalidated, so M4 remains IN_PROGRESS. The latest accepted full suite is 443 passed in 9.03s at M4.5 implementation `57ccfac`.
+At the historical M4.5 checkpoint, M4.6–M4.7 were not yet validated and the then-current complete-suite evidence was 443 passing tests in 9.03 seconds at `57ccfac`. This is historical checkpoint evidence, not the current M4 status or latest test count.
 
 ### M4.1 — Backtest economic contract
 
@@ -920,7 +920,7 @@ The validated M4.5 scope does not include WFA validity/configuration migration, 
 
 ### M4.6 — Research manifest and deterministic references
 
-**Status:** READY at accepted design scope under AD-019 / implementation not validated
+**Historical status at M4.6 design checkpoint:** READY at accepted design scope under AD-019 / implementation not validated
 
 M4.6 must implement a complete versioned effective-input manifest, shared Backtest economic policy, successor configuration identity and deterministic references without modifying frozen AD-015 v1 contracts. `kanasu.dataset.v1`, `kanasu.backtest-config.v1`, `kanasu.backtest-result.v1`, canonical serialization v1 and existing ResearchEvidence rows remain valid.
 
@@ -1014,7 +1014,7 @@ The economic outputs are hand-calculated acceptance references. SHA-256 fingerpr
 
 ### M4.7 — Backtest validity integration
 
-**Status:** PLANNED / not validated
+**Historical status at M4.7 planning checkpoint:** PLANNED / not validated
 
 M4 closure requires integrated deterministic reference runs, focused and regression neighborhoods, the full suite, explicit boundary and expected-failure cases, exact evidence reporting, and synchronization of affected authoritative documentation. The integration claim must remain bounded to Backtest validity and must not imply WFA, paper/live, application or V1 release acceptance.
 
@@ -1233,7 +1233,7 @@ Progress in one gate cannot compensate for a failed mandatory gate. A complete S
 > their recorded candidates, including then-current publication claims, test
 > counts and reported authorizations. They are not current branch-state or
 > original human-approval evidence. Current status is owned by
-> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> [Project Status](../PROJECT_STATUS.md#current-dashboard). Accepted technical contracts remain in force;
 > the IND-01 correction supersedes earlier plan-first resolver wording.
 
 ## M9.4m independent review and M9.4n validation checkpoint

@@ -565,7 +565,7 @@ The decision register is [DECISIONS.md](DECISIONS.md). AD-001 through AD-007 ret
 > their recorded candidates, including then-current publication claims, test
 > counts and reported authorizations. They are not current branch-state or
 > original human-approval evidence. Current status is owned by
-> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> [Project Status](../PROJECT_STATUS.md#current-dashboard). Accepted technical contracts remain in force;
 > the IND-01 correction supersedes earlier plan-first resolver wording.
 
 ## M9.4q canonical whole-share result boundary
@@ -817,4 +817,4 @@ Exact published-SHA CI run `39527603226` collected and passed 1684 tests;
 the parent review and its 122 probes remain separately attributed to `e6002758`.
 Technical carry-forward PASS, documentation failure and missing historical
 human-approval evidence are separate axes. Current gate details are owned by
-[Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21); no closure, M9.5 implementation or Git authority follows.
+[Project Status](../PROJECT_STATUS.md#current-dashboard); no closure, M9.5 implementation or Git authority follows.

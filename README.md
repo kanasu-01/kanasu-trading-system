@@ -6,7 +6,7 @@ V1 does **not** place real-money broker orders. Controlled real-money execution 
 
 ## Current state
 
-The repository is in **P1 — Trusted Historical Data Foundation**, at **M3.6 — Local Historical Persistence and Retrieval**. SQLite candle persistence is implemented; the next coding task is **M3.6b — Coverage and Missing-Range Planning**.
+M0–M8 and M9.2–M9.3 are complete at their accepted scopes. The current closure task is **M9.4q**, which remains **OPEN/BLOCKED** pending documentation, governance and final acceptance gates. Formal M9.5 admission and implementation remain **BLOCKED**.
 
 See [Project Status](docs/PROJECT_STATUS.md) for the dated baseline and current blockers.
 

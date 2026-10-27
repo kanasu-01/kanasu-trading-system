@@ -2,6 +2,10 @@
 
 Use targeted context. The repository documentation remains authoritative, but agents must read only the sections needed for the current task instead of repeatedly loading whole governance documents.
 
+## Applicable Global SOPs
+
+The project owner declares that Kanasu Trading System currently has **no project-specific SOPs**. Kanasu inherits the currently ACTIVE Global SOPs from the authoritative `/SOP/GLOBAL_SOP_REGISTRY.md` in ChatGPT Library; ordinary repository governance and accepted architecture contracts remain applicable. The GitHub Global SOP file is a non-authoritative mirror unless and until a separately authorized change of authoritative source is published and verified. Before undertaking controlled work, load the applicable ACTIVE Global SOP requirements from the authoritative source and verify this declaration. If authoritative status cannot be verified, do not infer permission from the mirror or from this bootstrap; report the uncertainty and limit work to permitted read-only investigation and preparation.
+
 Before changing the repository:
 
 1. Establish the current branch, baseline, milestone/step, and authorized task from the dashboard/current-work portion of [Project Status](docs/PROJECT_STATUS.md). Read the whole file only when the needed state cannot be resolved from the relevant section.

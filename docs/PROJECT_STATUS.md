@@ -11,14 +11,14 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest M9.4 corrective validation | Audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`: TECHNICAL PASS by verified carry-forward from direct parent `e6002758f22e0bb07d0886dcc1603eba21e6e501`; exact published-SHA CI run `39527603226` collected and passed 1684 Python tests. Parent reviewer probes remain separately attributed. |
+| Latest M9.4 corrective validation | Read-only preparation baseline verified on 2026-10-27: `5b61b902805f450b12a5c9c5e2d8511c23e10726`. Prior verified ancestry: `e6002758 → 929db5d6 → 4d637c8 → 5b61b902`; changes after `929db5d6` are documentation-only. Previously verified GitHub Actions run `40319418438` succeeded with 1,684 Python tests passed. Technical PASS is reused only within the reported implementation/carry-forward audit scope; this CI evidence is not a new independent technical audit. The original separate audit report, assessed SHA and scope still require attributable source evidence for final acceptance (F06). |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.4q published-HEAD documentation reconciliation: `M94Q-PH-DOC-01` and `M94Q-PH-DOC-02` remain open for audited baseline `929db5d6`. |
-| Lifecycle | M0-M8 complete; M9.2/M9.3 closed; M9.4q OPEN. Published technical correction is integrated; DOCUMENTATION FAIL; historical human integration approval NOT_VERIFIED; overall published-head gate VERIFIED_FAIL. M9.5 formal admission and implementation remain BLOCKED. |
+| Step | M9.4q present-day documentation and approval-evidence reconciliation. Earlier `M94Q-PH-DOC-01/02` were reported resolved at the preparation baseline; README/Validation Plan and SOP bootstrap corrections require independent exact published-state verification before documentation PASS. |
+| Lifecycle | M0–M8 complete; M9.2/M9.3 closed; M9.4q OPEN/BLOCKED. Technical PASS is bounded by its reported audit scope. Documentation FAIL at the preparation baseline is distinct from verification of subsequent documentation changes; formal closure acceptance remains incomplete. Historical human integration and protected Git-operation approvals remain NOT_VERIFIED. M9.5 formal admission and implementation remain BLOCKED. |
 | Gate to M9.5 | Requires independent technical and documentation acceptance of the exact final published HEAD and the required attributable human acceptance/authority records. Reported M9.5 Draft v0.3 design-review PASS WITH NONBLOCKING OBSERVATIONS does not grant admission or implementation authority. |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
@@ -321,8 +321,9 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-Reconcile published-head documentation under the approved v0.1 specification. See the [current published-head reconciliation](#current-published-head-reconciliation--2026-10-21).
-The exact diff requires separate human approval before application.
+Prepare the bounded present-day documentation and approval-evidence reconciliation under the human-approved Revision 004 specification (`d57ba50cae364d63a31403d9e2c4a8321dc9d3f4a516117267990ef403cd7449`). R004 Human Approval 1 is VERIFIED and its formal independent Codex Review 1 verdict is PASS. The complete exact documentation differences require separate Human Approval 2 before application; protected Git operations require separate explicit authorization. The [2026-10-21 published-head reconciliation](#current-published-head-reconciliation--2026-10-21) remains historical evidence for its stated SHA.
+
+Any prospective closure-rule amendment is conditional on a separate exact proposal, independent permissibility finding, human approvals and verified publication under the ACTIVE Global SOP and applicable project controls. Candidate V001 is not governing; the existing historical-approval requirement remains unchanged. Technical PASS alone does not close M9.4q or admit M9.5.
 
 ## Historical work records
 
@@ -330,7 +331,7 @@ The exact diff requires separate human approval before application.
 > their recorded candidates, including then-current publication claims, test
 > counts and reported authorizations. They are not current branch-state or
 > original human-approval evidence. Current status is owned by
-> [Project Status](#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> [Project Status](#current-dashboard). Accepted technical contracts remain in force;
 > the IND-01 correction supersedes earlier plan-first resolver wording.
 
 M9.4q second corrective checkpoint (2026-10-14): the first M9.4q candidate corrected M94-AUD-01 by enforcing whole-share bar-record `position_size` and reconciled most M94-AUD-02 documentation. A fresh independent candidate audit then returned `M94Q_AUDIT_GATE=BLOCKED`. M94Q-AUD-01 found that hash-valid canonical results could still contain negative authoritative cash with positive whole-share holdings and pass decoding, exact reuse and Study aggregation, despite AD-018's unlevered available-cash affordability contract. M94Q-AUD-02 found the AD-025 current status stale. M94Q-AUD-03 found the required M9.4q categorical behavior-impact declaration missing. M94Q-AUD-04 found review-bundle patch/exclusion reproducibility defects; that bundle issue did not invalidate the repository-backed audit but must be repaired before the next handoff. The current committed branch HEAD remains `0f679f9c24352dea46cff965f49eb4a53f5e9eed`; the second M9.4q correction is local, unstaged and unpublished. The shared canonical Backtest-result validator now rejects `cash < 0` without normalization or tolerance, preserves exactly zero cash for fully funded whole-share holdings, and retains the whole-share `position_size` correction. Regression evidence covers real M4 canonical boundaries, direct and stable-decoder validation, hash-valid persisted exact-reuse rejection without a fabricated RunAttempt, subsequent fresh execution, and both EXECUTED and REUSED Study aggregation. Current second-correction validation passes 30 focused `m94q_` tests, 129 complete tests across the three touched modules, 333 exact repository-wide M9.4 tests across the established 21 modules, and 1457 complete Python tests; `git diff --check` is clean. The earlier 328/1451 counts remain historical evidence for the first M9.4q candidate, not current closure proof. M9.5 Gate A design remains accepted/frozen, but substantive M9.5 implementation remains blocked until the locally validated corrected candidate is separately independently reviewed, is published only through the protected Git approval gates, and the exact published HEAD receives the required independent PASS.
@@ -844,6 +845,8 @@ identity must be verified before any acceptance request.
 Human approval is still required for milestone integration, followed by
 a separate independent PASS on the exact published milestone HEAD.
 ## Current published-head reconciliation — 2026-10-21
+
+**Historical checkpoint:** The findings below describe the `929db5d6` published-head audit of 2026-10-21 and retain their original scope and meaning. See the [current dashboard](#current-dashboard) for the preparation baseline and remaining gates. The historical `NOT_VERIFIED` approval result is unchanged.
 
 **Audited source baseline:** branch `m9-v1-research-platform`,
 commit `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`,

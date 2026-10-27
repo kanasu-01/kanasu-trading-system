@@ -580,13 +580,13 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED M9.4 DESIGN; reviewed correction integrated into audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`. Technical carry-forward PASS; DOCUMENTATION FAIL; historical human integration approval NOT_VERIFIED; overall gate VERIFIED_FAIL. M9.4q closure and M9.5 formal admission/implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
+**Status:** ACCEPTED M9.4 DESIGN. Current M9.4q baseline, audit axes and remaining gates are owned by [Project Status](../PROJECT_STATUS.md#current-dashboard). M9.4q closure and M9.5 formal admission/implementation remain BLOCKED.
 
 > Historical record scope: M9.4q review and checkpoint records below describe
 > their recorded candidates, including then-current publication claims, test
 > counts and reported authorizations. They are not current branch-state or
 > original human-approval evidence. Current status is owned by
-> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> [Project Status](../PROJECT_STATUS.md#current-dashboard). Accepted technical contracts remain in force;
 > the IND-01 correction supersedes earlier plan-first resolver wording.
 
 Historical pre-IND REVIEW-01 status snapshot:
@@ -893,4 +893,4 @@ Independent audit of exact SHA `e6002758f22e0bb07d0886dcc1603eba21e6e501`:
 The reviewed correction is integrated into audited published baseline
 `929db5d6`; historical human integration approval remains NOT_VERIFIED.
 Current documentation and final acceptance gates are owned by
-[Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21); M9.4q closure and M9.5 formal admission/implementation remain blocked.
+[Project Status](../PROJECT_STATUS.md#current-dashboard); M9.4q closure and M9.5 formal admission/implementation remain blocked.
