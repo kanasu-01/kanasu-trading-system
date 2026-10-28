@@ -307,6 +307,7 @@ def _environment(
     retrieval_hook=None,
     members=(INSTRUMENT_ID,),
     claim_job=True,
+    research_intent="exercise claimed ResearchJob",
 ):
     database = (
         tmp_path / "research.sqlite3"
@@ -376,9 +377,7 @@ def _environment(
     population = (
         registration.register_study_revision(
             study_id="study-claimed-job",
-            research_intent=(
-                "exercise claimed ResearchJob"
-            ),
+            research_intent=research_intent,
             strategy_procedure_id=(
                 "sma-crossover-v1"
             ),
@@ -6216,3 +6215,154 @@ def test_m94q_ind02_mutation_after_execution_blocks_successful_terminalization(
     assert attempt is not None
     assert attempt.state is RunAttemptState.RUNNING
     assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.PENDING
+
+
+# One durable acceptance matrix for RO-01 and CS-001/002/003.
+def _stabilization_inputs():
+    from dataclasses import replace
+    from core.config.execution_config import ExecutionConfig
+
+    inputs = _inputs()
+    return replace(inputs, runtime_context=replace(
+        inputs.runtime_context,
+        execution_config=ExecutionConfig(brokerage_enabled=False, slippage_enabled=False),
+    ))
+
+
+def _stabilization_result(case):
+    from core.entities.trade import Trade
+    from core.backtest.bar_record import BarRecord
+    from tests.research.test_m94q_fresh_independent_red import stabilization_payload
+
+    result = stabilization_payload(case, capital=100000., symbol="ABC")
+    timestamps = {record["timestamp"]: START + timedelta(minutes=15 * index)
+                  for index, record in enumerate(result["bar_records"])}
+    for record in result["bar_records"]:
+        record["timestamp"] = timestamps[record["timestamp"]]
+    for trade in result["trades"]:
+        trade["entry_time"] = timestamps[trade["entry_time"]]
+        trade["exit_time"] = timestamps[trade["exit_time"]]
+    return BacktestResult(
+        trades=[Trade(**trade) for trade in result["trades"]],
+        bar_records=[BarRecord(**record) for record in result["bar_records"]],
+        session_id="stabilization",
+    )
+
+
+def _stabilization_environment(tmp_path, monkeypatch, **kwargs):
+    from dataclasses import replace
+
+    monkeypatch.setitem(RISK_DECLARATION, "brokerage_enabled", False)
+    monkeypatch.setitem(RISK_DECLARATION, "slippage_enabled", False)
+    treatment = kwargs.get("registered_data_treatment", {"price_adjustment": "raw"})
+    return _environment(tmp_path, execution_input_resolver=lambda plan: replace(
+        _stabilization_inputs(), data_treatment_basis=treatment,
+    ), **kwargs)
+
+
+@pytest.mark.parametrize("case", ["opening_1e-8", "opening_1e-9", "entry_fee", "trade_fee", "foreign_symbol", "negative_cash"])
+@pytest.mark.parametrize("cancel", [False, True])
+def test_m94q_stabilization_fresh_invalid_output_is_atomic_failure(tmp_path, monkeypatch, case, cancel):
+    from core.research.models.research_evidence import ResearchEvidenceStatus
+
+    catalog, trial, claimed, executor, _, _ = _stabilization_environment(tmp_path, monkeypatch)
+    orchestrator = executor.successor_coordinator.orchestrator
+
+    def compute(**kwargs):
+        if cancel:
+            catalog.request_running_research_job_cancellation(job_id=claimed.job_id, requested_at=TERMINAL_AT)
+        return _stabilization_result(case)
+
+    orchestrator._execute_candles = compute
+    completed = executor.execute(claimed)
+    assert completed.state is ResearchJobState.FAILED
+    attempt = catalog.load_run_attempt(completed.attempt_id)
+    assert attempt.state is RunAttemptState.FAILED
+    assert attempt.result_artifact_id is None
+    assert orchestrator.evidence_store.load(attempt.evidence_id).status is ResearchEvidenceStatus.FAILED
+    assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.FAILED
+    events = catalog.load_trial_disposition_events(trial.trial_id)
+    assert events[-1].causing_job_id == claimed.job_id
+    assert events[-1].new_disposition is TrialDisposition.FAILED
+    assert (completed.cancel_requested_at is not None) is cancel
+    with sqlite3.connect(catalog.database_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM research_evidence WHERE status='ACCEPTED'").fetchone()[0] == 0
+    # Explicit retry retains the Trial and makes valid fresh execution available.
+    _, retry_job, _ = catalog.retry_trial(trial.trial_id, retry_requested_at=TERMINAL_AT)
+    retry_claim = catalog.claim_next_research_job(trial.study_revision_id, "retry-worker", TERMINAL_AT, max_running_jobs=1)
+    assert retry_claim.job_id == retry_job.job_id
+    orchestrator._execute_candles = lambda **kwargs: _stabilization_result("valid")
+    assert executor.execute(retry_claim).state is ResearchJobState.SUCCEEDED
+    assert len(catalog.list_trials_for_revision(trial.study_revision_id)) == 1
+
+
+@pytest.mark.parametrize("case", ["opening_1e-8", "opening_1e-9", "entry_fee", "trade_fee", "foreign_symbol"])
+@pytest.mark.parametrize("lineage", ["EXECUTED", "REUSED"])
+def test_m94q_stabilization_persisted_authority_and_fresh_fallback(tmp_path, monkeypatch, case, lineage):
+    from core.research.reproducibility import stable_backtest_result_payload
+    from core.research.study_aggregation import StudyAggregationError, StudyAggregationService
+
+    env = _stabilization_environment(tmp_path, monkeypatch, evidence_reuse_policy=EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED)
+    catalog, trial, claimed, executor, _, _ = env
+    orchestrator = executor.successor_coordinator.orchestrator
+    orchestrator._execute_candles = lambda **kwargs: _stabilization_result("valid")
+    if lineage == "REUSED":
+        inputs = _stabilization_inputs()
+        prior = executor.successor_coordinator.execute(
+            strategy=inputs.strategy, config=inputs.config, runtime_context=inputs.runtime_context,
+            dataset_context=inputs.dataset_context, instrument_id=INSTRUMENT_ID,
+            provider=inputs.provider, price_adjustment_basis=inputs.price_adjustment_basis,
+        )
+        source_attempt_id = prior.attempt_id
+        completed = executor.execute(claimed)
+        assert completed.completion_kind is ResearchJobCompletionKind.REUSED
+        assert _attempt_count(catalog) == 1
+    else:
+        completed = executor.execute(claimed)
+        source_attempt_id = completed.attempt_id
+        assert completed.completion_kind is ResearchJobCompletionKind.EXECUTED
+    _m94q_fresh_financial_install(catalog, orchestrator.artifact_store, source_attempt_id,
+                                stable_backtest_result_payload(_stabilization_result(case)))
+    source = catalog.load_run_attempt(source_attempt_id)
+    before = _attempt_count(catalog)
+    assert orchestrator.find_exact_reusable_execution(source.experiment_spec_id) is None
+    assert _attempt_count(catalog) == before
+    with pytest.raises(StudyAggregationError):
+        StudyAggregationService(catalog_store=catalog, artifact_store=orchestrator.artifact_store).aggregate_revision(trial.study_revision_id)
+    # A second registered revision cannot reuse the invalid evidence.
+    second = _stabilization_environment(tmp_path, monkeypatch, evidence_reuse_policy=EvidenceReusePolicy.ALLOW_EXACT_ACCEPTED,
+                                        research_intent="stabilization fresh fallback")
+    second[0]._attempt_id_factory = lambda: "attempt-stabilization-fallback"
+    second_orchestrator = second[3].successor_coordinator.orchestrator
+    second_orchestrator._evidence_id_factory = lambda: "evidence-stabilization-fallback"
+    second_orchestrator._execute_candles = lambda **kwargs: _stabilization_result("valid")
+    outcome = second[3].execute(second[2])
+    assert outcome.completion_kind is ResearchJobCompletionKind.EXECUTED
+    assert _attempt_count(catalog) == before + 1
+
+
+def test_m94q_stabilization_invalid_output_terminal_write_rolls_back_and_recovers(tmp_path, monkeypatch):
+    import core.research.sqlite_research_catalog_store as persistence
+
+    catalog, trial, claimed, executor, _, _ = _stabilization_environment(tmp_path, monkeypatch)
+    executor.successor_coordinator.orchestrator._execute_candles = lambda **kwargs: _stabilization_result("negative_cash")
+    insert = persistence._insert_research_evidence
+
+    def fail_after_insert(connection, evidence):
+        insert(connection, evidence)
+        raise RuntimeError("injected evidence transaction failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(persistence, "_insert_research_evidence", fail_after_insert)
+        with pytest.raises(RuntimeError, match="transaction failure"):
+            executor.execute(claimed)
+    running = catalog.load_research_job(claimed.job_id)
+    assert running.state is ResearchJobState.RUNNING
+    assert catalog.load_run_attempt(running.attempt_id).state is RunAttemptState.RUNNING
+    assert catalog.load_trial(trial.trial_id).disposition is TrialDisposition.PENDING
+    with sqlite3.connect(catalog.database_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM research_evidence").fetchone()[0] == 0
+    recovered = catalog.recover_running_research_jobs(terminal_at=TERMINAL_AT)
+    assert len(recovered) == 1
+    assert recovered[0].state is ResearchJobState.INTERRUPTED
+    assert catalog.load_run_attempt(running.attempt_id).state is RunAttemptState.INTERRUPTED

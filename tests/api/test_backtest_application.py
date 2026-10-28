@@ -175,12 +175,12 @@ def test_application_projects_authoritative_result(
         trades=[
             Trade(
                 symbol="RELIANCE",
-                entry_time=START,
+                entry_time=START + timedelta(minutes=15),
                 entry_price=100.0,
                 exit_time=START + timedelta(minutes=30),
                 exit_price=102.6,
                 stop_price=98.0,
-                quantity=10,
+                quantity=100,
                 direction="LONG",
                 exit_reason="STRATEGY_EXIT",
                 pnl=240.0,
@@ -209,24 +209,31 @@ def test_application_projects_authoritative_result(
                 position_size=0,
                 drawdown=0.0,
             ),
+            # A completed round trip plus a later open holding keeps
+            # realized P&L (240) distinct from marked account P&L (250).
             BarRecord(
                 timestamp=START + timedelta(minutes=15),
-                open=102.0,
-                high=103.0,
-                low=101.0,
-                close=102.0,
-                volume=1000.0,
-                strategy="SMACrossOver",
-                state=None,
-                signal=None,
-                execution_event=None,
-                execution_price=None,
-                execution_quantity=None,
-                decision_snapshot={},
-                equity=100250.0,
-                cash=100250.0,
-                position_size=0,
-                drawdown=0.0,
+                open=102.0, high=103.0, low=100.0, close=102.0, volume=1000.0,
+                strategy="SMACrossOver", state=None, signal=None,
+                execution_event="BUY", execution_price=100.0, execution_quantity=100,
+                decision_snapshot={}, equity=100190.0, cash=89990.0,
+                position_size=100, drawdown=0.0,
+            ),
+            BarRecord(
+                timestamp=START + timedelta(minutes=30),
+                open=102.6, high=104.0, low=102.0, close=103.0, volume=1000.0,
+                strategy="SMACrossOver", state=None, signal=None,
+                execution_event="SELL", execution_price=102.6, execution_quantity=100,
+                decision_snapshot={}, equity=100240.0, cash=100240.0,
+                position_size=0, drawdown=0.0,
+            ),
+            BarRecord(
+                timestamp=START + timedelta(minutes=45),
+                open=100.0, high=111.0, low=99.0, close=110.0, volume=1000.0,
+                strategy="SMACrossOver", state=None, signal=None,
+                execution_event="BUY", execution_price=100.0, execution_quantity=1,
+                decision_snapshot={}, equity=100250.0, cash=100140.0,
+                position_size=1, drawdown=0.0,
             ),
         ],
     )
@@ -344,6 +351,8 @@ def test_application_projects_authoritative_result(
         for point in response.equity_curve
     ] == [
         100000.0,
+        100190.0,
+        100240.0,
         100250.0,
     ]
 

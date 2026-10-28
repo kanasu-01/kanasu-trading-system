@@ -488,3 +488,31 @@ remains FAIL and historical human integration approval NOT_VERIFIED.
 Further documentation publication requires fresh independent verification of
 its new exact SHA. No M9.4q closure or M9.5 formal admission/implementation
 is authorized; current gate details are owned by [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).
+
+## M9.4q consolidated acceptance-boundary regressions
+
+M94Q-STAB-SPEC-001 Rev 001 implements existing accepted evidence/provenance contracts; no new strategy, economic policy or milestone is introduced. The isolated implementation is locally validated, not independently accepted or published. See [Project Status](../PROJECT_STATUS.md#m94q-consolidated-stabilization-candidate--2026-10-28).
+
+| Finding / preserved contract | Production authority | Regression evidence |
+|---|---|---|
+| RO-01; BT-RULE-002, RESEARCH-RULE-009/014 | Shared manifest binding in `reproducibility.py`; existing reuse/aggregation callers | `test_m94q_stabilization_manifest_rejects_generic_counterexample`; `test_m94q_stabilization_opening_numeric_guard`; `test_m94q_stabilization_existing_capital_tolerance`; `test_m94q_stabilization_persisted_authority_and_fresh_fallback` |
+| CS-001; frozen financial identity, RESEARCH-RULE-009 | Shared disabled-brokerage binding using recorded fills | Generic counterexample and durable matrix above; `test_m94q_stabilization_manifest_positive_controls`; `test_m94q_stabilization_mixed_symbols_and_enabled_brokerage`; `test_m94q_stabilization_real_engine_fresh_and_reusable` |
+| CS-002; exact execution/result provenance, RESEARCH-RULE-009/014 | Shared manifest symbol binding | Foreign/mixed-symbol variants above; `test_m94q_stabilization_missing_manifest_authority_fails_closed` |
+| CS-003; RESEARCH-RULE-009/010/015 | Private fresh-result validation before existing terminalizer | `test_m94q_stabilization_standalone_validates_before_acceptance`; `test_m94q_stabilization_fresh_invalid_output_is_atomic_failure`; `test_m94q_stabilization_invalid_output_terminal_write_rolls_back_and_recovers`; `test_m94q_stabilization_persists_validated_private_result` |
+
+Both EXECUTED and REUSED canonical SQLite aggregation are exercised by the durable matrix without silent denominator shrinkage. Valid fresh fallback creates one actual attempt; explicit retry retains one Trial. Complete suite preservation evidence is owned by the Validation Plan, and historical reviewer probes/approvals retain their original attribution.
+
+## M94Q-STAB-SPEC-001 Revision 001 — complete specification and publication mapping
+
+The [complete specification preservation record](../design/M94Q_STAB_SPEC_001_REV001.md) contains the original integrated wording and unchanged incorporated RO-01 V002 (SHA-256 `d8480704b0b2ad3ee1f6739c78a04ec78613dd17d85b37cab43fb28f462325cd`). It is an archive/publication addition, not a revised behavior specification. R004 remains ACCEPTED_CLOSED.
+
+| Governing specification version | Implementation status / stable location | Relevant regression locations | Independent review / implementing commit reference |
+|---|---|---|---|
+| RO-01 V002, incorporated by M94Q-STAB-SPEC-001 Rev 001 | Locally implemented/validated: `reproducibility.validate_backtest_result_manifest_capital_binding` opening-position guard; existing exact-reuse and canonical aggregation callers | `test_m94q_stabilization_manifest_rejects_generic_counterexample`; `test_m94q_stabilization_opening_numeric_guard`; durable `test_m94q_stabilization_persisted_authority_and_fresh_fallback` | Candidate review PASS; permanent implementing-commit reference defined below |
+| M94Q-STAB-SPEC-001 Rev 001 / CS-001 | Same shared validator, disabled-brokerage trade-cost/cash-movement checks | Counterexample/positive-control tests in `test_m94q_fresh_independent_red.py`; durable matrix and real-engine controls | Same candidate review and implementing-commit reference |
+| M94Q-STAB-SPEC-001 Rev 001 / CS-002 | Same shared validator, authoritative completed-trade symbol comparison | Foreign/mixed-symbol and missing-authority tests; durable EXECUTED/REUSED matrix | Same candidate review and implementing-commit reference |
+| M94Q-STAB-SPEC-001 Rev 001 / CS-003 | `backtest_research_orchestrator.BacktestResearchOrchestrator._validate_prepared_execution_identity` and `_execute_prepared_internal`, verified manifest/private fresh-result validation before success | Standalone acceptance/private-result tests in `test_backtest_research_orchestrator.py`; atomic failure/cancellation/retry/rollback/recovery tests in `test_m94d_claimed_research_job_executor.py` | Same candidate review and implementing-commit reference |
+
+Candidate review record: `INDEPENDENT_REVIEW_REPORT.md`, SHA-256 `adddedbf43f0dd3dbc313d3118978947939fef355f2a69072bb3a15de40538aa`; current-source addendum SHA-256 `b37d446af603fb7e6d4298bfbd3d89268150d4f0e0ef29f7709cb80c929a5dcf`. The current-source PASS is prospective and does not rewrite old source-NOT_VERIFIED or historical Git-approval results. Source authority is the owner-designated repository SOP; no Library read is claimed for this verification.
+
+Permanent implementing-commit reference: the Git commit that first introduces `docs/design/M94Q_STAB_SPEC_001_REV001.md` together with the corresponding shared-validator/orchestrator corrections and regressions. Resolve this history reference with `git log --diff-filter=A --format=%H -- docs/design/M94Q_STAB_SPEC_001_REV001.md` and verify the actual implementing commit/file contents against the approved combined diff. A commit has not yet been created at preparation time; actual SHA, publication/read-back and independent published-state review must be recorded in the publication evidence before final human acceptance. An archive introduced without its corresponding implementation does not satisfy this mapping.

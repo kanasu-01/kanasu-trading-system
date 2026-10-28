@@ -41,6 +41,7 @@ from core.research.reproducibility import (
     decode_canonical_bytes,
     decode_stable_backtest_result_bytes,
     stable_backtest_result_fingerprint,
+    stable_backtest_result_bytes,
     validate_backtest_result_manifest_capital_binding,
     BACKTEST_RESULT_SCHEMA,
     BACKTEST_RUN_MANIFEST_SCHEMA,
@@ -887,7 +888,7 @@ class BacktestResearchOrchestrator:
         config: BacktestConfig,
         runtime_context: RuntimeContext,
         dataset_context: DatasetContext,
-    ) -> None:
+    ) -> dict:
         """
         Prove that the exact inputs about to execute still match
         the canonical research identity prepared earlier.
@@ -998,6 +999,12 @@ class BacktestResearchOrchestrator:
                 "prepared execution identity mismatch: "
                 "manifest does not describe execution inputs"
             )
+
+        # Return only the manifest whose exact bytes were just verified.
+        # Fresh-result acceptance uses this private pre-computation authority.
+        return decode_canonical_bytes(
+            execution_manifest_bytes, schema=BACKTEST_RUN_MANIFEST_SCHEMA,
+        )
     def execute_prepared(
         self,
         *,
@@ -1146,7 +1153,7 @@ class BacktestResearchOrchestrator:
                 dataset_context
             )
 
-            self._validate_prepared_execution_identity(
+            execution_manifest = self._validate_prepared_execution_identity(
                 prepared=execution_prepared,
                 strategy=execution_strategy,
                 config=execution_config,
@@ -1168,6 +1175,17 @@ class BacktestResearchOrchestrator:
                 dataset_context=(
                     execution_dataset_context
                 ),
+            )
+
+            # Validate a private result before ACCEPTED evidence or success
+            # publication. Persist/fingerprint this same snapshot, not the
+            # mutable result retained by an execution dependency.
+            result = deepcopy(result)
+            result_payload = decode_stable_backtest_result_bytes(
+                stable_backtest_result_bytes(result)
+            )
+            validate_backtest_result_manifest_capital_binding(
+                result_payload, execution_manifest,
             )
 
         except AuthoritativeResearchStateError:

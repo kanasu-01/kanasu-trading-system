@@ -594,6 +594,8 @@ Historical pre-IND REVIEW-01 status snapshot:
 
 **Target:** M9.4
 
+**Additive correction, M94Q-STAB-SPEC-001 Rev 001:** the isolated candidate extends the existing shared manifest-bound validator with exact flat opening position (RO-01), disabled-brokerage consistency (CS-001) and trade-symbol provenance (CS-002), and validates fresh private results before accepted success (CS-003). Generic legacy result compatibility, M4 economic ownership, immutable identities and all AD-025 orchestration/aggregation contracts remain in force. R004 remains closed; RO-01 V002 approval is preserved. This note is not a new closure or financial-engine decision. See [current candidate evidence](../PROJECT_STATUS.md#m94q-consolidated-stabilization-candidate--2026-10-28).
+
 M9.4 introduces the durable registered research workflow above M9.2 execution/evidence lineage and M9.3 canonical instrument/universe/dataset truth. A Study owns immutable StudyRevisions; each revision atomically registers its complete finite Trial population before execution. The registered Trial population is the fixed research denominator.
 
 ResearchJob is the durable operational queue identity. Start is separate and idempotent, queue claiming is atomic/FIFO and bounded by actual configured worker slots, and a claimed job does not itself create a RunAttempt. One Trial may accumulate multiple ResearchJobs through explicit retry while retaining one Trial identity and append-only disposition history.

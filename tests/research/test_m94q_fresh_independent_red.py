@@ -614,3 +614,139 @@ def test_m94q_fresh_distinct_entry_settlements_control(
     )
 
     assert len(verified["trades"]) == 2
+
+
+# M94Q-STAB-SPEC-001: shared manifest-bound acceptance regressions.
+def stabilization_manifest(*, capital=1000.0, symbol="RELIANCE", brokerage=False):
+    from core.config.execution_config import ExecutionConfig
+    from core.market_data.historical_coverage import TimeRange
+    from core.research.reproducibility import (
+        build_backtest_run_manifest, backtest_run_manifest_payload,
+    )
+    from core.runtime.dataset_context import DatasetContext
+    from core.runtime.runtime_context import RuntimeContext
+    from core.strategies.sma_crossover_strategy import SMACrossOverStrategy
+
+    return backtest_run_manifest_payload(build_backtest_run_manifest(
+        DatasetContext(symbol=symbol, timeframe="5m", timezone="UTC"),
+        TimeRange(T, T + timedelta(hours=1)),
+        "sha256:" + "a" * 64,
+        SMACrossOverStrategy(),
+        initial_capital=capital,
+        runtime_context=RuntimeContext(execution_config=ExecutionConfig(
+            brokerage_enabled=brokerage, slippage_enabled=False,
+        )),
+    ))
+
+
+def stabilization_payload(case, *, capital=1000.0, symbol="RELIANCE"):
+    """Coherent generic payloads that contradict one manifest obligation."""
+    if case.startswith("opening_"):
+        mark = float(case.removeprefix("opening_"))
+        first = bar(0, cash=capital, pos=1, price=mark)
+        first.update(open=mark, low=mark, high=mark)
+        return payload([first, bar(1, cash=capital, pos=1)])
+    if case == "entry_fee":
+        return payload([
+            bar(0, cash=capital),
+            bar(1, cash=capital - 101, pos=1, event="BUY", qty=1, fill=100.),
+        ])
+    if case == "negative_cash":
+        return payload([
+            bar(0, cash=capital),
+            bar(1, cash=-100., pos=int(capital / 100) + 1,
+                event="BUY", qty=int(capital / 100) + 1, fill=100.),
+        ])
+    cost = 2.0 if case == "trade_fee" else 0.0
+    fill = 101.0 if case == "slippage" else 100.0
+    exit_fill = 99.0 if case == "losing" else 110.0
+    result = payload([
+        bar(0, cash=capital),
+        bar(1, cash=capital - fill - cost / 2, pos=1,
+            event="BUY", qty=1, fill=fill),
+        bar(2, cash=capital + exit_fill - fill - cost,
+            event="SELL", qty=1, fill=exit_fill),
+    ], [trade(ep=fill, xp=exit_fill, cost=cost)])
+    result["trades"][0]["symbol"] = "FOREIGN" if case == "foreign_symbol" else symbol
+    return result
+
+
+@pytest.mark.parametrize("case", ["opening_1e-8", "opening_1e-9", "entry_fee", "trade_fee", "foreign_symbol"])
+def test_m94q_stabilization_manifest_rejects_generic_counterexample(case):
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    result = stabilization_payload(case)
+    # These are hash-valid, generically valid whole-share counterexamples.
+    decoded = decode(canonical_bytes(result, schema=BACKTEST_RESULT_SCHEMA))
+    if case.startswith("opening_"):
+        assert abs(decoded["bar_records"][0]["equity"] - 1000.) < 1e-7
+    with pytest.raises(ValueError):
+        bind(decoded, stabilization_manifest())
+
+
+@pytest.mark.parametrize("case", ["valid", "slippage", "losing", "empty", "open", "samebar", "nullable"])
+def test_m94q_stabilization_manifest_positive_controls(case):
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    result = stabilization_payload(case)
+    if case == "empty":
+        result = payload([])
+    elif case == "open":
+        result = payload(result["bar_records"][:2])
+    elif case == "samebar":
+        result = payload([bar(0), bar(1, cash=1010., event="PROTECTIVE_EXIT", qty=1, fill=110.)], [trade(entry=1, exit=1)])
+    elif case == "nullable":
+        result["trades"][0]["exit_time"] = None
+    decoded = decode(canonical_bytes(result, schema=BACKTEST_RESULT_SCHEMA))
+    bind(decoded, stabilization_manifest())
+
+
+@pytest.mark.parametrize("position", [None, True, -1, 0.5, float("nan"), float("inf")])
+def test_m94q_stabilization_opening_numeric_guard(position):
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    result = payload([bar(0)])
+    if position is None:
+        result["bar_records"][0].pop("position_size")
+    else:
+        result["bar_records"][0]["position_size"] = position
+    with pytest.raises(ValueError):
+        bind(result, stabilization_manifest())
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e-8, 2e-7])
+def test_m94q_stabilization_existing_capital_tolerance(offset):
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    result = payload([bar(0, cash=1000. + offset)])
+    if offset > 1e-7:
+        with pytest.raises(ValueError):
+            bind(result, stabilization_manifest())
+    else:
+        bind(result, stabilization_manifest())
+
+
+@pytest.mark.parametrize("field,value", [("brokerage_enabled", None), ("brokerage_enabled", 0), ("symbol", None), ("symbol", "")])
+def test_m94q_stabilization_missing_manifest_authority_fails_closed(field, value):
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    manifest = stabilization_manifest()
+    section = manifest["execution"] if field == "brokerage_enabled" else manifest["dataset_context"]
+    if value is None:
+        section.pop(field)
+    else:
+        section[field] = value
+    with pytest.raises(ValueError):
+        bind(stabilization_payload("valid"), manifest)
+
+
+def test_m94q_stabilization_mixed_symbols_and_enabled_brokerage():
+    from core.research.reproducibility import validate_backtest_result_manifest_capital_binding as bind
+
+    result = _m94q_fresh_two_round_trip_entry_payload(second_trade_entry=3)
+    result["trades"][1]["symbol"] = "FOREIGN"
+    validate(result)
+    with pytest.raises(ValueError, match="symbol"):
+        bind(result, stabilization_manifest())
+    # Enabled brokerage retains existing semantics; no new fee calculator.
+    bind(stabilization_payload("trade_fee"), stabilization_manifest(brokerage=True))

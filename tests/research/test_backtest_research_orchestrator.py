@@ -2389,3 +2389,111 @@ def test_m94q_negative_cash_result_is_not_reused_and_fresh_execution_remains_ava
         fresh_attempt.experiment_spec_id
         == source_attempt.experiment_spec_id
     )
+
+
+@pytest.mark.parametrize("case", ["opening_1e-8", "trade_fee", "entry_fee", "foreign_symbol", "negative_cash"])
+@pytest.mark.parametrize("exact", [True, False])
+def test_m94q_stabilization_standalone_validates_before_acceptance(tmp_path, case, exact):
+    from core.config.execution_config import ExecutionConfig
+    from tests.research.test_m94d_claimed_research_job_executor import _stabilization_result
+
+    service, catalog, evidence, database = make_orchestrator(
+        tmp_path, SoftwareIdentity(REVISION, exact), retrieve=lambda **kwargs: candles(),
+        execute=lambda **kwargs: _stabilization_result(case),
+    )
+    # The fixture symbol is ABC; match its manifest except for the explicit foreign-symbol case.
+    dataset = DatasetContext(symbol="ABC", timeframe="15m", timezone="Asia/Kolkata")
+    settings = config()
+    settings.symbol = "ABC"
+    with pytest.raises(ValueError):
+        service.execute(historical_source=object(), strategy=create_strategy(settings), config=settings,
+                        runtime_context=RuntimeContext(execution_config=ExecutionConfig(brokerage_enabled=False)), dataset_context=dataset)
+    assert evidence.load("evidence-001").status is ResearchEvidenceStatus.FAILED
+    assert row_count(database, "run_attempts") == int(exact)
+    if exact:
+        attempt = catalog.load_run_attempt("attempt-001")
+        assert attempt.state is RunAttemptState.FAILED
+        assert attempt.result_artifact_id is None
+
+
+@pytest.mark.parametrize("scenario", ["open", "losing", "zero_trade", "samebar", "slippage", "brokerage"])
+def test_m94q_stabilization_real_engine_fresh_and_reusable(tmp_path, scenario):
+    from core.config.execution_config import ExecutionConfig
+    from core.runtime.backtest_runtime import execute_backtest_candles
+    from core.strategies.signal import SignalType
+    from tests.backtest.test_m4_7_backtest_validity_integration import IntegrationStrategy, candle
+
+    signals = {} if scenario == "zero_trade" else {1: SignalType.BUY}
+    strategy = IntegrationStrategy(signals, rejection_midpoint=None, scenario=scenario)
+    protective = scenario == "samebar"
+    values = [
+        candle(0, open_price=100., high=101., low=99., close=100.),
+        candle(1, open_price=100., high=111., low=97. if protective else 99., close=99. if protective else 110.),
+    ]
+    settings = config()
+    if scenario == "losing":
+        strategy = IntegrationStrategy(
+            {1: SignalType.BUY, 3: SignalType.SELL},
+            rejection_midpoint=None, scenario=scenario,
+        )
+        values = [
+            candle(0, open_price=100., high=101., low=99., close=100.),
+            candle(1, open_price=100., high=102., low=99., close=101.),
+            candle(2, open_price=101., high=102., low=99., close=100.),
+            candle(3, open_price=99., high=100., low=98.5, close=99.),
+        ]
+        settings.end = START + timedelta(hours=1)
+    service, catalog, _, _ = make_orchestrator(
+        tmp_path, SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: values, execute=execute_backtest_candles,
+    )
+    execution = service.execute(
+        historical_source=object(), strategy=strategy, config=settings,
+        runtime_context=RuntimeContext(execution_config=ExecutionConfig(
+            brokerage_enabled=scenario == "brokerage", slippage_enabled=scenario == "slippage",
+        )), dataset_context=context(),
+    )
+    assert execution.evidence_status is ResearchEvidenceStatus.ACCEPTED
+    if scenario == "zero_trade":
+        assert execution.result.trades == []
+        assert execution.result.bar_records[-1].position_size == 0
+    elif protective or scenario == "losing":
+        assert len(execution.result.trades) == 1
+        assert execution.result.trades[0].pnl < 0
+        if protective:
+            assert execution.result.trades[0].entry_time == execution.result.trades[0].exit_time
+        else:
+            assert execution.result.trades[0].entry_time < execution.result.trades[0].exit_time
+    else:
+        assert execution.result.bar_records[-1].position_size > 0
+        assert execution.result.bar_records[-1].execution_event == "BUY"
+    attempt = catalog.load_run_attempt(execution.attempt_id)
+    assert service.find_exact_reusable_execution(attempt.experiment_spec_id) is not None
+
+
+def test_m94q_stabilization_persists_validated_private_result(tmp_path, monkeypatch):
+    from tests.research.test_m94d_claimed_research_job_executor import _stabilization_result
+    from core.research.reproducibility import decode_stable_backtest_result_bytes
+
+    original = _stabilization_result("valid")
+    # Match the ordinary fixture manifest's execution symbol.
+    original.trades[0].symbol = "RELIANCE"
+    service, catalog, _, _ = make_orchestrator(
+        tmp_path, SoftwareIdentity(REVISION, True),
+        retrieve=lambda **kwargs: candles(), execute=lambda **kwargs: original,
+    )
+    persist = service.artifact_store.persist_backtest_result
+
+    def mutate_caller_result(result, **kwargs):
+        original.trades[0].symbol = "FOREIGN"
+        original.bar_records[1].cash = -1.
+        return persist(result, **kwargs)
+
+    monkeypatch.setattr(service.artifact_store, "persist_backtest_result", mutate_caller_result)
+    execution = service.execute(historical_source=object(), strategy=create_strategy(config()), config=config(),
+                                runtime_context=RuntimeContext(), dataset_context=context())
+    attempt = catalog.load_run_attempt(execution.attempt_id)
+    persisted = decode_stable_backtest_result_bytes(service.artifact_store.load_bytes(attempt.result_artifact_id))
+    assert persisted["trades"][0]["symbol"] == "RELIANCE"
+    assert persisted["bar_records"][1]["cash"] > 0
+    assert execution.result is not original

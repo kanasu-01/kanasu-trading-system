@@ -818,3 +818,9 @@ the parent review and its 122 probes remain separately attributed to `e6002758`.
 Technical carry-forward PASS, documentation failure and missing historical
 human-approval evidence are separate axes. Current gate details are owned by
 [Project Status](../PROJECT_STATUS.md#current-dashboard); no closure, M9.5 implementation or Git authority follows.
+
+## M9.4q shared manifest-bound acceptance correction
+
+The isolated M94Q-STAB-SPEC-001 candidate extends `validate_backtest_result_manifest_capital_binding` as the common authority for RO-01 and CS-001/002: a nonempty bound account starts exactly flat, disabled brokerage cannot explain transaction costs or observed cash deductions, and completed trades match the manifest execution symbol. Fee checks consume recorded fills, preserving slippage; they do not implement another fee engine. Generic legacy decoding and empty-result behavior remain unchanged.
+
+Fresh orchestration (CS-003) snapshots the returned result, canonically validates it and binds it to the exact pre-computation verified manifest before success publication. Invalid output uses existing failure/transaction handling. Exact reuse and canonical EXECUTED/REUSED aggregation retain their existing callers, lineage checks and fail-closed behavior. No schema, serialization, financial engine, retry, cancellation, recovery or denominator redesign is involved. Publication/acceptance state is owned by [Project Status](../PROJECT_STATUS.md#m94q-consolidated-stabilization-candidate--2026-10-28).

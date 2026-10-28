@@ -11,14 +11,14 @@
 | M8 starting baseline | `390c7cc` — `Close M7 documentation and advance roadmap` |
 | M8 design baseline | `f86a6dd` — `Baseline M8 research and paper application design` |
 | M8.5 closure parent baseline | `83ae719` - `Harden AngelOne login retry configuration` |
-| Latest M9.4 corrective validation | Read-only preparation baseline verified on 2026-10-27: `5b61b902805f450b12a5c9c5e2d8511c23e10726`. Prior verified ancestry: `e6002758 → 929db5d6 → 4d637c8 → 5b61b902`; changes after `929db5d6` are documentation-only. Previously verified GitHub Actions run `40319418438` succeeded with 1,684 Python tests passed. Technical PASS is reused only within the reported implementation/carry-forward audit scope; this CI evidence is not a new independent technical audit. The original separate audit report, assessed SHA and scope still require attributable source evidence for final acceptance (F06). |
+| Latest M9.4 corrective validation | Isolated unpublished M94Q-STAB-SPEC-001 Rev 001 candidate prepared from GitHub `c6e2d3cb199f9bbed606e89f3644f40950aee46c` on 2026-10-28: 66 focused, 273 affected-module, 609 M9.4 and 1,750 complete Python tests passed. This is local implementation evidence, not independent acceptance or publication. See [stabilization evidence](#m94q-consolidated-stabilization-candidate--2026-10-28). |
 | Latest M8.5 frontend validation | `17 passed`; production build passed; lint passed |
 | Latest M8.5 closure checks | placeholder/drift search found none; responsive desktop/mobile browser smoke passed; `git diff --check` passed |
 | Version | V1 — Research and Real-Market-Data Paper Trading |
 | Phase | P5 — V1 Research Platform Completion |
 | Milestone | M9 — V1 research platform completion |
-| Step | M9.4q present-day documentation and approval-evidence reconciliation. Earlier `M94Q-PH-DOC-01/02` were reported resolved at the preparation baseline; README/Validation Plan and SOP bootstrap corrections require independent exact published-state verification before documentation PASS. |
-| Lifecycle | M0–M8 complete; M9.2/M9.3 closed; M9.4q OPEN/BLOCKED. Technical PASS is bounded by its reported audit scope. Documentation FAIL at the preparation baseline is distinct from verification of subsequent documentation changes; formal closure acceptance remains incomplete. Historical human integration and protected Git-operation approvals remain NOT_VERIFIED. M9.5 formal admission and implementation remain BLOCKED. |
+| Step | M9.4q consolidated RO-01 / CS-001 / CS-002 / CS-003 correction prepared and validated in an isolated working copy; exact content diff awaits Human Approval 2 and applicable formal review gates before authoritative application. R004 documentation publication remains ACCEPTED_CLOSED. |
+| Lifecycle | M0–M8 complete; M9.2/M9.3 closed; M9.4q OPEN/BLOCKED. Corrective candidate locally implemented and validated, unpublished and not independently accepted. Historical integration/protected-operation approvals and original audit-report F06 remain NOT_VERIFIED. M9.5 admission and implementation remain BLOCKED. |
 | Gate to M9.5 | Requires independent technical and documentation acceptance of the exact final published HEAD and the required attributable human acceptance/authority records. Reported M9.5 Draft v0.3 design-review PASS WITH NONBLOCKING OBSERVATIONS does not grant admission or implementation authority. |
 
 M9 expands the previously reserved release-only scope into completion of the V1 research product. M9.1 is documentation/design only: it defines the persistent research workflow, research identities and state axes, universe semantics, qualification authority, Candidate/PaperCampaign lineage, and behavioral-specification governance. It does not modify Backtest economics, WFA mathematics, Paper causality, historical-source semantics or the real-money boundary.
@@ -321,9 +321,9 @@ M4.3 execution priority, same-bar post-entry protection and no-lookahead orderin
 
 ## Current work
 
-Prepare the bounded present-day documentation and approval-evidence reconciliation under the human-approved Revision 004 specification (`d57ba50cae364d63a31403d9e2c4a8321dc9d3f4a516117267990ef403cd7449`). R004 Human Approval 1 is VERIFIED and its formal independent Codex Review 1 verdict is PASS. The complete exact documentation differences require separate Human Approval 2 before application; protected Git operations require separate explicit authorization. The [2026-10-21 published-head reconciliation](#current-published-head-reconciliation--2026-10-21) remains historical evidence for its stated SHA.
+Review one exact production/test/documentation diff for the isolated candidate implementing `M94Q-STAB-SPEC-001`, Revision 001. The owner authorized isolated preparation and testing; no authoritative application or protected Git operation has been authorized. Preserve the unchanged RO-01 V002 Human Approval 1 and technical assessment PASS; its formal Review 1 source-evidence limitation remains separate. R004 seven-file documentation publication is ACCEPTED_CLOSED, as attributed in the supplied handoff; its approvals are not reopened.
 
-Any prospective closure-rule amendment is conditional on a separate exact proposal, independent permissibility finding, human approvals and verified publication under the ACTIVE Global SOP and applicable project controls. Candidate V001 is not governing; the existing historical-approval requirement remains unchanged. Technical PASS alone does not close M9.4q or admit M9.5.
+Any prospective closure-rule amendment remains a separate, nongoverning proposal. No test PASS supplies retrospective authorization. M9.4q closure still requires the applicable independent reviews, exact-diff approval, separately authorized publication, exact published-state verification and final human acceptance.
 
 ## Historical work records
 
@@ -888,3 +888,17 @@ this source-baseline audit does not automatically cover it. Required human
 approval of the exact diff, applied-diff verification, and separately authorized
 stage, commit, push and integration remain distinct gates.
 
+
+## M9.4q consolidated stabilization candidate — 2026-10-28
+
+**State:** locally implemented/validated in an isolated cloud copy; UNPUBLISHED; M9.4q OPEN/BLOCKED. Source baseline is GitHub branch `m9-v1-research-platform`, `c6e2d3cb199f9bbed606e89f3644f40950aee46c` (366 original file hashes verified). This section describes the proposed resulting documentation, not a new published commit.
+
+BEHAVIOR IMPACT: CHANGED — manifest-bound research acceptance and fresh-result acceptance only. RO-01 requires exact zero opening position while retaining generic legacy decoding; CS-001 binds disabled-brokerage cash/transaction-cost evidence using recorded, potentially slipped fills; CS-002 binds completed-trade symbols to the manifest; CS-003 validates a private fresh-result snapshot before accepted success. Existing reuse and canonical EXECUTED/REUSED aggregation already cross the shared boundary. No financial engine, schema, fingerprint, queue or API contract changed.
+
+The new regressions include both tiny-mark RO-01 cases, canonical/generic compatibility, missing/numeric authority, disabled-fee/symbol contradictions, durable EXECUTED/REUSED rejection and valid fresh fallback, standalone/nonexact and claimed failure, cancellation, explicit retry, failed-transaction rollback/recovery, private-result mutation and real M4 controls. One pre-existing API projection fixture was made financially coherent while preserving its assertions distinguishing realized P&L (240) from marked account P&L (250).
+
+VALIDATION: Python 3.12.14 on Linux; 66 focused cases, 273 affected-module tests, 609 M9.4 cases across 24 modules and 1,750 full Python cases passed, with no failures/errors/skips. The full run reported 457 existing `datetime.utcnow()` deprecation warnings (two additional occurrences from new real-engine controls); CS-004 remains deferred. The initial baseline RED run recorded 48 failing/10 passing new cases. Exact commands, log hashes and candidate source identity are provided with the approval packet; no new GitHub CI or independent PASS is claimed.
+
+CODE/TEST IDENTITY: `4eea409c1dc68f9c0da65be1ac3f46159300d9076a4db83cc63c6f4e4cc0042d` — SHA-256 of sorted changed Python paths, NUL, each file's SHA-256, newline. It is a content identity, not a Git commit. See [Validation Plan](validation/VALIDATION_PLAN.md#m94q-consolidated-stabilization-validation--2026-10-28).
+
+GOVERNANCE: R004 acceptance and unchanged RO-01 V002 approval are preserved. The handoff attributes original Library V10 retrieval to ChatGPT; Codex has not independently retrieved that authority. Required formal source verification remains unresolved without blocking authorized isolated preparation. Historical protected-operation approval records, original audit-report F06 and the unidentified historical 90-control selector are not fabricated. A corrected technical PASS cannot retrospectively authorize Git history. No SOP amendment, M9.4q closure or M9.5 admission is implied.

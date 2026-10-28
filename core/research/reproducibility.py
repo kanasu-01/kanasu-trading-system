@@ -2109,7 +2109,11 @@ def validate_backtest_result_manifest_capital_binding(
     manifest: dict[str, Any],
 ) -> None:
     """
-    Bind observable Backtest account capital to its immutable run manifest.
+    Bind canonical Backtest account evidence to its immutable run manifest.
+
+    M94Q-STAB-SPEC-001: manifest-bound accounts start flat; completed
+    trades retain the execution symbol, and disabled brokerage cannot
+    explain cash deductions. Generic legacy decoding remains unchanged.
 
     Empty Backtest results contain no account snapshot and therefore make
     no observable capital claim. Once at least one bar is recorded, M4
@@ -2162,6 +2166,15 @@ def validate_backtest_result_manifest_capital_binding(
             "for manifest binding"
         )
 
+    opening_position = _require_result_finite_number(
+        first_record.get("position_size"),
+        label="Backtest opening position_size",
+    )
+    if opening_position != 0:
+        raise ValueError(
+            "Backtest manifest-bound opening position_size must be exactly zero"
+        )
+
     for field in ("cash", "equity"):
         if field not in first_record:
             raise ValueError(
@@ -2186,6 +2199,59 @@ def validate_backtest_result_manifest_capital_binding(
             raise ValueError(
                 "Backtest observable initial account capital "
                 "does not match authoritative run manifest"
+            )
+
+    execution = manifest.get("execution")
+    if (
+        not isinstance(execution, dict)
+        or type(execution.get("brokerage_enabled")) is not bool
+    ):
+        raise ValueError(
+            "Backtest manifest requires Boolean execution.brokerage_enabled"
+        )
+
+    trades = result["trades"]
+    if trades:
+        context = manifest.get("dataset_context")
+        if not isinstance(context, dict):
+            raise ValueError("Backtest manifest requires dataset_context symbol")
+        symbol = _require_result_string(
+            context.get("symbol"), label="Backtest manifest dataset_context symbol"
+        )
+        for trade in trades:
+            if trade["symbol"] != symbol:
+                raise ValueError(
+                    "Backtest trade symbol does not match authoritative run manifest"
+                )
+
+    if execution["brokerage_enabled"]:
+        return
+
+    for trade in trades:
+        if trade["transaction_cost"] != 0:
+            raise ValueError(
+                "Backtest disabled brokerage requires zero transaction_cost"
+            )
+
+    # The canonical validator already proves execution tuples, quantities
+    # and unique same-bar settlements. Check ordinary cash movements using
+    # recorded fills, which already include slippage; do not price fills or
+    # calculate fees here. Same-bar net P&L is reconciled by that validator.
+    for previous, current in zip(bar_records, bar_records[1:]):
+        quantity_change = current["position_size"] - previous["position_size"]
+        if quantity_change == 0:
+            continue
+        try:
+            expected_cash = (
+                previous["cash"] - current["execution_price"] * quantity_change
+            )
+        except OverflowError as error:
+            raise ValueError("Backtest disabled-brokerage cash exceeds numeric range") from error
+        if not _result_financial_isclose(
+            current["cash"], expected_cash, rel_tol=1e-12, abs_tol=1e-7,
+        ):
+            raise ValueError(
+                "Backtest cash movement contradicts disabled brokerage"
             )
 
 

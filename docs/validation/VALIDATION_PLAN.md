@@ -1693,3 +1693,26 @@ identity must be verified before any acceptance request.
 **No M9.4q closure or M9.5 authorization is implied by this PASS.**
 Human approval is still required for milestone integration, followed by
 a separate independent PASS on the exact published milestone HEAD.
+
+## M9.4q consolidated stabilization validation — 2026-10-28
+
+Candidate: `M94Q-STAB-SPEC-001` Rev 001, isolated and unpublished, based on `c6e2d3cb199f9bbed606e89f3644f40950aee46c`. Current status and governance remain owned by [Project Status](../PROJECT_STATUS.md#m94q-consolidated-stabilization-candidate--2026-10-28); this local result does not reopen R004 or establish independent acceptance.
+
+| Obligation | Acceptance evidence |
+|---|---|
+| RO-01 | Whole-share opening marks at 1e-8 and 1e-9 remain generically decodable but fail manifest binding; persisted evidence fails lookup and both canonical aggregation dispositions. Exact flat start, later funded BUY, empty result, numeric guards and existing capital tolerances remain supported. |
+| CS-001 | Disabled-brokerage nonzero trade costs and entry cash deductions fail; zero-fee, same-bar/nullable exit, slippage and enabled-brokerage controls remain valid. Recorded fills are used without recalculating economics. |
+| CS-002 | Foreign/mixed symbols and missing required authority fail; matching execution symbols retain exact provenance. |
+| CS-003 | Standalone (exact/nonexact software) and claimed invalid outputs fail before accepted success; atomic FAILED state, cancellation, explicit retry, terminal-write rollback/recovery and private-result isolation are covered. |
+| Preservation | Real M4 open, losing, zero-trade, same-bar, slippage and brokerage outputs validate and remain reusable; complete M4–M9.4 regression passes. No test was removed or weakened. |
+
+Interpreter: Python 3.12.14. Common command prefix: `python -m pytest -q -p no:cacheprovider -o faulthandler_timeout=30`.
+
+- Focused: affected modules below plus `-k stabilization`: **66 passed, 207 deselected**.
+- Affected modules: `tests/research/test_m94q_fresh_independent_red.py`, `tests/research/test_m94d_claimed_research_job_executor.py`, `tests/research/test_backtest_research_orchestrator.py`, `tests/api/test_backtest_application.py`: **273 passed**.
+- M9.4: `tests/research/test_m94*.py tests/api/test_m94*.py`: **609 passed**, 24 modules.
+- Complete suite, without selectors: **1,750 passed**, no failures/errors/skips; **457 deprecation warnings**, 9.48 seconds pytest-reported duration.
+
+The full-suite first pass identified one inconsistent API success fixture (incorrect trade arithmetic, first-bar entry and unexplained cash). Its history was corrected, preserving exact P&L/projection assertions and adding the valid intervening settlements; validation was not disabled. Development test-environment socket restrictions required the permitted networking profile used by the successful runs. No external broker/live execution was used.
+
+The approval packet retains RED/GREEN logs, exact commands, per-log SHA-256 and code/test content identity. Local validation neither substitutes for independent review nor authorizes authoritative writes or protected Git operations. Require exact approved diff, actual published-state verification and final acceptance. Preserve original audit and approval records as NOT_VERIFIED where unavailable; the historical 90-control selector remains unidentified.
