@@ -1696,7 +1696,7 @@ a separate independent PASS on the exact published milestone HEAD.
 
 ## M9.4q consolidated stabilization validation — 2026-10-28
 
-Candidate: `M94Q-STAB-SPEC-001` Rev 001, isolated and unpublished, based on `c6e2d3cb199f9bbed606e89f3644f40950aee46c`. Current status and governance remain owned by [Project Status](../PROJECT_STATUS.md#m94q-consolidated-stabilization-candidate--2026-10-28); this local result does not reopen R004 or establish independent acceptance.
+Historical pre-publication local validation checkpoint: `M94Q-STAB-SPEC-001` Rev 001 was isolated and unpublished, based on `c6e2d3cb199f9bbed606e89f3644f40950aee46c`. These original local results are preserved below. Current publication and governance evidence is owned by the [verified Project Status checkpoint](../PROJECT_STATUS.md#m94q-verified-implementation-publication--2026-10-28). R004 remains closed.
 
 | Obligation | Acceptance evidence |
 |---|---|
@@ -1716,3 +1716,6 @@ Interpreter: Python 3.12.14. Common command prefix: `python -m pytest -q -p no:c
 The full-suite first pass identified one inconsistent API success fixture (incorrect trade arithmetic, first-bar entry and unexplained cash). Its history was corrected, preserving exact P&L/projection assertions and adding the valid intervening settlements; validation was not disabled. Development test-environment socket restrictions required the permitted networking profile used by the successful runs. No external broker/live execution was used.
 
 The approval packet retains RED/GREEN logs, exact commands, per-log SHA-256 and code/test content identity. Local validation neither substitutes for independent review nor authorizes authoritative writes or protected Git operations. Require exact approved diff, actual published-state verification and final acceptance. Preserve original audit and approval records as NOT_VERIFIED where unavailable; the historical 90-control selector remains unidentified.
+
+
+Publication evidence: implementation SHA `4c1067fac6aec337ec10ac6e63409482ca649d15` matches the approved code/test content identity. Independent candidate validation passed 1,750 tests and 32 adversarial checks. GitHub CI run [40700668246](https://github.com/kanasu-01/kanasu-trading-system/actions/runs/40700668246) completed SUCCESS for this actual SHA; its test job and Run tests step succeeded. No separate CI test count is inferred. The subsequent current-status synchronization changes Markdown only; the unchanged code/test evidence is retained without a redundant full-suite run. Final synchronized-documentation review and human acceptance are separate from technical validation.
