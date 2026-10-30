@@ -4,7 +4,7 @@ Use targeted context. The repository documentation remains authoritative, but ag
 
 ## Applicable Global SOPs
 
-The project owner declares that Kanasu Trading System currently has **no project-specific SOPs**. Kanasu inherits the currently ACTIVE Global SOPs from the authoritative `/SOP/GLOBAL_SOP_REGISTRY.md` in ChatGPT Library; ordinary repository governance and accepted architecture contracts remain applicable. The GitHub Global SOP file is a non-authoritative mirror unless and until a separately authorized change of authoritative source is published and verified. Before undertaking controlled work, load the applicable ACTIVE Global SOP requirements from the authoritative source and verify this declaration. If authoritative status cannot be verified, do not infer permission from the mirror or from this bootstrap; report the uncertainty and limit work to permitted read-only investigation and preparation.
+The project owner declares that Kanasu Trading System currently has **no project-specific SOPs**. Kanasu inherits the currently ACTIVE Global SOPs from the authoritative Global SOP Registry in the default branch of GitHub repository `kanasu-01/kanasu-sops`, at `global/GLOBAL_SOP_REGISTRY.md`; ordinary repository governance and accepted architecture contracts remain applicable. Before undertaking controlled work, load the applicable ACTIVE Global SOP requirements directly from that authoritative source and verify this declaration. If authoritative status cannot be verified, do not infer permission from this bootstrap; report the uncertainty and limit work to permitted read-only investigation and preparation.
 
 Before changing the repository:
 
