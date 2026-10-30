@@ -83,8 +83,8 @@ Hierarchy ancestry is metadata. It is not encoded into identifiers. M3.6b remain
   - **M9.1 — DONE** — V1 research product, domain/authority contracts and behavioral traceability design baseline.
   - **M9.2 - DONE** - Durable research catalog and automatic evidence.
   - **M9.3 - DONE/CLOSED** - Instrument, universe and dataset truthfulness. Canonical identity/bindings, temporal universe snapshots, successor dataset/acquisition-stream truth, AngelOne wall-time handling, binding-aware retrieval, DatasetReference evidence and explicit opt-in application integration are validated.
-  - **M9.4 - M9.4q OPEN/BLOCKED; consolidated correction ACCEPTED_CLOSED** — Current corrected baseline is `87d740d9d5558821088d8095fd4cf59dcb81bee6`. The remaining bounded prospective closure-governance publication, review and explicit milestone acceptance are owned by [Project Status](../PROJECT_STATUS.md#current-dashboard) and Governance section 7.1. Historical missing records remain NOT_VERIFIED. M9.5 formal admission and implementation remain BLOCKED.
-  - **M9.5 - PLANNED; FORMAL ADMISSION AND IMPLEMENTATION BLOCKED** - Robustness evidence and versioned qualification. Draft v0.3 has a separately reported design-level PASS WITH NONBLOCKING OBSERVATIONS; it does not satisfy the M9.4q closure or human-approval gates.
+  - **M9.4 - M9.4q PROSPECTIVE GOVERNANCE PUBLISHED; FINAL CLOSURE NOT_VERIFIED** — The consolidated correction remains ACCEPTED_CLOSED at `87d740d9d5558821088d8095fd4cf59dcb81bee6`; the approved prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`. The original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable, so final closure is not currently verified. Historical missing records remain NOT_VERIFIED.
+  - **M9.5 - PLANNED; FORMAL ADMISSION AND IMPLEMENTATION BLOCKED** - Robustness evidence and versioned qualification. M9.5 remains blocked pending verified M9.4q final-closure evidence and its own controlled admission/design process. Earlier Draft v0.3 / Gate-A material grants no implementation authority.
   - **M9.6 ? PLANNED** ? Candidate-bound WFA and OOS confirmation.
   - **M9.7 ? PLANNED** ? Qualified persistent Paper campaigns and operational continuity.
   - **M9.8 ? PLANNED** ? Complete research-workspace integration.
@@ -701,7 +701,7 @@ Final accepted closure: `3584d5921a1ee1f0cb1c3143fc70eb916fc28c0a`.
 
 ### M9 ? V1 research platform completion
 
-**Status:** ACTIVE — M9.4q closure and M9.5 formal admission/implementation remain BLOCKED. Current baseline, bounded technical evidence, documentation verification and historical/current approval axes are owned by [Project Status](../PROJECT_STATUS.md#current-dashboard).
+**Status:** ACTIVE — M9.4q prospective governance is published, but final milestone closure is NOT_VERIFIED in the currently retrievable evidence; M9.5 formal admission/implementation remain BLOCKED. Current baseline, technical acceptance, publication evidence and historical/current approval axes are owned by [Project Status](../PROJECT_STATUS.md#current-dashboard).
 
 > Historical record scope: M9.4q review and checkpoint records below describe
 > their recorded candidates, including then-current publication claims, test

@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; M9.4q CURRENT STATE: The correction reviewed at `e6002758` is integrated into audited published baseline `929db5d6b207d172b66cb3b38ae9b0f617f8ce0a`. TECHNICAL PASS is carried forward on verified unchanged executable surfaces with exact published-SHA CI; DOCUMENTATION FAIL and historical human integration approval NOT_VERIFIED keep the overall gate VERIFIED_FAIL. M9.4q is not closed; M9.5 formal admission and implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21).**
+**ACCEPTED DESIGN BASELINE; CURRENT STATE: The M9.4q technical correction remains accepted, and the approved prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`. Final milestone closure remains NOT_VERIFIED because the original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable. Historical human integration/protected-operation approval gaps remain NOT_VERIFIED. M9.5 formal admission and implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-dashboard).**
 
 `M94_DESIGN_ACCEPTED=True`
 
@@ -10,7 +10,7 @@
 > their recorded candidates, including then-current publication claims, test
 > counts and reported authorizations. They are not current branch-state or
 > original human-approval evidence. Current status is owned by
-> [Project Status](../PROJECT_STATUS.md#current-published-head-reconciliation--2026-10-21). Accepted technical contracts remain in force;
+> [Project Status](../PROJECT_STATUS.md#current-dashboard). Accepted technical contracts remain in force;
 > the IND-01 correction supersedes earlier plan-first resolver wording.
 
 The accepted design baseline was published at `9b7ab42` and synchronized at `199ec34`. Production implementation subsequently proceeded in separately reviewed M9.4a-M9.4f slices. M9.4g, M9.4h and M9.4i remain historical corrective states. M9.4j is published/post-push verified at `7f123daa135be4009294f5197676dc5153261255`; its subsequent independent audit produced F01-F03, which M9.4k corrected without changing the accepted architecture. M9.4k was then published/post-push verified at `9ac407fd4910edf9392445a6fa0539ba90fa97c5`.

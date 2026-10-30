@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED M9.4 DESIGN. Current M9.4q baseline, audit axes and remaining gates are owned by [Project Status](../PROJECT_STATUS.md#current-dashboard). M9.4q closure and M9.5 formal admission/implementation remain BLOCKED.
+**Status:** ACCEPTED M9.4 DESIGN. The M9.4q technical correction remains accepted and the approved prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`; final milestone closure remains NOT_VERIFIED because the original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable. Current status is owned by [Project Status](../PROJECT_STATUS.md#current-dashboard). M9.5 formal admission/implementation remain BLOCKED.
 
 > Historical record scope: M9.4q review and checkpoint records below describe
 > their recorded candidates, including then-current publication claims, test
@@ -894,5 +894,5 @@ Independent audit of exact SHA `e6002758f22e0bb07d0886dcc1603eba21e6e501`:
 122 reviewer cases passed, no runtime blocker, candidate-level PASS.
 The reviewed correction is integrated into audited published baseline
 `929db5d6`; historical human integration approval remains NOT_VERIFIED.
-Current documentation and final acceptance gates are owned by
-[Project Status](../PROJECT_STATUS.md#current-dashboard); M9.4q closure and M9.5 formal admission/implementation remain blocked.
+That statement describes the historical `929db5d6` checkpoint. Current documentation and final-acceptance status are owned by
+[Project Status](../PROJECT_STATUS.md#current-dashboard): the prospective-governance publication is verified, final M9.4q closure evidence remains NOT_VERIFIED, and M9.5 formal admission/implementation remain blocked.
