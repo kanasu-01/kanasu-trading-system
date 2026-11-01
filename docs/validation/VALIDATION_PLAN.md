@@ -1201,6 +1201,16 @@ accepted behavior before
 
 A refactor may declare `BEHAVIOR IMPACT: NONE`, but that declaration must be independently reviewable against code and tests.
 
+### M9.5 — Proposed minimal MVP V1 qualification admission and subsequent test scope
+
+**Status:** DESIGN PROPOSED; M9.5 remains NOT_ADMITTED until the exact design publication, independent Review 2 PASS and final Human Approval 3. No code implementation is authorized by this document.
+
+Subject to separately approved human-language specifications, the minimum M9.5 behavior will evaluate one explicitly selected and verified registered historical Backtest/Trial result for one fixed CandidateRevision using **only** the unrounded `net_profitable_trade_rate_pct >= T` economic criterion, where `T` is the human-selected fixed percentage in the applicable immutable, versioned policy (finite, within 0–100 inclusive). The human selects a specific threshold before evaluation; no universal number is embedded in the general design. Positive monetary **net** completed-trade P&L counts as profitable; losing and breakeven completed trades remain in the denominator. Evidence validity, identity and availability are prerequisites to legitimate evaluation, not extra economic criteria. Zero completed trades is insufficient rather than rejected. With valid sufficient evidence, a calculated rate below the selected policy threshold `T` is rejected, and a rate **equal to or above that policy threshold** is eligible **for M9.6 consideration only**.
+
+Subsequent deterministic tests must cover equality to **each selected policy threshold** `T`, just-below threshold, finite percentage bounds (including 0 and 100), invalid/missing policy threshold, immutable per-policy-version threshold identity, explicit human selection and successor-policy decisions when the human chooses a different threshold, breakevens, zero completed trades, invalid/absent evidence, net-versus-gross-cost classification, unchanged precision/authoritative M4 economics, exact selected Trial and fixed CandidateRevision bindings, append-only policy/decision identities, no hidden best-Trial selection, no WFA/Paper auto-launch, and unchanged accepted safety and stage-order regressions. Even one completed trade may meet a sufficiently permissive human-selected percentage threshold; this is not a claim of adequate statistical sample size. Eligibility does not claim aggregate profitability, validated WFA/OOS results or permission for qualified Paper.
+
+Additional robustness thresholds and adaptive qualification are deferred beyond MVP V1 as qualification gates under AD-026, but the accepted V1 product's data validity, true trial denominator, correct WFA/OOS partition attribution, immutable evidence/progression lineage, authoritative Backtest/WFA/Paper economics and no-real-money safeguards remain requirements. This paragraph does not waive the other applicable release gates below. Formal indexing of the deferred capabilities into `DEFERRED_WORK.md` is a required separate controlled follow-up **before any M9.5 code implementation**.
+
 ## 11. V1 research-ready release gates
 
 `KANASU V1 ? RESEARCH READY` means the supported product satisfies all applicable gates below. It does not mean any particular strategy is profitable or must qualify.
