@@ -6,7 +6,7 @@ V1 does **not** place real-money broker orders. Controlled real-money execution 
 
 ## Current state
 
-M0–M8 and M9.2–M9.3 are complete at their accepted scopes. The approved M9.4q prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`, but the original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable in the current evidence set. M9.4q final closure is therefore **NOT_VERIFIED** for current governance purposes, and M9.5 remains **NOT_ADMITTED / IMPLEMENTATION BLOCKED**.
+M0–M8 and M9.2–M9.3 are complete at their accepted scopes. M9.4q final closure is governed by the [M9.4q Final Closure Record](docs/governance/M94Q_FINAL_CLOSURE_RECORD.md). Before the record's exact publication/read-back, Independent Review 2 PASS and explicit final Human Approval 3 accepting both the final-closure governance state and the M9.4q milestone on Governance §7.1's bounded prospective basis, M9.4q is **OPEN/BLOCKED**; immediately upon that final acceptance, M9.4q is **DONE/CLOSED**. Historical NOT_VERIFIED findings remain preserved. M9.5 remains **NOT_ADMITTED**; M9.4q closure authorizes only a separate controlled M9.5 admission/design task and does not authorize M9.5 implementation.
 
 See [Project Status](docs/PROJECT_STATUS.md) for the dated baseline and current blockers.
 

@@ -580,7 +580,7 @@ For AngelOne historical requests, naive bounds retain explicit `Asia/Kolkata` wa
 M9.3 does not implement registered Study/Trial batch execution, qualification, Candidate progression, shared-capital multi-symbol portfolio economics, real-money execution or corporate-action adjustment logic. Study/Trial execution remains M9.4 scope. Accepted Backtest/WFA/Paper financial and causal behavior remains unchanged.
 ### AD-025 - Registered Studies, bounded research jobs and truthful Study aggregation
 
-**Status:** ACCEPTED M9.4 DESIGN. The M9.4q technical correction remains accepted and the approved prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`; final milestone closure remains NOT_VERIFIED because the original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable. Current status is owned by [Project Status](../PROJECT_STATUS.md#current-dashboard). M9.5 formal admission/implementation remain BLOCKED.
+**Status:** ACCEPTED M9.4 DESIGN. The M9.4q technical correction remains accepted. Final milestone closure is governed by the [M9.4q Final Closure Record](../governance/M94Q_FINAL_CLOSURE_RECORD.md): OPEN/BLOCKED before exact publication/read-back, Independent Review 2 PASS and explicit final Human Approval 3; DONE/CLOSED immediately upon that explicit milestone acceptance. Current status is owned by [Project Status](../PROJECT_STATUS.md#current-dashboard). M9.5 remains unadmitted; M9.4q closure authorizes only a separate controlled admission/design task and does not authorize M9.5 implementation.
 
 > Historical record scope: M9.4q review and checkpoint records below describe
 > their recorded candidates, including then-current publication claims, test
@@ -894,5 +894,5 @@ Independent audit of exact SHA `e6002758f22e0bb07d0886dcc1603eba21e6e501`:
 122 reviewer cases passed, no runtime blocker, candidate-level PASS.
 The reviewed correction is integrated into audited published baseline
 `929db5d6`; historical human integration approval remains NOT_VERIFIED.
-That statement describes the historical `929db5d6` checkpoint. Current documentation and final-acceptance status are owned by
-[Project Status](../PROJECT_STATUS.md#current-dashboard): the prospective-governance publication is verified, final M9.4q closure evidence remains NOT_VERIFIED, and M9.5 formal admission/implementation remain blocked.
+That statement describes the historical `929db5d6` checkpoint. Current M9.4q final-closure status is governed by the
+[M9.4q Final Closure Record](../governance/M94Q_FINAL_CLOSURE_RECORD.md) and [Project Status](../PROJECT_STATUS.md#current-dashboard): OPEN/BLOCKED before exact publication/read-back, Independent Review 2 PASS and explicit final Human Approval 3; DONE/CLOSED immediately after that explicit milestone acceptance. M9.5 remains unadmitted; M9.4q closure authorizes only a separate controlled admission/design task and does not authorize M9.5 implementation.

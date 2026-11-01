@@ -2,7 +2,7 @@
 
 ## Status
 
-**ACCEPTED DESIGN BASELINE; CURRENT STATE: The M9.4q technical correction remains accepted, and the approved prospective-governance publication is verified at `97c4f5f14c6797f49e0c9510812774d64af5657c`. Final milestone closure remains NOT_VERIFIED because the original milestone-level Review 2 and final Human Approval 3 artifacts are not independently retrievable. Historical human integration/protected-operation approval gaps remain NOT_VERIFIED. M9.5 formal admission and implementation remain BLOCKED. See [Project Status](../PROJECT_STATUS.md#current-dashboard).**
+**ACCEPTED DESIGN BASELINE; CURRENT STATE: The M9.4q technical correction remains accepted. Final milestone closure is governed by the [M9.4q Final Closure Record](../governance/M94Q_FINAL_CLOSURE_RECORD.md): OPEN/BLOCKED before exact publication/read-back, Independent Review 2 PASS and explicit final Human Approval 3; DONE/CLOSED immediately upon that explicit milestone acceptance. Historical human integration/protected-operation approval gaps remain NOT_VERIFIED. M9.5 remains unadmitted; M9.4q closure authorizes only a separate controlled admission/design task and does not authorize M9.5 implementation. See [Project Status](../PROJECT_STATUS.md#current-dashboard).**
 
 `M94_DESIGN_ACCEPTED=True`
 
