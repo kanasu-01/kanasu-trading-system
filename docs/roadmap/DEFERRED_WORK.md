@@ -234,6 +234,22 @@ M9.3d implemented that boundary in `27baa264328432490246730d00a108dcd38916fe` (`
 
 DW-019 remains resolved at this bounded adapter scope. M9.3e has since completed acquisition-stream persistence and successor research/application wiring, and M9.3f closes the overall M9.3 validation/traceability record. The DW-019 resolution itself remains specifically the AngelOne historical wall-time/provider-binding boundary and is not broadened into a claim about provider data quality or corporate-action correctness.
 
+## DW-020 — Additional Strategy Qualification Criteria Beyond MVP V1
+
+**Status:** DEFERRED — separately approved future version; not part of MVP V1 M9.5 qualification.
+**Target / revisit trigger:** A future, specifically approved strategy-validation version after the MVP V1 one-metric gate has been implemented and validated.
+**Related authority:** Accepted AD-026 and `KTS-M009-S005-SPEC002-V001`; DW-017 separately retains advanced selection-bias statistical research.
+
+The accepted MVP V1 historical Backtest-to-WFA economic eligibility rule is **only** `net_profitable_trade_rate_pct >= T`, with a human-authorized fixed threshold stored in an immutable versioned `QualificationPolicy`. Current M9.5 qualification does not require a second economic threshold, a strategy leaderboard, manual winner selection or a multi-criterion rule builder. A passing result is not proof of future profitability or permission to skip WFA/OOS verification.
+
+The following **additional economic qualification gates** are deferred, not silently required in MVP V1: independent minimum completed-trade or sample-size thresholds; benchmark outperformance; parameter stability/sensitivity; additional transaction-cost or slippage stress scenarios beyond existing accepted execution-cost accounting; statistical confidence or multiple-testing qualification methods (including the separately tracked DW-017 scope); temporal/regime performance robustness; cross-instrument performance thresholds; Sharpe, Sortino, profit-factor and drawdown qualification thresholds; configurable multiple-rule strategy selectors; and adaptive-candidate qualification.
+
+**Reason for deferral:** Keep the first MVP V1 Backtest-to-WFA admission decision transparent and limited to the accepted single profitable-trade percentage criterion. Later criteria must have their own human-approved definitions, evidence requirements, versioned policy meaning, deterministic tests and independent review before implementation.
+
+**Explicitly preserved, NOT deferred:** genuine immutable research evidence and result-integrity validation; already accepted realistic Backtest transaction costs, net-P&L and equity/drawdown accounting; complete StudyRevision, Trial and search-population lineage; descriptive cross-sectional breadth; valid holdout/OOS separation; WFA/OOS stage integrity; append-only policy/qualification decisions; and the existing prohibition on real-money trading within MVP V1. These are safeguards or research obligations, **not** extra economic pass/fail thresholds.
+
+**Resolution evidence required:** A later approved specification and implementation identifying exactly which new gates apply, to which evidence and candidates, under which versioned policy; traceable tests and regression checks; and accepted reviews. Recording this deferral does not authorize M9.5 code, alter AD-026, modify the existing SPEC002 wording, or decide M9.6 behavior.
+
 ## Maintenance
 
 New entries use the next available DW identifier after inspecting this ledger. Group related symptoms by root cause where practical. A resolution records the exact scope, evidence and related milestone/decision; it does not erase history.
