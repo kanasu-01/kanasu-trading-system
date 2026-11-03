@@ -3,7 +3,7 @@
 import sqlite3
 
 
-RESEARCH_SCHEMA_VERSION = 5
+RESEARCH_SCHEMA_VERSION = 6
 
 
 _CREATE_RESEARCH_EVIDENCE_TABLE = """
@@ -379,6 +379,113 @@ _CREATE_V5_TABLES = (
 )
 
 
+_CREATE_QUALIFICATION_POLICIES_TABLE = """
+CREATE TABLE IF NOT EXISTS qualification_policies (
+    policy_id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE CHECK (version > 0),
+    threshold_text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+)
+"""
+
+
+_CREATE_QUALIFICATION_POLICY_ACTIVATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS qualification_policy_activations (
+    activation_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    policy_id TEXT NOT NULL,
+    activated_at TEXT NOT NULL,
+    FOREIGN KEY (policy_id)
+        REFERENCES qualification_policies (policy_id)
+)
+"""
+
+
+_CREATE_FIXED_CANDIDATE_REVISIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS fixed_candidate_revisions (
+    candidate_revision_id TEXT PRIMARY KEY,
+    study_revision_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL UNIQUE,
+    experiment_spec_id TEXT NOT NULL,
+    parameter_configuration_fingerprint TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (study_revision_id)
+        REFERENCES study_revisions (study_revision_id),
+    FOREIGN KEY (trial_id)
+        REFERENCES trials (trial_id),
+    FOREIGN KEY (experiment_spec_id)
+        REFERENCES experiment_specs (experiment_spec_id)
+)
+"""
+
+
+_CREATE_QUALIFICATION_DECISIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS qualification_decisions (
+    decision_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    evaluator_version TEXT NOT NULL,
+    policy_id TEXT NOT NULL,
+    policy_version INTEGER NOT NULL CHECK (policy_version > 0),
+    threshold_text TEXT NOT NULL,
+    study_revision_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    candidate_revision_id TEXT,
+    attempt_id TEXT,
+    evidence_id TEXT,
+    result_artifact_id TEXT,
+    evidence_validity TEXT NOT NULL CHECK (
+        evidence_validity IN ('VALID', 'INSUFFICIENT', 'INVALID')
+    ),
+    criterion_outcome TEXT NOT NULL CHECK (
+        criterion_outcome IN (
+            'SATISFIED', 'NOT_SATISFIED', 'NOT_EVALUATED'
+        )
+    ),
+    outcome TEXT NOT NULL CHECK (
+        outcome IN ('ELIGIBLE', 'REJECTED', 'INSUFFICIENT', 'INVALID')
+    ),
+    profitable_trade_count INTEGER CHECK (
+        profitable_trade_count IS NULL OR profitable_trade_count >= 0
+    ),
+    completed_trade_count INTEGER CHECK (
+        completed_trade_count IS NULL OR completed_trade_count >= 0
+    ),
+    rate_numerator INTEGER,
+    rate_denominator INTEGER CHECK (
+        rate_denominator IS NULL OR rate_denominator > 0
+    ),
+    reason TEXT NOT NULL,
+    CHECK (
+        profitable_trade_count IS NULL
+        OR completed_trade_count IS NULL
+        OR profitable_trade_count <= completed_trade_count
+    ),
+    FOREIGN KEY (policy_id)
+        REFERENCES qualification_policies (policy_id),
+    FOREIGN KEY (study_revision_id)
+        REFERENCES study_revisions (study_revision_id),
+    FOREIGN KEY (trial_id)
+        REFERENCES trials (trial_id),
+    FOREIGN KEY (candidate_revision_id)
+        REFERENCES fixed_candidate_revisions (candidate_revision_id),
+    FOREIGN KEY (attempt_id)
+        REFERENCES run_attempts (attempt_id),
+    FOREIGN KEY (evidence_id)
+        REFERENCES research_evidence (evidence_id),
+    FOREIGN KEY (result_artifact_id)
+        REFERENCES research_artifacts (artifact_id)
+)
+"""
+
+
+_CREATE_V6_TABLES = (
+    _CREATE_QUALIFICATION_POLICIES_TABLE,
+    _CREATE_QUALIFICATION_POLICY_ACTIVATIONS_TABLE,
+    _CREATE_FIXED_CANDIDATE_REVISIONS_TABLE,
+    _CREATE_QUALIFICATION_DECISIONS_TABLE,
+)
+
+
 _V1_EXPECTED_TABLE_COLUMNS = {
     "research_evidence": (
         ("evidence_id", "TEXT", 0, 1),
@@ -528,12 +635,59 @@ _V4_EXPECTED_TABLE_COLUMNS = {
 }
 
 
-_EXPECTED_TABLE_COLUMNS = {
+_V5_EXPECTED_TABLE_COLUMNS = {
     **_V4_EXPECTED_TABLE_COLUMNS,
     "study_revision_population_registrations": (
         ("study_revision_id", "TEXT", 0, 1),
         ("trial_count", "INTEGER", 1, 0),
         ("population_fingerprint", "TEXT", 1, 0),
+    ),
+}
+
+
+_EXPECTED_TABLE_COLUMNS = {
+    **_V5_EXPECTED_TABLE_COLUMNS,
+    "qualification_policies": (
+        ("policy_id", "TEXT", 0, 1),
+        ("version", "INTEGER", 1, 0),
+        ("threshold_text", "TEXT", 1, 0),
+        ("created_at", "TEXT", 1, 0),
+    ),
+    "qualification_policy_activations": (
+        ("activation_sequence", "INTEGER", 0, 1),
+        ("policy_id", "TEXT", 1, 0),
+        ("activated_at", "TEXT", 1, 0),
+    ),
+    "fixed_candidate_revisions": (
+        ("candidate_revision_id", "TEXT", 0, 1),
+        ("study_revision_id", "TEXT", 1, 0),
+        ("trial_id", "TEXT", 1, 0),
+        ("experiment_spec_id", "TEXT", 1, 0),
+        ("parameter_configuration_fingerprint", "TEXT", 1, 0),
+        ("created_at", "TEXT", 1, 0),
+    ),
+    "qualification_decisions": (
+        ("decision_sequence", "INTEGER", 0, 1),
+        ("decision_id", "TEXT", 1, 0),
+        ("created_at", "TEXT", 1, 0),
+        ("evaluator_version", "TEXT", 1, 0),
+        ("policy_id", "TEXT", 1, 0),
+        ("policy_version", "INTEGER", 1, 0),
+        ("threshold_text", "TEXT", 1, 0),
+        ("study_revision_id", "TEXT", 1, 0),
+        ("trial_id", "TEXT", 1, 0),
+        ("candidate_revision_id", "TEXT", 0, 0),
+        ("attempt_id", "TEXT", 0, 0),
+        ("evidence_id", "TEXT", 0, 0),
+        ("result_artifact_id", "TEXT", 0, 0),
+        ("evidence_validity", "TEXT", 1, 0),
+        ("criterion_outcome", "TEXT", 1, 0),
+        ("outcome", "TEXT", 1, 0),
+        ("profitable_trade_count", "INTEGER", 0, 0),
+        ("completed_trade_count", "INTEGER", 0, 0),
+        ("rate_numerator", "INTEGER", 0, 0),
+        ("rate_denominator", "INTEGER", 0, 0),
+        ("reason", "TEXT", 1, 0),
     ),
 }
 
@@ -701,6 +855,9 @@ def _migrate_v1_to_v5(
         for statement in _CREATE_V5_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -738,6 +895,9 @@ def _migrate_v2_to_v5(
         for statement in _CREATE_V5_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -770,6 +930,9 @@ def _migrate_v3_to_v5(
             connection.execute(statement)
 
         for statement in _CREATE_V5_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(
@@ -807,6 +970,9 @@ def _migrate_v4_to_v5(
         for statement in _CREATE_V5_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -823,6 +989,33 @@ def _migrate_v4_to_v5(
         connection.rollback()
         raise
 
+    else:
+        connection.commit()
+
+
+def _migrate_v5_to_v6(
+    connection: sqlite3.Connection,
+) -> None:
+    _validate_required_schema(
+        connection,
+        _V5_EXPECTED_TABLE_COLUMNS,
+        5,
+    )
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+
+        for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
+        _create_and_validate_v2_indexes(connection)
+        _validate_current_schema(connection)
+        connection.execute(
+            f"PRAGMA user_version = {RESEARCH_SCHEMA_VERSION}"
+        )
+    except Exception:
+        connection.rollback()
+        raise
     else:
         connection.commit()
 
@@ -867,6 +1060,10 @@ def initialize_research_schema(
         else:
             connection.commit()
 
+        return
+
+    if current_version == 5:
+        _migrate_v5_to_v6(connection)
         return
 
     if current_version == 4:
@@ -931,6 +1128,9 @@ def initialize_research_schema(
             connection.execute(statement)
 
         for statement in _CREATE_V5_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(

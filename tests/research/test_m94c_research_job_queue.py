@@ -1156,7 +1156,7 @@ def test_existing_current_schema_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 5
+            == 6
         )
 
         for name in names:
@@ -1175,7 +1175,7 @@ def test_existing_current_schema_restores_queue_indexes_without_version_bump(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 5
+            == 6
         )
 
         state_columns = tuple(

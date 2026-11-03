@@ -39,6 +39,14 @@ V5_TABLES = V4_TABLES | {
 }
 
 
+V6_TABLES = V5_TABLES | {
+    "qualification_policies",
+    "qualification_policy_activations",
+    "fixed_candidate_revisions",
+    "qualification_decisions",
+}
+
+
 def user_version(path) -> int:
     with sqlite3.connect(path) as connection:
         return int(
@@ -115,16 +123,16 @@ def create_v1_database(path) -> None:
         connection.execute("PRAGMA user_version = 1")
 
 
-def test_new_database_initializes_additive_schema_v5(
+def test_new_database_initializes_additive_schema_v6(
     tmp_path,
 ):
     path = tmp_path / "research.sqlite3"
 
     SQLiteResearchEvidenceStore(path)
 
-    assert RESEARCH_SCHEMA_VERSION == 5
-    assert user_version(path) == 5
-    assert table_names(path) == V5_TABLES
+    assert RESEARCH_SCHEMA_VERSION == 6
+    assert user_version(path) == 6
+    assert table_names(path) == V6_TABLES
 
 
 def test_v1_migration_preserves_existing_rows_and_adds_tables(
@@ -154,8 +162,8 @@ def test_v1_migration_preserves_existing_rows_and_adds_tables(
         ).fetchone()
 
     assert before == after
-    assert user_version(path) == 5
-    assert table_names(path) == V5_TABLES
+    assert user_version(path) == 6
+    assert table_names(path) == V6_TABLES
 
 
 
@@ -197,8 +205,8 @@ def test_v2_migration_adds_reuse_dataset_lineage_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 5
-    assert table_names(path) == V5_TABLES
+    assert user_version(path) == 6
+    assert table_names(path) == V6_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -261,8 +269,8 @@ def test_v3_migration_adds_dataset_reference_identity_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 5
-    assert table_names(path) == V5_TABLES
+    assert user_version(path) == 6
+    assert table_names(path) == V6_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -342,8 +350,8 @@ def test_v4_migration_adds_population_proof_table_fail_closed(
         path
     )
 
-    assert user_version(path) == 5
-    assert table_names(path) == V5_TABLES
+    assert user_version(path) == 6
+    assert table_names(path) == V6_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(

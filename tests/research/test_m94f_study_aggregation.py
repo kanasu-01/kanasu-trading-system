@@ -119,7 +119,11 @@ def _attempt():
     )
 
 
-def _artifact(artifact_id):
+def _artifact(
+    artifact_id,
+    *,
+    byte_count,
+):
     return ResearchArtifact(
         artifact_id=artifact_id,
         artifact_kind=(
@@ -130,7 +134,7 @@ def _artifact(artifact_id):
             artifact_id.removeprefix("sha256:")
             + ".json"
         ),
-        byte_count=1,
+        byte_count=byte_count,
         created_at=NOW,
     )
 
@@ -321,10 +325,20 @@ class CatalogStub:
 
         self.artifacts = {
             EXECUTED_ARTIFACT_ID: _artifact(
-                EXECUTED_ARTIFACT_ID
+                EXECUTED_ARTIFACT_ID,
+                byte_count=len(
+                    _financial_result_bytes(
+                        equities=(100.0, 120.0, 108.0),
+                    )
+                ),
             ),
             REUSED_ARTIFACT_ID: _artifact(
-                REUSED_ARTIFACT_ID
+                REUSED_ARTIFACT_ID,
+                byte_count=len(
+                    _financial_result_bytes(
+                        equities=(100.0, 95.0, 95.0),
+                    )
+                ),
             ),
         }
 

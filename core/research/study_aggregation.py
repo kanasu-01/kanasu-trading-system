@@ -169,6 +169,15 @@ class StudyAggregationResult:
     result_artifact_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class VerifiedTrialBacktestResult:
+    """One already-registered Trial result after existing integrity checks."""
+
+    trial: Trial
+    result_artifact_id: str
+    payload: dict
+
+
 class StudyAggregationService:
     """
     Aggregate descriptive statistics across independent Trial accounts.
@@ -188,6 +197,31 @@ class StudyAggregationService:
         self.catalog_store = catalog_store
         self.artifact_store = artifact_store
         self.evidence_store = evidence_store
+
+    def load_verified_trial_backtest(
+        self,
+        trial_id: str,
+    ) -> VerifiedTrialBacktestResult:
+        """Reuse existing result/evidence checks for one selected Trial."""
+
+        trial = self.catalog_store.load_trial(trial_id)
+        if trial is None:
+            raise StudyAggregationError(
+                "selected registered Trial does not exist"
+            )
+        if not self._result_bearing_disposition(trial.disposition):
+            raise StudyAggregationError(
+                "selected Trial does not have a result-bearing disposition"
+            )
+
+        artifact_id = self._resolve_result_artifact_id(trial)
+        payload = self._load_result_payload(artifact_id)
+        self._validate_result_manifest_capital(trial, payload)
+        return VerifiedTrialBacktestResult(
+            trial=trial,
+            result_artifact_id=artifact_id,
+            payload=payload,
+        )
 
     def _authoritative_evidence_store(self):
         database_path = getattr(
@@ -575,6 +609,11 @@ class StudyAggregationService:
             raw = self.artifact_store.load_bytes(
                 artifact_id
             )
+
+            if len(raw) != artifact.byte_count:
+                raise ValueError(
+                    "Backtest result artifact byte count mismatch"
+                )
 
             return decode_stable_backtest_result_bytes(
                 raw
