@@ -526,6 +526,28 @@ class SQLiteResearchCatalogStore:
 
         return artifact
 
+
+    def load_dataset_reference_identity(
+        self,
+        artifact_id: str,
+    ) -> str | None:
+        """Return the registered canonical dataset ID for one artifact."""
+        if not isinstance(artifact_id, str) or not artifact_id:
+            raise ValueError(
+                "artifact_id must be a non-empty string"
+            )
+
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT dataset_id
+                FROM research_dataset_reference_identities
+                WHERE artifact_id = ?
+                """,
+                (artifact_id,),
+            ).fetchone()
+
+        return None if row is None else row[0]
     def load_artifact(
         self,
         artifact_id: str,

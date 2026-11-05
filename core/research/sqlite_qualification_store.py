@@ -3,6 +3,7 @@
 from contextlib import closing
 from datetime import datetime
 from decimal import Decimal
+import json
 from pathlib import Path
 import sqlite3
 
@@ -14,6 +15,13 @@ from core.research.models.qualification import (
     QualificationOutcome,
 )
 from core.research.models.qualification_policy import QualificationPolicy
+
+from core.research.models.dataset_reference import (
+    DATASET_REFERENCE_SCHEMA_ID,
+)
+from core.research.models.research_catalog import (
+    ResearchArtifactKind,
+)
 from core.research.research_schema import initialize_research_schema
 
 
@@ -291,6 +299,78 @@ class SQLiteQualificationStore:
                             decision.reason,
                         ),
                     )
+                    if decision.evidence_id is not None:
+                        evidence_row = connection.execute(
+                            """
+                            SELECT artifact_references
+                            FROM research_evidence
+                            WHERE evidence_id = ?
+                            """,
+                            (decision.evidence_id,),
+                        ).fetchone()
+
+                        dataset_reference_ids = []
+                        if evidence_row is not None:
+                            try:
+                                artifact_references = json.loads(
+                                    evidence_row[0]
+                                )
+                            except (
+                                TypeError,
+                                ValueError,
+                                json.JSONDecodeError,
+                            ):
+                                artifact_references = ()
+
+                            if isinstance(
+                                artifact_references,
+                                list,
+                            ):
+                                for reference in artifact_references:
+                                    if (
+                                        not isinstance(reference, str)
+                                        or not reference.startswith(
+                                            "artifact:sha256:"
+                                        )
+                                    ):
+                                        continue
+
+                                    artifact_id = reference.removeprefix(
+                                        "artifact:"
+                                    )
+                                    artifact_row = connection.execute(
+                                        """
+                                        SELECT artifact_kind, schema_id
+                                        FROM research_artifacts
+                                        WHERE artifact_id = ?
+                                        """,
+                                        (artifact_id,),
+                                    ).fetchone()
+
+                                    if artifact_row == (
+                                        ResearchArtifactKind
+                                        .DATASET_REFERENCE
+                                        .value,
+                                        DATASET_REFERENCE_SCHEMA_ID,
+                                    ):
+                                        dataset_reference_ids.append(
+                                            artifact_id
+                                        )
+
+                        if len(dataset_reference_ids) == 1:
+                            connection.execute(
+                                """
+                                INSERT INTO qualification_dataset_admissions (
+                                    decision_id,
+                                    dataset_reference_artifact_id
+                                ) VALUES (?, ?)
+                                """,
+                                (
+                                    decision.decision_id,
+                                    dataset_reference_ids[0],
+                                ),
+                            )
+
             except sqlite3.IntegrityError as error:
                 raise ValueError(
                     "QualificationDecision is append-only and must be unique"
@@ -360,3 +440,104 @@ class SQLiteQualificationStore:
                 (trial_id, policy.policy_id),
             ).fetchone()
         return None if row is None else self._decision_from_row(row)
+
+    def list_current_eligible_decisions(
+        self,
+        study_revision_id: str,
+    ) -> tuple[QualificationDecision, ...]:
+        """
+        Return current-policy ELIGIBLE decisions for one StudyRevision.
+
+        Active-policy resolution and latest-per-Trial selection share one
+        SQLite read snapshot. Latest selection occurs before ELIGIBLE filtering
+        so an older eligible decision cannot survive a later current-policy
+        reject.
+        """
+        if not isinstance(study_revision_id, str) or not study_revision_id:
+            raise ValueError(
+                "study_revision_id must be a non-empty string"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+                policy_row = connection.execute(
+                    """
+                    SELECT policy_id
+                    FROM qualification_policy_activations
+                    ORDER BY activation_sequence DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+                if policy_row is None:
+                    raise RuntimeError(
+                        "no active QualificationPolicy; "
+                        "current eligibility unavailable"
+                    )
+
+                rows = connection.execute(
+                    """
+                    SELECT
+                        q.decision_id,
+                        q.created_at,
+                        q.evaluator_version,
+                        q.policy_id,
+                        q.policy_version,
+                        q.threshold_text,
+                        q.study_revision_id,
+                        q.trial_id,
+                        q.candidate_revision_id,
+                        q.attempt_id,
+                        q.evidence_id,
+                        q.result_artifact_id,
+                        q.evidence_validity,
+                        q.criterion_outcome,
+                        q.outcome,
+                        q.profitable_trade_count,
+                        q.completed_trade_count,
+                        q.rate_numerator,
+                        q.rate_denominator,
+                        q.reason
+                    FROM qualification_decisions AS q
+                    JOIN (
+                        SELECT
+                            trial_id,
+                            MAX(decision_sequence) AS decision_sequence
+                        FROM qualification_decisions
+                        WHERE policy_id = ?
+                          AND study_revision_id = ?
+                        GROUP BY trial_id
+                    ) AS latest
+                      ON latest.decision_sequence = q.decision_sequence
+                    WHERE q.outcome = 'ELIGIBLE'
+                    ORDER BY q.trial_id
+                    """,
+                    (policy_row[0], study_revision_id),
+                ).fetchall()
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+        return tuple(
+            self._decision_from_row(row)
+            for row in rows
+        )
+
+    def load_dataset_admission(
+        self,
+        decision_id: str,
+    ) -> str | None:
+        """Return the exact DatasetReference frozen with one qualification decision."""
+        if not isinstance(decision_id, str) or not decision_id:
+            raise ValueError("decision_id must be a non-empty string")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT dataset_reference_artifact_id
+                FROM qualification_dataset_admissions
+                WHERE decision_id = ?
+                """,
+                (decision_id,),
+            ).fetchone()
+        return None if row is None else row[0]

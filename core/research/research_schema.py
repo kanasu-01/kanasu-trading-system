@@ -3,7 +3,7 @@
 import sqlite3
 
 
-RESEARCH_SCHEMA_VERSION = 6
+RESEARCH_SCHEMA_VERSION = 7
 
 
 _CREATE_RESEARCH_EVIDENCE_TABLE = """
@@ -486,6 +486,112 @@ _CREATE_V6_TABLES = (
 )
 
 
+_CREATE_CANDIDATE_WFA_DECISIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS candidate_wfa_decisions (
+    decision_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    evaluator_version TEXT NOT NULL,
+    study_revision_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    candidate_revision_id TEXT NOT NULL,
+    historical_qualification_decision_id TEXT NOT NULL,
+    evaluator_repository_revision TEXT,
+    dataset_reference_artifact_id TEXT,
+    dataset_id TEXT,
+    dataset_fingerprint TEXT,
+    wfa_configuration_fingerprint TEXT NOT NULL,
+    result_artifact_id TEXT,
+    evidence_validity TEXT NOT NULL CHECK (
+        evidence_validity IN ('VALID', 'INSUFFICIENT', 'INVALID')
+    ),
+    wfa_verdict TEXT CHECK (
+        wfa_verdict IS NULL OR wfa_verdict IN ('PASS', 'FAIL')
+    ),
+    outcome TEXT NOT NULL CHECK (
+        outcome IN ('ELIGIBLE', 'REJECTED', 'INSUFFICIENT', 'INVALID')
+    ),
+    reason TEXT NOT NULL,
+    CHECK (
+        (
+            dataset_reference_artifact_id IS NULL
+            AND dataset_id IS NULL
+            AND dataset_fingerprint IS NULL
+        )
+        OR (
+            dataset_reference_artifact_id IS NOT NULL
+            AND dataset_id IS NOT NULL
+            AND dataset_fingerprint IS NOT NULL
+        )
+    ),
+    CHECK (
+        (
+            outcome = 'ELIGIBLE'
+            AND evidence_validity = 'VALID'
+            AND wfa_verdict IS NOT NULL
+            AND wfa_verdict = 'PASS'
+            AND result_artifact_id IS NOT NULL
+            AND evaluator_repository_revision IS NOT NULL
+            AND dataset_reference_artifact_id IS NOT NULL
+        )
+        OR (
+            outcome = 'REJECTED'
+            AND evidence_validity = 'VALID'
+            AND wfa_verdict IS NOT NULL
+            AND wfa_verdict = 'FAIL'
+            AND result_artifact_id IS NOT NULL
+            AND evaluator_repository_revision IS NOT NULL
+            AND dataset_reference_artifact_id IS NOT NULL
+        )
+        OR (
+            outcome = 'INSUFFICIENT'
+            AND evidence_validity = 'INSUFFICIENT'
+            AND wfa_verdict IS NULL
+            AND result_artifact_id IS NULL
+            AND evaluator_repository_revision IS NOT NULL
+            AND dataset_reference_artifact_id IS NOT NULL
+        )
+        OR (
+            outcome = 'INVALID'
+            AND evidence_validity = 'INVALID'
+            AND wfa_verdict IS NULL
+            AND result_artifact_id IS NULL
+        )
+    ),
+    FOREIGN KEY (study_revision_id)
+        REFERENCES study_revisions (study_revision_id),
+    FOREIGN KEY (trial_id)
+        REFERENCES trials (trial_id),
+    FOREIGN KEY (candidate_revision_id)
+        REFERENCES fixed_candidate_revisions (candidate_revision_id),
+    FOREIGN KEY (historical_qualification_decision_id)
+        REFERENCES qualification_decisions (decision_id),
+    FOREIGN KEY (dataset_reference_artifact_id)
+        REFERENCES research_artifacts (artifact_id),
+    FOREIGN KEY (result_artifact_id)
+        REFERENCES research_artifacts (artifact_id)
+)
+"""
+
+
+_CREATE_QUALIFICATION_DATASET_ADMISSIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS qualification_dataset_admissions (
+    decision_id TEXT PRIMARY KEY,
+    dataset_reference_artifact_id TEXT NOT NULL,
+    FOREIGN KEY (decision_id)
+        REFERENCES qualification_decisions (decision_id),
+    FOREIGN KEY (dataset_reference_artifact_id)
+        REFERENCES research_artifacts (artifact_id)
+)
+"""
+
+
+_CREATE_V7_TABLES = (
+    _CREATE_CANDIDATE_WFA_DECISIONS_TABLE,
+    _CREATE_QUALIFICATION_DATASET_ADMISSIONS_TABLE,
+)
+
+
 _V1_EXPECTED_TABLE_COLUMNS = {
     "research_evidence": (
         ("evidence_id", "TEXT", 0, 1),
@@ -645,7 +751,7 @@ _V5_EXPECTED_TABLE_COLUMNS = {
 }
 
 
-_EXPECTED_TABLE_COLUMNS = {
+_V6_EXPECTED_TABLE_COLUMNS = {
     **_V5_EXPECTED_TABLE_COLUMNS,
     "qualification_policies": (
         ("policy_id", "TEXT", 0, 1),
@@ -692,6 +798,35 @@ _EXPECTED_TABLE_COLUMNS = {
 }
 
 
+
+
+_EXPECTED_TABLE_COLUMNS = {
+    **_V6_EXPECTED_TABLE_COLUMNS,
+    "candidate_wfa_decisions": (
+        ("decision_sequence", "INTEGER", 0, 1),
+        ("decision_id", "TEXT", 1, 0),
+        ("created_at", "TEXT", 1, 0),
+        ("evaluator_version", "TEXT", 1, 0),
+        ("study_revision_id", "TEXT", 1, 0),
+        ("trial_id", "TEXT", 1, 0),
+        ("candidate_revision_id", "TEXT", 1, 0),
+        ("historical_qualification_decision_id", "TEXT", 1, 0),
+        ("evaluator_repository_revision", "TEXT", 0, 0),
+        ("dataset_reference_artifact_id", "TEXT", 0, 0),
+        ("dataset_id", "TEXT", 0, 0),
+        ("dataset_fingerprint", "TEXT", 0, 0),
+        ("wfa_configuration_fingerprint", "TEXT", 1, 0),
+        ("result_artifact_id", "TEXT", 0, 0),
+        ("evidence_validity", "TEXT", 1, 0),
+        ("wfa_verdict", "TEXT", 0, 0),
+        ("outcome", "TEXT", 1, 0),
+        ("reason", "TEXT", 1, 0),
+    ),
+    "qualification_dataset_admissions": (
+        ("decision_id", "TEXT", 0, 1),
+        ("dataset_reference_artifact_id", "TEXT", 1, 0),
+    ),
+}
 def _table_exists(
     connection: sqlite3.Connection,
     table_name: str,
@@ -858,6 +993,9 @@ def _migrate_v1_to_v5(
         for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -898,6 +1036,9 @@ def _migrate_v2_to_v5(
         for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -933,6 +1074,9 @@ def _migrate_v3_to_v5(
             connection.execute(statement)
 
         for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(
@@ -973,6 +1117,9 @@ def _migrate_v4_to_v5(
         for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -1008,6 +1155,9 @@ def _migrate_v5_to_v6(
         for statement in _CREATE_V6_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(connection)
         _validate_current_schema(connection)
         connection.execute(
@@ -1020,6 +1170,32 @@ def _migrate_v5_to_v6(
         connection.commit()
 
 
+
+def _migrate_v6_to_v7(
+    connection: sqlite3.Connection,
+) -> None:
+    _validate_required_schema(
+        connection,
+        _V6_EXPECTED_TABLE_COLUMNS,
+        6,
+    )
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+
+        for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
+        _create_and_validate_v2_indexes(connection)
+        _validate_current_schema(connection)
+        connection.execute(
+            f"PRAGMA user_version = {RESEARCH_SCHEMA_VERSION}"
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    else:
+        connection.commit()
 def initialize_research_schema(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1060,6 +1236,10 @@ def initialize_research_schema(
         else:
             connection.commit()
 
+        return
+
+    if current_version == 6:
+        _migrate_v6_to_v7(connection)
         return
 
     if current_version == 5:
@@ -1131,6 +1311,9 @@ def initialize_research_schema(
             connection.execute(statement)
 
         for statement in _CREATE_V6_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(

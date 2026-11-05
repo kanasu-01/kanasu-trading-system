@@ -238,7 +238,7 @@ def test_sqlite_policy_activation_is_monotonic(tmp_path):
         store.activate_policy(p1.policy_id, activated_at=NOW)
 
 
-def test_genuine_v5_research_database_migrates_to_v6(tmp_path):
+def test_genuine_v5_research_database_migrates_to_v7(tmp_path):
     from core.research import research_schema
 
     path = tmp_path / "research-v5.sqlite3"
@@ -271,7 +271,7 @@ def test_genuine_v5_research_database_migrates_to_v6(tmp_path):
 
     connection = sqlite3.connect(path)
     try:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert connection.execute(
             "SELECT display_title FROM studies WHERE study_id = ?", (F("9"),)
         ).fetchone() == ("preserved",)
