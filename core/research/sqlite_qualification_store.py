@@ -15,7 +15,6 @@ from core.research.models.qualification import (
     QualificationOutcome,
 )
 from core.research.models.qualification_policy import QualificationPolicy
-
 from core.research.models.dataset_reference import (
     DATASET_REFERENCE_SCHEMA_ID,
 )
@@ -370,7 +369,6 @@ class SQLiteQualificationStore:
                                     dataset_reference_ids[0],
                                 ),
                             )
-
             except sqlite3.IntegrityError as error:
                 raise ValueError(
                     "QualificationDecision is append-only and must be unique"

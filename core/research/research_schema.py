@@ -798,8 +798,6 @@ _V6_EXPECTED_TABLE_COLUMNS = {
 }
 
 
-
-
 _EXPECTED_TABLE_COLUMNS = {
     **_V6_EXPECTED_TABLE_COLUMNS,
     "candidate_wfa_decisions": (
@@ -827,6 +825,8 @@ _EXPECTED_TABLE_COLUMNS = {
         ("dataset_reference_artifact_id", "TEXT", 1, 0),
     ),
 }
+
+
 def _table_exists(
     connection: sqlite3.Connection,
     table_name: str,
@@ -1169,8 +1169,6 @@ def _migrate_v5_to_v6(
     else:
         connection.commit()
 
-
-
 def _migrate_v6_to_v7(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1196,6 +1194,8 @@ def _migrate_v6_to_v7(
         raise
     else:
         connection.commit()
+
+
 def initialize_research_schema(
     connection: sqlite3.Connection,
 ) -> None:

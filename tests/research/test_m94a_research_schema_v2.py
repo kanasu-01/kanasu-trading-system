@@ -45,11 +45,11 @@ V6_TABLES = V5_TABLES | {
     "fixed_candidate_revisions",
     "qualification_decisions",
 }
+
 V7_TABLES = V6_TABLES | {
     "candidate_wfa_decisions",
     "qualification_dataset_admissions",
 }
-
 
 
 def user_version(path) -> int:

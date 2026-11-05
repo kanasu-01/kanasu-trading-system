@@ -526,7 +526,6 @@ class SQLiteResearchCatalogStore:
 
         return artifact
 
-
     def load_dataset_reference_identity(
         self,
         artifact_id: str,
@@ -548,6 +547,7 @@ class SQLiteResearchCatalogStore:
             ).fetchone()
 
         return None if row is None else row[0]
+
     def load_artifact(
         self,
         artifact_id: str,
