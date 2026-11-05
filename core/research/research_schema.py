@@ -3,7 +3,7 @@
 import sqlite3
 
 
-RESEARCH_SCHEMA_VERSION = 7
+RESEARCH_SCHEMA_VERSION = 8
 
 
 _CREATE_RESEARCH_EVIDENCE_TABLE = """
@@ -592,6 +592,95 @@ _CREATE_V7_TABLES = (
 )
 
 
+_CREATE_PAPER_CAMPAIGNS_TABLE = """
+CREATE TABLE IF NOT EXISTS paper_campaigns (
+    campaign_id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    candidate_revision_id TEXT NOT NULL,
+    wfa_decision_id TEXT NOT NULL,
+    study_revision_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    experiment_spec_id TEXT NOT NULL,
+    parameter_configuration_fingerprint TEXT NOT NULL,
+    configuration_fingerprint TEXT NOT NULL,
+    created_repository_revision TEXT NOT NULL,
+    FOREIGN KEY (candidate_revision_id)
+        REFERENCES fixed_candidate_revisions (candidate_revision_id),
+    FOREIGN KEY (wfa_decision_id)
+        REFERENCES candidate_wfa_decisions (decision_id),
+    FOREIGN KEY (study_revision_id)
+        REFERENCES study_revisions (study_revision_id),
+    FOREIGN KEY (trial_id)
+        REFERENCES trials (trial_id),
+    FOREIGN KEY (experiment_spec_id)
+        REFERENCES experiment_specs (experiment_spec_id)
+)
+"""
+
+
+_CREATE_PAPER_CAMPAIGN_SESSIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS paper_campaign_sessions (
+    session_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL UNIQUE,
+    campaign_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    evaluator_repository_revision TEXT NOT NULL,
+    live_binding_id TEXT NOT NULL,
+    live_provider TEXT NOT NULL,
+    live_provider_instrument_id TEXT NOT NULL,
+    live_provider_symbol TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (
+        state IN ('CREATED', 'RUNNING', 'STOPPED', 'FAILED', 'INTERRUPTED')
+    ),
+    started_at TEXT,
+    terminal_at TEXT,
+    terminal_snapshot_json TEXT,
+    failure_type TEXT,
+    failure_message TEXT,
+    CHECK (
+        (state = 'CREATED'
+         AND started_at IS NULL
+         AND terminal_at IS NULL
+         AND terminal_snapshot_json IS NULL
+         AND failure_type IS NULL
+         AND failure_message IS NULL)
+        OR
+        (state = 'RUNNING'
+         AND started_at IS NOT NULL
+         AND terminal_at IS NULL
+         AND terminal_snapshot_json IS NULL
+         AND failure_type IS NULL
+         AND failure_message IS NULL)
+        OR
+        (state = 'STOPPED'
+         AND terminal_at IS NOT NULL
+         AND terminal_snapshot_json IS NOT NULL
+         AND failure_type IS NULL
+         AND failure_message IS NULL)
+        OR
+        (state = 'FAILED'
+         AND terminal_at IS NOT NULL
+         AND failure_type IS NOT NULL
+         AND failure_message IS NOT NULL)
+        OR
+        (state = 'INTERRUPTED'
+         AND terminal_at IS NOT NULL
+         AND terminal_snapshot_json IS NULL
+         AND failure_type IS NOT NULL
+         AND failure_message IS NOT NULL)
+    ),
+    FOREIGN KEY (campaign_id)
+        REFERENCES paper_campaigns (campaign_id)
+)
+"""
+
+
+_CREATE_V8_TABLES = (
+    _CREATE_PAPER_CAMPAIGNS_TABLE,
+    _CREATE_PAPER_CAMPAIGN_SESSIONS_TABLE,
+)
+
+
 _V1_EXPECTED_TABLE_COLUMNS = {
     "research_evidence": (
         ("evidence_id", "TEXT", 0, 1),
@@ -798,7 +887,7 @@ _V6_EXPECTED_TABLE_COLUMNS = {
 }
 
 
-_EXPECTED_TABLE_COLUMNS = {
+_V7_EXPECTED_TABLE_COLUMNS = {
     **_V6_EXPECTED_TABLE_COLUMNS,
     "candidate_wfa_decisions": (
         ("decision_sequence", "INTEGER", 0, 1),
@@ -823,6 +912,40 @@ _EXPECTED_TABLE_COLUMNS = {
     "qualification_dataset_admissions": (
         ("decision_id", "TEXT", 0, 1),
         ("dataset_reference_artifact_id", "TEXT", 1, 0),
+    ),
+}
+
+
+_EXPECTED_TABLE_COLUMNS = {
+    **_V7_EXPECTED_TABLE_COLUMNS,
+    "paper_campaigns": (
+        ("campaign_id", "TEXT", 0, 1),
+        ("created_at", "TEXT", 1, 0),
+        ("candidate_revision_id", "TEXT", 1, 0),
+        ("wfa_decision_id", "TEXT", 1, 0),
+        ("study_revision_id", "TEXT", 1, 0),
+        ("trial_id", "TEXT", 1, 0),
+        ("experiment_spec_id", "TEXT", 1, 0),
+        ("parameter_configuration_fingerprint", "TEXT", 1, 0),
+        ("configuration_fingerprint", "TEXT", 1, 0),
+        ("created_repository_revision", "TEXT", 1, 0),
+    ),
+    "paper_campaign_sessions": (
+        ("session_sequence", "INTEGER", 0, 1),
+        ("session_id", "TEXT", 1, 0),
+        ("campaign_id", "TEXT", 1, 0),
+        ("created_at", "TEXT", 1, 0),
+        ("evaluator_repository_revision", "TEXT", 1, 0),
+        ("live_binding_id", "TEXT", 1, 0),
+        ("live_provider", "TEXT", 1, 0),
+        ("live_provider_instrument_id", "TEXT", 1, 0),
+        ("live_provider_symbol", "TEXT", 1, 0),
+        ("state", "TEXT", 1, 0),
+        ("started_at", "TEXT", 0, 0),
+        ("terminal_at", "TEXT", 0, 0),
+        ("terminal_snapshot_json", "TEXT", 0, 0),
+        ("failure_type", "TEXT", 0, 0),
+        ("failure_message", "TEXT", 0, 0),
     ),
 }
 
@@ -996,6 +1119,9 @@ def _migrate_v1_to_v5(
         for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V8_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -1039,6 +1165,9 @@ def _migrate_v2_to_v5(
         for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V8_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -1077,6 +1206,9 @@ def _migrate_v3_to_v5(
             connection.execute(statement)
 
         for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V8_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(
@@ -1120,6 +1252,9 @@ def _migrate_v4_to_v5(
         for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V8_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(
             connection
         )
@@ -1158,6 +1293,9 @@ def _migrate_v5_to_v6(
         for statement in _CREATE_V7_TABLES:
             connection.execute(statement)
 
+        for statement in _CREATE_V8_TABLES:
+            connection.execute(statement)
+
         _create_and_validate_v2_indexes(connection)
         _validate_current_schema(connection)
         connection.execute(
@@ -1182,6 +1320,36 @@ def _migrate_v6_to_v7(
         connection.execute("BEGIN IMMEDIATE")
 
         for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V8_TABLES:
+            connection.execute(statement)
+
+        _create_and_validate_v2_indexes(connection)
+        _validate_current_schema(connection)
+        connection.execute(
+            f"PRAGMA user_version = {RESEARCH_SCHEMA_VERSION}"
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    else:
+        connection.commit()
+
+
+def _migrate_v7_to_v8(
+    connection: sqlite3.Connection,
+) -> None:
+    _validate_required_schema(
+        connection,
+        _V7_EXPECTED_TABLE_COLUMNS,
+        7,
+    )
+
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+
+        for statement in _CREATE_V8_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(connection)
@@ -1236,6 +1404,10 @@ def initialize_research_schema(
         else:
             connection.commit()
 
+        return
+
+    if current_version == 7:
+        _migrate_v7_to_v8(connection)
         return
 
     if current_version == 6:
@@ -1314,6 +1486,9 @@ def initialize_research_schema(
             connection.execute(statement)
 
         for statement in _CREATE_V7_TABLES:
+            connection.execute(statement)
+
+        for statement in _CREATE_V8_TABLES:
             connection.execute(statement)
 
         _create_and_validate_v2_indexes(

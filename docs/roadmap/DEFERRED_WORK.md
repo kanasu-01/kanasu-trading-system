@@ -250,6 +250,17 @@ The following **additional economic qualification gates** are deferred, not sile
 
 **Resolution evidence required:** A later approved specification and implementation identifying exactly which new gates apply, to which evidence and candidates, under which versioned policy; traceable tests and regression checks; and accepted reviews. Recording this deferral does not authorize M9.5 code, alter AD-026, modify the existing SPEC002 wording, or decide M9.6 behavior.
 
+## DW-021 — Continuous Paper Account Checkpoint and Cross-Restart State Recovery
+
+**Status:** DEFERRED — outside MVP V1 M9.7 qualified-campaign continuity.
+**Target / revisit trigger:** Before Kanasu claims uninterrupted multi-session/overnight Paper account continuity or before a future Live Trading design relies on durable restoration of active trading state.
+
+M9.7 deliberately persists qualified campaign lineage and truthful per-session terminal/interruption evidence without pretending an in-memory Paper runtime survived process/session boundaries. Each M9.7 session begins as a fresh accepted M7 simulated-account episode with the exact registered candidate initial capital.
+
+A future separately approved capability may define durable checkpoint and restoration semantics for cash/equity, open positions, protective state, pending intents, strategy/indicator state, provider observation boundaries, journal reconciliation and exact restart causality. It must prove that missing observations or fills cannot be manufactured and must define how checkpoint identity relates to broker/live reconciliation before reuse for real-money execution.
+
+Until that work is separately specified, implemented and validated, campaign history must not sum session P&L, compound session returns or combine session drawdowns and present them as one continuous account.
+
 ## Maintenance
 
 New entries use the next available DW identifier after inspecting this ledger. Group related symptoms by root cause where practical. A resolution records the exact scope, evidence and related milestone/decision; it does not erase history.

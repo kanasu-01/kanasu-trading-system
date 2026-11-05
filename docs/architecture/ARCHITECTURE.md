@@ -63,7 +63,7 @@ The V1 supported execution timeframes remain 5m and 15m. The research domain rem
 
 A Candidate freezes either a fixed executable configuration or an adaptive procedure. Those are distinct research claims. Candidate lineage carries exact evidence/configuration forward so WFA and Paper do not depend on manual parameter reconstruction. For research progression, PaperCampaign may begin only after the exact CandidateRevision satisfies its applicable registered WFA/OOS qualification. A separately supported standalone Paper run may be labelled operational smoke, but it cannot be represented as qualified research progression.
 
-`PaperCampaign` is the research-level forward-observation concept above one or more runtime `PaperSession` episodes. Detailed campaign persistence, checkpoint and session-boundary economics remain later M9 design/implementation work; M9.1 does not change accepted M7/M8 Paper semantics.
+`PaperCampaign` is the research-level forward-observation concept above one or more runtime `PaperSession` episodes. M9.7 implements immutable campaign lineage and ordered durable per-session lifecycle evidence for exact currently qualified fixed CandidateRevisions while reusing accepted M7/M8 Paper causality and simulated execution. Each new session rechecks current M9.5/M9.6 authority and records the exact current live-provider binding; application restart converts incomplete durable sessions to `INTERRUPTED` without recreating provider observations, pending intents, open positions, strategy state or account state. Continuous cross-session/cross-restart Paper account checkpoint restoration remains deferred under DW-021.
 
 AI may assist future research, but it cannot silently mutate registered protocols/policies/Candidates or act as qualification authority. AI-generated configurations that are actually evaluated participate in the same research search/trial history as human-generated configurations.
 
@@ -500,10 +500,10 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 - ordinary standalone Backtest execution remains request-scoped, while M9.4 now provides a separate durable registered Study/StudyRevision/Trial/ResearchJob workflow for research batches;
 - automatic Backtest research-result/evidence persistence remains implemented by M9.2, and M9.4 now adds registered Study/Trial/ResearchJob ownership plus truthful batch progress and aggregation;
 - M9.3 remains authoritative for canonical instrument/provider/dataset truth. M9.4 consumes explicit registered truth and intentionally does not manufacture default provider mappings; successor application activation remains explicit until authoritative canonical registry data is supplied;
-- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle is now implemented; remaining research-platform work includes qualification/Candidate/WFA/PaperCampaign progression and complete research-workspace integration in later M9 milestones;
-- the current WFA implementation is validated computation but is not exposed as a durable Candidate-bound application workflow;
-- no versioned research `QualificationPolicy` / immutable `QualificationDecision` authority currently exists;
-- current Paper ownership is one process-local authoritative session rather than a durable multi-session `PaperCampaign`;
+- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle, M9.5 fixed-candidate historical qualification, M9.6 Candidate-bound WFA qualification and M9.7 persistent qualified-Paper campaign authority are implemented; complete research-workspace integration remains M9.8;
+- M9.6 provides durable Candidate-bound WFA evidence/decisions without complete public HTTP/UI orchestration; M9.8 owns the research-workspace exposure;
+- versioned immutable `QualificationPolicy` and append-only `QualificationDecision` authority exist at the accepted M9.5 scope;
+- M9.7 adds durable multi-session `PaperCampaign` lineage above the existing one-process Paper runtime, while continuous account/checkpoint restoration across sessions or restarts remains deferred under DW-021;
 - reusable broker authentication/session lifecycle remains an open hardening item;
 - the paper lifecycle does not expose separate `STARTING`/`STOPPING` states;
 - the legacy Replay performance panel reconstructs financial results from signal-close prices rather than authoritative execution evidence;

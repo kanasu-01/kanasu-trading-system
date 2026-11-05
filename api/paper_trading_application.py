@@ -58,6 +58,8 @@ class PaperApplicationHandle:
     )
     stop_in_progress: bool = False
     worker_failure: Exception | None = None
+    terminal_callback: Callable[[object], None] | None = None
+    terminal_callback_failure: Exception | None = None
 
 
 class PaperTradingApplication:
@@ -146,6 +148,74 @@ class PaperTradingApplication:
                 self._start_in_progress = False
             raise
 
+    def start_prepared(
+        self,
+        prepared: PreparedLivePaperRun,
+        *,
+        before_start_callback: Callable[
+            [PreparedLivePaperRun],
+            None,
+        ] | None = None,
+        terminal_callback: Callable[[object], None] | None = None,
+    ) -> PaperTradingStartResponse:
+        """Start one already-prepared Paper graph under existing ownership."""
+
+        if not isinstance(prepared, PreparedLivePaperRun):
+            raise TypeError("prepared must be a PreparedLivePaperRun")
+        for value, name in (
+            (before_start_callback, "before_start_callback"),
+            (terminal_callback, "terminal_callback"),
+        ):
+            if value is not None and not callable(value):
+                raise TypeError(f"{name} must be callable or None")
+
+        with self._lifecycle_lock:
+            current = self._current_handle
+            if self._start_in_progress:
+                raise PaperLifecycleConflict(
+                    "paper trading start is already in progress"
+                )
+            if current is not None and not current.completed.is_set():
+                raise PaperLifecycleConflict(
+                    "paper trading session is already active"
+                )
+            previous = current
+            self._start_in_progress = True
+
+        try:
+            if before_start_callback is not None:
+                before_start_callback(prepared)
+
+            handle = PaperApplicationHandle(
+                prepared=prepared,
+                terminal_callback=terminal_callback,
+            )
+            worker = threading.Thread(
+                target=self._run_worker,
+                args=(handle,),
+                name="kanasu-paper-application-worker",
+                daemon=False,
+            )
+            handle.worker = worker
+
+            with self._lifecycle_lock:
+                self._current_handle = handle
+                try:
+                    worker.start()
+                except Exception:
+                    self._current_handle = previous
+                    raise
+                self._start_in_progress = False
+
+            return self._project_snapshot(
+                handle,
+                PaperTradingStartResponse,
+            )
+        except Exception:
+            with self._lifecycle_lock:
+                self._start_in_progress = False
+            raise
+
     def status(
         self,
     ) -> PaperTradingStatusResponse:
@@ -159,6 +229,11 @@ class PaperTradingApplication:
             )
 
         with handle.prepared.state_lock:
+            if handle.terminal_callback_failure is not None:
+                raise RuntimeError(
+                    "paper terminal persistence callback failed"
+                ) from handle.terminal_callback_failure
+
             snapshot = (
                 handle.prepared.session.snapshot()
             )
@@ -258,6 +333,11 @@ class PaperTradingApplication:
                 "paper application worker ended without completion"
             )
 
+        if handle.terminal_callback_failure is not None:
+            raise RuntimeError(
+                "paper terminal persistence callback failed"
+            ) from handle.terminal_callback_failure
+
     def _run_worker(
         self,
         handle: PaperApplicationHandle,
@@ -273,6 +353,18 @@ class PaperTradingApplication:
         finally:
             with handle.prepared.state_lock:
                 handle.worker_failure = failure
+                terminal_snapshot = (
+                    handle.prepared.session.snapshot()
+                )
+
+                if handle.terminal_callback is not None:
+                    try:
+                        handle.terminal_callback(
+                            terminal_snapshot
+                        )
+                    except Exception as exc:
+                        handle.terminal_callback_failure = exc
+
                 handle.completed.set()
 
     @staticmethod
@@ -287,7 +379,12 @@ class PaperTradingApplication:
         handle: PaperApplicationHandle,
         response_type,
     ):
-        snapshot = self._snapshot(handle)
+        with handle.prepared.state_lock:
+            if handle.terminal_callback_failure is not None:
+                raise RuntimeError(
+                    "paper terminal persistence callback failed"
+                ) from handle.terminal_callback_failure
+            snapshot = handle.prepared.session.snapshot()
 
         return response_type.model_validate(
             asdict(snapshot)

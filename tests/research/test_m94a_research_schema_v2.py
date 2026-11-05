@@ -51,6 +51,11 @@ V7_TABLES = V6_TABLES | {
     "qualification_dataset_admissions",
 }
 
+V8_TABLES = V7_TABLES | {
+    "paper_campaigns",
+    "paper_campaign_sessions",
+}
+
 
 def user_version(path) -> int:
     with sqlite3.connect(path) as connection:
@@ -128,16 +133,50 @@ def create_v1_database(path) -> None:
         connection.execute("PRAGMA user_version = 1")
 
 
-def test_new_database_initializes_additive_schema_v7(
+def create_v7_database(path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            research_schema._CREATE_RESEARCH_EVIDENCE_TABLE
+        )
+        for group in (
+            research_schema._CREATE_V1_CATALOG_TABLES,
+            research_schema._CREATE_V2_TABLES,
+            research_schema._CREATE_V3_TABLES,
+            research_schema._CREATE_V4_TABLES,
+            research_schema._CREATE_V5_TABLES,
+            research_schema._CREATE_V6_TABLES,
+            research_schema._CREATE_V7_TABLES,
+        ):
+            for statement in group:
+                connection.execute(statement)
+        for statement in research_schema._CREATE_V2_INDEXES:
+            connection.execute(statement)
+        connection.execute("PRAGMA user_version = 7")
+
+
+def test_v7_migration_adds_paper_campaign_tables(tmp_path):
+    path = tmp_path / "research-v7.sqlite3"
+    create_v7_database(path)
+
+    assert user_version(path) == 7
+    assert table_names(path) == V7_TABLES
+
+    SQLiteResearchEvidenceStore(path)
+
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
+
+
+def test_new_database_initializes_additive_schema_v8(
     tmp_path,
 ):
     path = tmp_path / "research.sqlite3"
 
     SQLiteResearchEvidenceStore(path)
 
-    assert RESEARCH_SCHEMA_VERSION == 7
-    assert user_version(path) == 7
-    assert table_names(path) == V7_TABLES
+    assert RESEARCH_SCHEMA_VERSION == 8
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
 
 
 def test_v1_migration_preserves_existing_rows_and_adds_tables(
@@ -167,8 +206,8 @@ def test_v1_migration_preserves_existing_rows_and_adds_tables(
         ).fetchone()
 
     assert before == after
-    assert user_version(path) == 7
-    assert table_names(path) == V7_TABLES
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
 
 
 
@@ -210,8 +249,8 @@ def test_v2_migration_adds_reuse_dataset_lineage_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 7
-    assert table_names(path) == V7_TABLES
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -274,8 +313,8 @@ def test_v3_migration_adds_dataset_reference_identity_table(
 
     SQLiteResearchEvidenceStore(path)
 
-    assert user_version(path) == 7
-    assert table_names(path) == V7_TABLES
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(
@@ -355,8 +394,8 @@ def test_v4_migration_adds_population_proof_table_fail_closed(
         path
     )
 
-    assert user_version(path) == 7
-    assert table_names(path) == V7_TABLES
+    assert user_version(path) == 8
+    assert table_names(path) == V8_TABLES
 
     with sqlite3.connect(path) as connection:
         columns = tuple(

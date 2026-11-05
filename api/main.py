@@ -19,6 +19,9 @@ from core.config.loaders import load_app_config
 from core.research.sqlite_research_catalog_store import (
     SQLiteResearchCatalogStore,
 )
+from core.research.sqlite_paper_campaign_store import (
+    SQLitePaperCampaignStore,
+)
 
 
 load_dotenv()
@@ -49,9 +52,22 @@ def recover_stale_research_attempts():
     )
 
 
+
+def recover_stale_paper_campaign_sessions() -> int:
+    """Mark unfinished qualified Paper sessions interrupted after restart."""
+
+    config = load_app_config()
+    store = SQLitePaperCampaignStore(
+        config.research_database_path
+    )
+    return store.recover_incomplete_sessions(
+        terminal_at=datetime.now(timezone.utc)
+    )
+
 @asynccontextmanager
 async def application_lifespan(_app: FastAPI):
     recover_stale_research_attempts()
+    recover_stale_paper_campaign_sessions()
     yield
 
 

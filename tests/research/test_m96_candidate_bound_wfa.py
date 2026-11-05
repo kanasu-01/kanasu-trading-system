@@ -2756,7 +2756,7 @@ def test_genuine_v6_with_qualification_history_migrates_to_v7(tmp_path):
     )
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
         after_candidate = connection.execute(
             "SELECT * FROM fixed_candidate_revisions WHERE candidate_revision_id = ?",
             (F("5"),),

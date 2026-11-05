@@ -271,7 +271,7 @@ def test_genuine_v5_research_database_migrates_to_v7(tmp_path):
 
     connection = sqlite3.connect(path)
     try:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
         assert connection.execute(
             "SELECT display_title FROM studies WHERE study_id = ?", (F("9"),)
         ).fetchone() == ("preserved",)
