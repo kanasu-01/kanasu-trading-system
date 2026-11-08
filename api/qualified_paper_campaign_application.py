@@ -21,6 +21,7 @@ from core.research.executable_compatibility import (
     GitHistoricalExecutableCompatibilityChecker,
 )
 from core.research.qualified_paper_campaign_service import (
+    PaperCampaignLifecycleConflict,
     QualifiedPaperCampaignService,
     QualifiedPaperSessionAuthority,
 )
@@ -198,6 +199,23 @@ class QualifiedPaperCampaignApplication:
     def create_campaign(self, candidate_revision_id: str):
         return self.service.create_campaign(candidate_revision_id)
 
+    def create_or_reuse_campaign(self, candidate_revision_id: str):
+        return self.service.create_or_reuse_campaign(candidate_revision_id)
+
+    def list_campaigns_for_study(self, study_id: str):
+        return self.service.list_campaigns_for_study(study_id)
+
+    def list_campaigns_for_candidate(self, candidate_revision_id: str):
+        return self.service.list_campaigns_for_candidate(
+            candidate_revision_id
+        )
+
+    def campaign_is_current(self, campaign_id: str) -> bool:
+        return self.service.campaign_is_current(campaign_id)
+
+    def active_session(self):
+        return self.service.active_session()
+
     def start_session(self, campaign_id: str):
         authority = self.service.prepare_session(campaign_id)
         prepared = prepare_qualified_paper_trading(
@@ -245,7 +263,7 @@ class QualifiedPaperCampaignApplication:
     def stop_session(self, campaign_id: str):
         active = self.service.active_session()
         if active is None or active.campaign_id != campaign_id:
-            raise RuntimeError(
+            raise PaperCampaignLifecycleConflict(
                 "requested PaperCampaign does not own the active qualified session"
             )
         status = self.paper_application.status()
@@ -253,10 +271,12 @@ class QualifiedPaperCampaignApplication:
             status.snapshot is None
             or status.snapshot.session_id != active.session_id
         ):
-            raise RuntimeError(
+            raise PaperCampaignLifecycleConflict(
                 "durable qualified session does not match process Paper ownership"
             )
-        self.paper_application.stop()
+        self.paper_application.stop(
+            expected_session_id=active.session_id
+        )
         return self.service.history(campaign_id)
 
     def history(self, campaign_id: str):

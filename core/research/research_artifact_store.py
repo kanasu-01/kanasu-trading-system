@@ -30,6 +30,10 @@ from core.research.reproducibility import (
 _FINGERPRINT_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
+class ArtifactIdentityMismatchError(RuntimeError):
+    """Stored artifact bytes do not match their content-addressed identity."""
+
+
 def _require_artifact_id(artifact_id: str) -> None:
     if (
         not isinstance(artifact_id, str)
@@ -81,7 +85,7 @@ class ContentAddressedResearchArtifactStore:
         actual_id = _artifact_id(payload)
 
         if actual_id != artifact_id:
-            raise RuntimeError(
+            raise ArtifactIdentityMismatchError(
                 "stored artifact content does not match its identity"
             )
 

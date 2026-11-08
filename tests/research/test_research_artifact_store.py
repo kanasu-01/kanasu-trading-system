@@ -19,6 +19,7 @@ from core.research.reproducibility import (
     stable_backtest_result_fingerprint,
 )
 from core.research.research_artifact_store import (
+    ArtifactIdentityMismatchError,
     ContentAddressedResearchArtifactStore,
     research_artifact_reference,
 )
@@ -179,7 +180,7 @@ def test_load_rejects_corrupted_content(tmp_path):
     path.write_bytes(b"corrupted")
 
     with pytest.raises(
-        RuntimeError,
+        ArtifactIdentityMismatchError,
         match="does not match its identity",
     ):
         store.load_bytes(artifact.artifact_id)

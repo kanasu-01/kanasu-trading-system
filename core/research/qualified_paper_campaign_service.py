@@ -39,6 +39,9 @@ from core.research.models.wfa_qualification import (
     decode_candidate_wfa_result_bytes,
 )
 from core.research.reproducibility import canonical_fingerprint
+from core.research.sqlite_paper_campaign_store import (
+    PaperCampaignAuthorityConflict,
+)
 
 
 Clock = Callable[[], datetime]
@@ -578,7 +581,72 @@ class QualifiedPaperCampaignService:
                 authority.evaluator_repository_revision
             ),
         )
-        return self.campaign_store.create_campaign(campaign)
+        try:
+            return self.campaign_store.create_campaign(campaign)
+        except PaperCampaignAuthorityConflict as error:
+            raise QualifiedPaperAdmissionError(str(error)) from error
+        except Exception as error:
+            if _is_operational_failure(error):
+                raise QualifiedPaperOperationalError(
+                    "qualified Paper campaign could not be persisted reliably"
+                ) from error
+            raise
+
+    def create_or_reuse_campaign(
+        self,
+        candidate_revision_id: str,
+    ) -> tuple[PaperCampaign, bool]:
+        authority = self._resolve_candidate_authority(candidate_revision_id)
+        campaign = PaperCampaign(
+            campaign_id=self._campaign_id_factory(),
+            created_at=self._clock(),
+            candidate_revision_id=authority.candidate.candidate_revision_id,
+            wfa_decision_id=authority.wfa_decision.decision_id,
+            study_revision_id=authority.candidate.study_revision_id,
+            trial_id=authority.candidate.trial_id,
+            experiment_spec_id=authority.candidate.experiment_spec_id,
+            parameter_configuration_fingerprint=(
+                authority.candidate.parameter_configuration_fingerprint
+            ),
+            configuration_fingerprint=authority.configuration_fingerprint,
+            created_repository_revision=(
+                authority.evaluator_repository_revision
+            ),
+        )
+        try:
+            return self.campaign_store.create_or_load_matching_campaign(campaign)
+        except PaperCampaignAuthorityConflict as error:
+            raise QualifiedPaperAdmissionError(str(error)) from error
+        except Exception as error:
+            if _is_operational_failure(error):
+                raise QualifiedPaperOperationalError(
+                    "qualified Paper campaign could not be persisted reliably"
+                ) from error
+            raise
+
+    def list_campaigns_for_study(
+        self,
+        study_id: str,
+    ) -> tuple[PaperCampaign, ...]:
+        return self.campaign_store.list_campaigns_for_study(study_id)
+
+    def list_campaigns_for_candidate(
+        self,
+        candidate_revision_id: str,
+    ) -> tuple[PaperCampaign, ...]:
+        return self.campaign_store.list_campaigns_for_candidate(
+            candidate_revision_id
+        )
+
+    def campaign_is_current(
+        self,
+        campaign_id: str,
+    ) -> bool:
+        try:
+            self._load_campaign_authority(campaign_id)
+        except QualifiedPaperAdmissionError:
+            return False
+        return True
 
     def _load_campaign_authority(
         self,
@@ -721,7 +789,16 @@ class QualifiedPaperCampaignService:
             live_provider_symbol=authority.live_binding.provider_symbol,
             state=PaperCampaignSessionState.CREATED,
         )
-        self.campaign_store.register_session(session)
+        try:
+            self.campaign_store.register_session(session)
+        except PaperCampaignAuthorityConflict as error:
+            raise QualifiedPaperAdmissionError(str(error)) from error
+        except Exception as error:
+            if _is_operational_failure(error):
+                raise QualifiedPaperOperationalError(
+                    "qualified Paper session could not be registered reliably"
+                ) from error
+            raise
         return session
 
     def mark_session_running(self, session_id: str) -> PaperCampaignSession:

@@ -14,6 +14,10 @@ from core.research.models.paper_campaign import (
 from core.research.research_schema import initialize_research_schema
 
 
+class PaperCampaignAuthorityConflict(ValueError):
+    """Expected qualified Paper authority is no longer current at durable write."""
+
+
 class SQLitePaperCampaignStore:
     """Persist immutable campaigns and append/transition Paper session history."""
 
@@ -66,43 +70,107 @@ class SQLitePaperCampaignStore:
             failure_message=row[13],
         )
 
+    @staticmethod
+    def _require_current_qualified_authority(
+        connection: sqlite3.Connection,
+        campaign: PaperCampaign,
+    ) -> None:
+        row = connection.execute(
+            """
+            WITH active_policy AS (
+                SELECT policy_id
+                FROM qualification_policy_activations
+                ORDER BY activation_sequence DESC
+                LIMIT 1
+            ),
+            latest_wfa AS (
+                SELECT *
+                FROM candidate_wfa_decisions
+                WHERE candidate_revision_id = ?
+                ORDER BY decision_sequence DESC
+                LIMIT 1
+            ),
+            latest_historical AS (
+                SELECT q.*
+                FROM qualification_decisions AS q
+                JOIN active_policy AS p ON p.policy_id = q.policy_id
+                WHERE q.trial_id = ?
+                ORDER BY q.decision_sequence DESC
+                LIMIT 1
+            )
+            SELECT 1
+            FROM latest_wfa AS w
+            JOIN latest_historical AS h
+              ON h.decision_id = w.historical_qualification_decision_id
+            WHERE w.decision_id = ?
+              AND w.study_revision_id = ?
+              AND w.trial_id = ?
+              AND w.candidate_revision_id = ?
+              AND w.evidence_validity = 'VALID'
+              AND w.wfa_verdict = 'PASS'
+              AND w.outcome = 'ELIGIBLE'
+              AND h.outcome = 'ELIGIBLE'
+              AND h.candidate_revision_id = w.candidate_revision_id
+            """,
+            (
+                campaign.candidate_revision_id,
+                campaign.trial_id,
+                campaign.wfa_decision_id,
+                campaign.study_revision_id,
+                campaign.trial_id,
+                campaign.candidate_revision_id,
+            ),
+        ).fetchone()
+        if row is None:
+            raise PaperCampaignAuthorityConflict(
+                "qualified Paper authority changed before durable persistence"
+            )
+
     def create_campaign(self, campaign: PaperCampaign) -> PaperCampaign:
         if not isinstance(campaign, PaperCampaign):
             raise TypeError("campaign must be a PaperCampaign")
-        try:
-            with closing(self._connect()) as connection:
-                with connection:
-                    connection.execute(
-                        """
-                        INSERT INTO paper_campaigns (
-                            campaign_id, created_at, candidate_revision_id,
-                            wfa_decision_id, study_revision_id, trial_id,
-                            experiment_spec_id,
-                            parameter_configuration_fingerprint,
-                            configuration_fingerprint,
-                            created_repository_revision
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            campaign.campaign_id,
-                            campaign.created_at.isoformat(timespec="microseconds"),
-                            campaign.candidate_revision_id,
-                            campaign.wfa_decision_id,
-                            campaign.study_revision_id,
-                            campaign.trial_id,
-                            campaign.experiment_spec_id,
-                            campaign.parameter_configuration_fingerprint,
-                            campaign.configuration_fingerprint,
-                            campaign.created_repository_revision,
-                        ),
-                    )
-        except sqlite3.IntegrityError as error:
-            existing = self.load_campaign(campaign.campaign_id)
-            if existing == campaign:
-                return existing
-            raise ValueError(
-                "PaperCampaign identity already has different data"
-            ) from error
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_current_qualified_authority(connection, campaign)
+                connection.execute(
+                    """
+                    INSERT INTO paper_campaigns (
+                        campaign_id, created_at, candidate_revision_id,
+                        wfa_decision_id, study_revision_id, trial_id,
+                        experiment_spec_id,
+                        parameter_configuration_fingerprint,
+                        configuration_fingerprint,
+                        created_repository_revision
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        campaign.campaign_id,
+                        campaign.created_at.isoformat(timespec="microseconds"),
+                        campaign.candidate_revision_id,
+                        campaign.wfa_decision_id,
+                        campaign.study_revision_id,
+                        campaign.trial_id,
+                        campaign.experiment_spec_id,
+                        campaign.parameter_configuration_fingerprint,
+                        campaign.configuration_fingerprint,
+                        campaign.created_repository_revision,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+                existing = self.load_campaign(campaign.campaign_id)
+                if existing == campaign:
+                    return existing
+                raise ValueError(
+                    "PaperCampaign identity already has different data"
+                ) from error
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
         return campaign
 
     def load_campaign(self, campaign_id: str) -> PaperCampaign | None:
@@ -125,6 +193,129 @@ class SQLitePaperCampaignStore:
             ).fetchone()
         return None if row is None else self._campaign_from_row(row)
 
+    def create_or_load_matching_campaign(
+        self,
+        campaign: PaperCampaign,
+    ) -> tuple[PaperCampaign, bool]:
+        """Atomically validate, reuse one exact campaign, or create it."""
+
+        if not isinstance(campaign, PaperCampaign):
+            raise TypeError("campaign must be a PaperCampaign")
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_current_qualified_authority(connection, campaign)
+                row = connection.execute(
+                    """
+                    SELECT
+                        campaign_id, created_at, candidate_revision_id,
+                        wfa_decision_id, study_revision_id, trial_id,
+                        experiment_spec_id,
+                        parameter_configuration_fingerprint,
+                        configuration_fingerprint,
+                        created_repository_revision
+                    FROM paper_campaigns
+                    WHERE candidate_revision_id = ?
+                      AND wfa_decision_id = ?
+                      AND configuration_fingerprint = ?
+                    ORDER BY created_at, campaign_id
+                    LIMIT 1
+                    """,
+                    (
+                        campaign.candidate_revision_id,
+                        campaign.wfa_decision_id,
+                        campaign.configuration_fingerprint,
+                    ),
+                ).fetchone()
+                if row is not None:
+                    existing = self._campaign_from_row(row)
+                    connection.commit()
+                    return existing, False
+
+                connection.execute(
+                    """
+                    INSERT INTO paper_campaigns (
+                        campaign_id, created_at, candidate_revision_id,
+                        wfa_decision_id, study_revision_id, trial_id,
+                        experiment_spec_id,
+                        parameter_configuration_fingerprint,
+                        configuration_fingerprint,
+                        created_repository_revision
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        campaign.campaign_id,
+                        campaign.created_at.isoformat(timespec="microseconds"),
+                        campaign.candidate_revision_id,
+                        campaign.wfa_decision_id,
+                        campaign.study_revision_id,
+                        campaign.trial_id,
+                        campaign.experiment_spec_id,
+                        campaign.parameter_configuration_fingerprint,
+                        campaign.configuration_fingerprint,
+                        campaign.created_repository_revision,
+                    ),
+                )
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+                return campaign, True
+
+    def list_campaigns_for_study(
+        self,
+        study_id: str,
+    ) -> tuple[PaperCampaign, ...]:
+        if not isinstance(study_id, str) or not study_id:
+            raise ValueError("study_id must be a non-empty string")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    c.campaign_id, c.created_at, c.candidate_revision_id,
+                    c.wfa_decision_id, c.study_revision_id, c.trial_id,
+                    c.experiment_spec_id,
+                    c.parameter_configuration_fingerprint,
+                    c.configuration_fingerprint,
+                    c.created_repository_revision
+                FROM paper_campaigns AS c
+                JOIN study_revisions AS r
+                  ON r.study_revision_id = c.study_revision_id
+                WHERE r.study_id = ?
+                ORDER BY c.created_at, c.campaign_id
+                """,
+                (study_id,),
+            ).fetchall()
+        return tuple(self._campaign_from_row(row) for row in rows)
+
+    def list_campaigns_for_candidate(
+        self,
+        candidate_revision_id: str,
+    ) -> tuple[PaperCampaign, ...]:
+        if not isinstance(candidate_revision_id, str) or not candidate_revision_id:
+            raise ValueError(
+                "candidate_revision_id must be a non-empty string"
+            )
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    campaign_id, created_at, candidate_revision_id,
+                    wfa_decision_id, study_revision_id, trial_id,
+                    experiment_spec_id,
+                    parameter_configuration_fingerprint,
+                    configuration_fingerprint,
+                    created_repository_revision
+                FROM paper_campaigns
+                WHERE candidate_revision_id = ?
+                ORDER BY created_at, campaign_id
+                """,
+                (candidate_revision_id,),
+            ).fetchall()
+        return tuple(self._campaign_from_row(row) for row in rows)
+
     def register_session(self, session: PaperCampaignSession) -> None:
         if not isinstance(session, PaperCampaignSession):
             raise TypeError("session must be a PaperCampaignSession")
@@ -135,15 +326,25 @@ class SQLitePaperCampaignStore:
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 campaign_row = connection.execute(
-                    "SELECT created_at FROM paper_campaigns WHERE campaign_id = ?",
+                    """
+                    SELECT
+                        campaign_id, created_at, candidate_revision_id,
+                        wfa_decision_id, study_revision_id, trial_id,
+                        experiment_spec_id,
+                        parameter_configuration_fingerprint,
+                        configuration_fingerprint,
+                        created_repository_revision
+                    FROM paper_campaigns
+                    WHERE campaign_id = ?
+                    """,
                     (session.campaign_id,),
                 ).fetchone()
                 if campaign_row is None:
                     raise ValueError("PaperCampaign does not exist")
-                campaign_created_at = datetime.fromisoformat(
-                    campaign_row[0]
-                )
-                if session.created_at < campaign_created_at:
+                campaign = self._campaign_from_row(campaign_row)
+                self._require_current_qualified_authority(connection, campaign)
+
+                if session.created_at < campaign.created_at:
                     raise ValueError(
                         "Paper campaign session cannot precede campaign creation"
                     )

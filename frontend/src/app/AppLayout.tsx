@@ -37,7 +37,7 @@ export function AppLayout({ children }: Props) {
               fontSize: 14,
             }}
           >
-            Connected
+            Status shown in each module
           </div>
         </div>
 

@@ -24,6 +24,10 @@ from core.research.models.research_catalog import (
 from core.research.research_schema import initialize_research_schema
 
 
+class QualificationPolicyConcurrencyConflict(RuntimeError):
+    """Active global QualificationPolicy changed since caller observation."""
+
+
 class SQLiteQualificationStore:
     """Persist policy activation, fixed candidates and append-only decisions."""
 
@@ -163,6 +167,103 @@ class SQLiteQualificationStore:
         if policy is None:
             raise RuntimeError("active qualification policy is missing")
         return policy
+
+    def ensure_active_policy_threshold(
+        self,
+        threshold: Decimal,
+        *,
+        changed_at: datetime,
+        expected_active_policy_id: str | None = None,
+    ) -> tuple[QualificationPolicy, bool]:
+        """Atomically reuse or advance the active global threshold."""
+
+        if not isinstance(threshold, Decimal) or not threshold.is_finite():
+            raise ValueError("threshold must be a finite Decimal")
+        if threshold < Decimal("0") or threshold > Decimal("100"):
+            raise ValueError("threshold must be between 0 and 100 inclusive")
+        if not isinstance(changed_at, datetime) or changed_at.utcoffset() is None:
+            raise ValueError("changed_at must be timezone-aware")
+        if (
+            expected_active_policy_id is not None
+            and (
+                not isinstance(expected_active_policy_id, str)
+                or not expected_active_policy_id
+            )
+        ):
+            raise ValueError(
+                "expected_active_policy_id must be a non-empty string or None"
+            )
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                current_row = connection.execute(
+                    """
+                    SELECT p.policy_id, p.version, p.threshold_text
+                    FROM qualification_policy_activations AS a
+                    JOIN qualification_policies AS p
+                      ON p.policy_id = a.policy_id
+                    ORDER BY a.activation_sequence DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+
+                current = None
+                current_policy_id = None
+                if current_row is not None:
+                    current = QualificationPolicy(
+                        current_row[1],
+                        Decimal(current_row[2]),
+                    )
+                    current_policy_id = current_row[0]
+                    if current.policy_id != current_policy_id:
+                        raise RuntimeError(
+                            "active qualification policy identity mismatch"
+                        )
+                    if (
+                        current.net_profitable_trade_rate_threshold_pct
+                        == threshold
+                    ):
+                        connection.rollback()
+                        return current, False
+
+                if current_policy_id != expected_active_policy_id:
+                    raise QualificationPolicyConcurrencyConflict(
+                        "active QualificationPolicy changed since caller observation"
+                    )
+
+                next_version = connection.execute(
+                    "SELECT COALESCE(MAX(version), 0) + 1 "
+                    "FROM qualification_policies"
+                ).fetchone()[0]
+                policy = QualificationPolicy(next_version, threshold)
+                timestamp = changed_at.isoformat(timespec="microseconds")
+                connection.execute(
+                    """
+                    INSERT INTO qualification_policies (
+                        policy_id, version, threshold_text, created_at
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        policy.policy_id,
+                        policy.version,
+                        str(policy.net_profitable_trade_rate_threshold_pct),
+                        timestamp,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO qualification_policy_activations (
+                        policy_id, activated_at
+                    ) VALUES (?, ?)
+                    """,
+                    (policy.policy_id, timestamp),
+                )
+                connection.commit()
+                return policy, True
+            except Exception:
+                connection.rollback()
+                raise
 
     def save_candidate_revision(
         self,
@@ -403,40 +504,46 @@ class SQLiteQualificationStore:
         self,
         trial_id: str,
     ) -> QualificationDecision | None:
-        policy = self.load_active_policy()
-        if policy is None:
-            return None
+        if not isinstance(trial_id, str) or not trial_id:
+            raise ValueError("trial_id must be a non-empty string")
+
         with closing(self._connect()) as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    decision_id,
-                    created_at,
-                    evaluator_version,
-                    policy_id,
-                    policy_version,
-                    threshold_text,
-                    study_revision_id,
-                    trial_id,
-                    candidate_revision_id,
-                    attempt_id,
-                    evidence_id,
-                    result_artifact_id,
-                    evidence_validity,
-                    criterion_outcome,
-                    outcome,
-                    profitable_trade_count,
-                    completed_trade_count,
-                    rate_numerator,
-                    rate_denominator,
-                    reason
-                FROM qualification_decisions
-                WHERE trial_id = ? AND policy_id = ?
-                ORDER BY decision_sequence DESC
-                LIMIT 1
-                """,
-                (trial_id, policy.policy_id),
-            ).fetchone()
+            try:
+                connection.execute("BEGIN")
+                policy_row = connection.execute(
+                    """
+                    SELECT policy_id
+                    FROM qualification_policy_activations
+                    ORDER BY activation_sequence DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+                if policy_row is None:
+                    connection.commit()
+                    return None
+
+                row = connection.execute(
+                    """
+                    SELECT
+                        decision_id, created_at, evaluator_version, policy_id,
+                        policy_version, threshold_text, study_revision_id,
+                        trial_id, candidate_revision_id, attempt_id, evidence_id,
+                        result_artifact_id, evidence_validity, criterion_outcome,
+                        outcome, profitable_trade_count, completed_trade_count,
+                        rate_numerator, rate_denominator, reason
+                    FROM qualification_decisions
+                    WHERE trial_id = ? AND policy_id = ?
+                    ORDER BY decision_sequence DESC
+                    LIMIT 1
+                    """,
+                    (trial_id, policy_row[0]),
+                ).fetchone()
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+
         return None if row is None else self._decision_from_row(row)
 
     def list_current_eligible_decisions(

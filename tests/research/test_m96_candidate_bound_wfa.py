@@ -2572,6 +2572,104 @@ def test_wrapped_sqlite_input_failure_is_operational_without_decision(tmp_path):
     assert fixture.wfa_store.decisions == {}
 
 
+def test_unexpected_dataset_admission_failure_is_operational_without_decision(tmp_path):
+    fixture = _service_fixture(tmp_path, 479)
+
+    def fail(_decision_id):
+        raise RuntimeError("unexpected admission infrastructure failure")
+
+    fixture.service.qualification_store.load_dataset_admission = fail
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="DatasetReference admission",
+    ):
+        fixture.service.evaluate_study_revision(F("2"))
+
+    assert fixture.wfa_store.decisions == {}
+
+
+def test_unexpected_dataset_reference_read_failure_is_operational_without_decision(
+    tmp_path,
+):
+    fixture = _service_fixture(tmp_path, 479)
+    original = fixture.catalog.load_artifact
+
+    def fail(artifact_id):
+        if artifact_id == fixture.dataset_artifact.artifact_id:
+            raise RuntimeError("unexpected DatasetReference catalog failure")
+        return original(artifact_id)
+
+    fixture.catalog.load_artifact = fail
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="DatasetReference could not be read reliably",
+    ):
+        fixture.service.evaluate_study_revision(F("2"))
+
+    assert fixture.wfa_store.decisions == {}
+
+
+def test_unexpected_wfa_runner_failure_is_operational_without_decision(
+    tmp_path,
+    monkeypatch,
+):
+    fixture = _service_fixture(tmp_path, 479)
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("unexpected WFA engine failure")
+
+    monkeypatch.setattr(WalkForwardRunner, "run", fail)
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="WFA execution failed operationally",
+    ):
+        fixture.service.evaluate_study_revision(F("2"))
+
+    assert fixture.wfa_store.decisions == {}
+
+
+def test_wrapped_dataset_reference_value_error_with_sqlite_cause_is_operational(
+    tmp_path,
+):
+    fixture = _service_fixture(tmp_path, 479)
+    original = fixture.catalog.load_artifact
+
+    def fail(artifact_id):
+        if artifact_id == fixture.dataset_artifact.artifact_id:
+            try:
+                raise sqlite3.OperationalError("database unavailable")
+            except sqlite3.OperationalError as error:
+                raise ValueError("wrapped DatasetReference lookup failure") from error
+        return original(artifact_id)
+
+    fixture.catalog.load_artifact = fail
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="DatasetReference could not be read reliably",
+    ):
+        fixture.service.evaluate_study_revision(F("2"))
+
+    assert fixture.wfa_store.decisions == {}
+
+
+def test_dataset_reference_content_identity_mismatch_is_invalid(tmp_path):
+    fixture = _service_fixture(tmp_path, 479)
+    artifact_path = fixture.artifact_store._absolute_path(
+        fixture.dataset_artifact.artifact_id
+    )
+    artifact_path.write_bytes(b"corrupted DatasetReference bytes")
+
+    decision = fixture.service.evaluate_study_revision(F("2"))[0]
+
+    assert decision.outcome is WfaQualificationOutcome.INVALID
+    assert decision.evidence_validity is WfaEvidenceValidity.INVALID
+    assert decision.result_artifact_id is None
+
+
 def test_deterministic_retrieval_value_error_is_invalid_not_operational(tmp_path):
     fixture = _service_fixture(tmp_path, 479)
 
@@ -3617,3 +3715,38 @@ def test_completed_writer_rejects_malformed_wfa_result_artifact_metadata(tmp_pat
     )
     with pytest.raises(ValueError, match="result artifact metadata is malformed"):
         fixture.wfa_store._append_decision(changed)
+
+
+def test_outer_historical_evidence_value_error_with_sqlite_cause_is_operational(tmp_path):
+    fixture = _service_fixture(tmp_path, 479)
+
+    def fail(**_kwargs):
+        try:
+            raise sqlite3.OperationalError("database unavailable")
+        except sqlite3.OperationalError as error:
+            raise ValueError("wrapped historical evidence failure") from error
+
+    fixture.service._load_authoritative_historical_evidence = fail
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="result/evidence authority could not be reliably verified",
+    ):
+        fixture.service.evaluate_study_revision(F("2"))
+
+    assert fixture.wfa_store.decisions == {}
+
+
+def test_outer_historical_evidence_plain_value_error_is_invalid(tmp_path):
+    fixture = _service_fixture(tmp_path, 479)
+
+    def fail(**_kwargs):
+        raise ValueError("deterministic historical contradiction")
+
+    fixture.service._load_authoritative_historical_evidence = fail
+
+    decision = fixture.service.evaluate_study_revision(F("2"))[0]
+
+    assert decision.outcome is WfaQualificationOutcome.INVALID
+    assert decision.evidence_validity is WfaEvidenceValidity.INVALID
+    assert decision.result_artifact_id is None

@@ -15,6 +15,9 @@ from api.routes.paper_trading_routes import (
 from api.routes.research_routes import (
     router as research_router,
 )
+from api.routes.research_workspace_routes import (
+    router as research_workspace_router,
+)
 from core.config.loaders import load_app_config
 from core.research.sqlite_research_catalog_store import (
     SQLiteResearchCatalogStore,
@@ -117,4 +120,10 @@ app.include_router(
     research_router,
     prefix="/api/research",
     tags=["Research"],
+)
+
+app.include_router(
+    research_workspace_router,
+    prefix="/api/research-workspace",
+    tags=["Research Workspace"],
 )

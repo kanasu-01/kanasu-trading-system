@@ -49,6 +49,7 @@ class AppConfig:
     # Durable research storage
     research_database_path: str = "data/research.sqlite3"
     research_artifact_root: str = "data/research_artifacts"
+    instrument_registry_path: str = "config/instrument_registry.json"
 
     # M9.4 registered research workload safety.
     research_max_trials_per_revision: int = 5_000

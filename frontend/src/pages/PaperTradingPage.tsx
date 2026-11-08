@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ApiRequestError } from "@/api/apiClient";
 import {
@@ -179,6 +180,8 @@ function AccountMetrics({
 }
 
 export function PaperTradingPage() {
+  const navigate = useNavigate();
+
   const [
     config,
     setConfig,
@@ -540,6 +543,22 @@ export function PaperTradingPage() {
             authoritative paper trading
             session
           </div>
+
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="outline"
+              disabled={controlsBusy || isActive}
+              onClick={() => navigate("/paper")}
+            >
+              Qualified Research
+            </Button>
+            <Button>Standalone Smoke</Button>
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-lg border border-amber-800/70 bg-amber-950/20 p-4 text-sm text-amber-200">
+          Operational smoke testing only. This mode is not research-qualified
+          and cannot satisfy M9.7 progression evidence.
         </div>
 
         <DashboardSection title="Configuration">

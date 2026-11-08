@@ -1381,3 +1381,63 @@ class SQLiteCandidateWfaStore:
                 (candidate_revision_id,),
             ).fetchone()
         return None if row is None else self._from_row(row)
+
+    def load_current_decision_if_historical_current(
+        self,
+        candidate_revision_id: str,
+    ) -> CandidateWfaDecision | None:
+        """Return latest WFA only when its M9.5 dependency is still current."""
+
+        if not isinstance(candidate_revision_id, str) or not candidate_revision_id:
+            raise ValueError("candidate_revision_id must be a non-empty string")
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+                row = connection.execute(
+                    """
+                    WITH active_policy AS (
+                        SELECT policy_id
+                        FROM qualification_policy_activations
+                        ORDER BY activation_sequence DESC
+                        LIMIT 1
+                    ),
+                    latest_wfa AS (
+                        SELECT *
+                        FROM candidate_wfa_decisions
+                        WHERE candidate_revision_id = ?
+                        ORDER BY decision_sequence DESC
+                        LIMIT 1
+                    ),
+                    latest_historical AS (
+                        SELECT q.*
+                        FROM qualification_decisions AS q
+                        JOIN active_policy AS p ON p.policy_id = q.policy_id
+                        WHERE q.trial_id = (SELECT trial_id FROM latest_wfa)
+                        ORDER BY q.decision_sequence DESC
+                        LIMIT 1
+                    )
+                    SELECT
+                        w.decision_id, w.created_at, w.evaluator_version,
+                        w.study_revision_id, w.trial_id, w.candidate_revision_id,
+                        w.historical_qualification_decision_id,
+                        w.evaluator_repository_revision,
+                        w.dataset_reference_artifact_id, w.dataset_id,
+                        w.dataset_fingerprint, w.wfa_configuration_fingerprint,
+                        w.result_artifact_id, w.evidence_validity, w.wfa_verdict,
+                        w.outcome, w.reason
+                    FROM latest_wfa AS w
+                    JOIN latest_historical AS h
+                      ON h.decision_id = w.historical_qualification_decision_id
+                    WHERE h.outcome = 'ELIGIBLE'
+                      AND h.candidate_revision_id = w.candidate_revision_id
+                    """,
+                    (candidate_revision_id,),
+                ).fetchone()
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+
+        return None if row is None else self._from_row(row)

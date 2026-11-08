@@ -14,6 +14,7 @@ from core.research.models.qualification import (
     QualificationOutcome,
 )
 from core.research.models.registered_study import TrialDisposition
+from core.research.research_artifact_store import ArtifactIdentityMismatchError
 from core.research.study_aggregation import (
     StudyAggregationError,
     StudyAggregationService,
@@ -39,6 +40,39 @@ def _is_operational_failure(error: BaseException) -> bool:
             return True
         current = current.__cause__ or current.__context__
     return False
+
+
+def _is_deterministic_evidence_failure(error: BaseException) -> bool:
+    """Recognize proven evidence contradictions without hiding infrastructure faults."""
+
+    if _is_operational_failure(error):
+        return False
+
+    chain = []
+    current = error
+    seen = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+
+    if any(
+        isinstance(item, ArtifactIdentityMismatchError)
+        for item in chain
+    ):
+        return True
+
+    root = chain[-1]
+    if isinstance(
+        root,
+        (TypeError, ValueError, KeyError, FileNotFoundError),
+    ):
+        return True
+
+    return (
+        len(chain) == 1
+        and isinstance(error, StudyAggregationError)
+    )
 
 
 class QualificationService:
@@ -185,7 +219,7 @@ class QualificationService:
                 result_artifact_id,
             )
         except StudyAggregationError as error:
-            if _is_operational_failure(error):
+            if not _is_deterministic_evidence_failure(error):
                 raise QualificationOperationalError(
                     "saved Backtest evidence could not be reliably verified"
                 ) from error
@@ -202,22 +236,22 @@ class QualificationService:
                     "INVALID decision could not be persisted"
                 ) from persist_error
         except Exception as error:
-            if _is_operational_failure(error):
-                raise QualificationOperationalError(
-                    "saved Backtest evidence could not be reliably inspected"
-                ) from error
-            try:
-                return self._append_noneligible(
-                    trial=trial,
-                    policy=policy,
-                    created_at=evaluated_at,
-                    validity=EvidenceValidity.INVALID,
-                    reason="saved Backtest lineage could not be proven",
-                )
-            except Exception as persist_error:
-                raise QualificationOperationalError(
-                    "INVALID decision could not be persisted"
-                ) from persist_error
+            if _is_deterministic_evidence_failure(error):
+                try:
+                    return self._append_noneligible(
+                        trial=trial,
+                        policy=policy,
+                        created_at=evaluated_at,
+                        validity=EvidenceValidity.INVALID,
+                        reason="saved Backtest lineage could not be proven",
+                    )
+                except Exception as persist_error:
+                    raise QualificationOperationalError(
+                        "INVALID decision could not be persisted"
+                    ) from persist_error
+            raise QualificationOperationalError(
+                "saved Backtest evidence could not be reliably inspected"
+            ) from error
 
         trades = tuple(payload["trades"])
         completed_count = len(trades)

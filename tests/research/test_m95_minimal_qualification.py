@@ -16,6 +16,7 @@ from core.research.qualification_service import (
     QualificationOperationalError,
     QualificationService,
 )
+from core.research.research_artifact_store import ArtifactIdentityMismatchError
 from core.research.sqlite_qualification_store import SQLiteQualificationStore
 from core.research.study_aggregation import (
     StudyAggregationError,
@@ -210,6 +211,95 @@ def test_storage_failure_is_operational_and_creates_no_decision(monkeypatch):
         service.evaluate_selected_trial(trial.trial_id, evaluated_at=NOW)
 
     assert store.decisions == []
+
+
+def test_unexpected_verifier_runtime_failure_is_operational_without_decision(monkeypatch):
+    def fail(self, trial_id):
+        raise RuntimeError("unexpected verifier infrastructure failure")
+
+    monkeypatch.setattr(
+        StudyAggregationService,
+        "load_verified_trial_backtest",
+        fail,
+    )
+    service, store, trial = _service(QualificationPolicy(1, Decimal("50")))
+
+    with pytest.raises(QualificationOperationalError, match="reliably inspected"):
+        service.evaluate_selected_trial(trial.trial_id, evaluated_at=NOW)
+
+    assert store.decisions == []
+
+
+def test_wrapped_unexpected_verifier_runtime_failure_is_operational_without_decision(
+    monkeypatch,
+):
+    def fail(self, trial_id):
+        try:
+            raise RuntimeError("unexpected artifact reader failure")
+        except RuntimeError as error:
+            raise StudyAggregationError(
+                "canonical Backtest result artifact could not be verified and decoded"
+            ) from error
+
+    monkeypatch.setattr(
+        StudyAggregationService,
+        "load_verified_trial_backtest",
+        fail,
+    )
+    service, store, trial = _service(QualificationPolicy(1, Decimal("50")))
+
+    with pytest.raises(QualificationOperationalError, match="reliably verified"):
+        service.evaluate_selected_trial(trial.trial_id, evaluated_at=NOW)
+
+    assert store.decisions == []
+
+
+def test_wrapped_snapshot_value_error_with_sqlite_cause_is_operational_without_decision(
+    monkeypatch,
+):
+    _verified(monkeypatch, ({"pnl": 10.0},))
+    service, store, trial = _service(QualificationPolicy(1, Decimal("50")))
+
+    def fail(_trial_id):
+        try:
+            raise sqlite3.OperationalError("database unavailable")
+        except sqlite3.OperationalError as error:
+            raise ValueError("snapshot lookup failed") from error
+
+    service.catalog_store.load_research_trial_detail_snapshot = fail
+
+    with pytest.raises(QualificationOperationalError, match="reliably inspected"):
+        service.evaluate_selected_trial(trial.trial_id, evaluated_at=NOW)
+
+    assert store.decisions == []
+
+
+def test_content_identity_mismatch_is_invalid_evidence(monkeypatch):
+    def fail(self, trial_id):
+        try:
+            raise ArtifactIdentityMismatchError(
+                "stored artifact content does not match its identity"
+            )
+        except ArtifactIdentityMismatchError as error:
+            raise StudyAggregationError(
+                "canonical Backtest result artifact could not be verified and decoded"
+            ) from error
+
+    monkeypatch.setattr(
+        StudyAggregationService,
+        "load_verified_trial_backtest",
+        fail,
+    )
+    service, store, trial = _service(QualificationPolicy(1, Decimal("50")))
+
+    decision = service.evaluate_selected_trial(
+        trial.trial_id,
+        evaluated_at=NOW,
+    )
+
+    assert decision.evidence_validity is EvidenceValidity.INVALID
+    assert decision.outcome is QualificationOutcome.INVALID
+    assert len(store.decisions) == 1
 
 
 def test_no_active_policy_fails_without_decision():

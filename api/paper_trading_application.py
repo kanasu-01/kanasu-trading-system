@@ -256,7 +256,17 @@ class PaperTradingApplication:
 
     def stop(
         self,
+        *,
+        expected_session_id: str | None = None,
     ) -> PaperTradingStopResponse:
+        if expected_session_id is not None and (
+            not isinstance(expected_session_id, str)
+            or not expected_session_id
+        ):
+            raise ValueError(
+                "expected_session_id must be a non-empty string or None"
+            )
+
         with self._lifecycle_lock:
             handle = self._current_handle
 
@@ -266,6 +276,15 @@ class PaperTradingApplication:
             ):
                 raise PaperLifecycleConflict(
                     "no active paper trading session"
+                )
+
+            if (
+                expected_session_id is not None
+                and handle.prepared.session.session_id
+                != expected_session_id
+            ):
+                raise PaperLifecycleConflict(
+                    "active paper trading session changed before stop"
                 )
 
             if handle.stop_in_progress:

@@ -1,0 +1,112 @@
+{
+  "schema": "kanasu.instrument-registry-config.v1",
+  "instruments": [
+    {
+      "instrument_id": "NSE-EQ-HDFCBANK",
+      "symbol": "HDFCBANK",
+      "exchange": "NSE",
+      "segment": "EQ",
+      "tick_size": 0.05,
+      "lot_size": 1,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "instrument_id": "NSE-EQ-INFY",
+      "symbol": "INFY",
+      "exchange": "NSE",
+      "segment": "EQ",
+      "tick_size": 0.05,
+      "lot_size": 1,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "instrument_id": "NSE-EQ-RELIANCE",
+      "symbol": "RELIANCE",
+      "exchange": "NSE",
+      "segment": "EQ",
+      "tick_size": 0.05,
+      "lot_size": 1,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "instrument_id": "NSE-EQ-SBIN",
+      "symbol": "SBIN",
+      "exchange": "NSE",
+      "segment": "EQ",
+      "tick_size": 0.05,
+      "lot_size": 1,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "instrument_id": "NSE-EQ-TCS",
+      "symbol": "TCS",
+      "exchange": "NSE",
+      "segment": "EQ",
+      "tick_size": 0.05,
+      "lot_size": 1,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ],
+  "provider_bindings": [
+    {
+      "binding_id": "angelone-nse-eq-hdfcbank-v1",
+      "instrument_id": "NSE-EQ-HDFCBANK",
+      "provider": "angelone",
+      "provider_instrument_id": "1333",
+      "provider_exchange": "NSE",
+      "provider_segment": "nse_cm",
+      "provider_symbol": "HDFCBANK",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "binding_id": "angelone-nse-eq-infy-v1",
+      "instrument_id": "NSE-EQ-INFY",
+      "provider": "angelone",
+      "provider_instrument_id": "1594",
+      "provider_exchange": "NSE",
+      "provider_segment": "nse_cm",
+      "provider_symbol": "INFY",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "binding_id": "angelone-nse-eq-reliance-v1",
+      "instrument_id": "NSE-EQ-RELIANCE",
+      "provider": "angelone",
+      "provider_instrument_id": "2885",
+      "provider_exchange": "NSE",
+      "provider_segment": "nse_cm",
+      "provider_symbol": "RELIANCE",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "binding_id": "angelone-nse-eq-sbin-v1",
+      "instrument_id": "NSE-EQ-SBIN",
+      "provider": "angelone",
+      "provider_instrument_id": "3045",
+      "provider_exchange": "NSE",
+      "provider_segment": "nse_cm",
+      "provider_symbol": "SBIN",
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "binding_id": "angelone-nse-eq-tcs-v1",
+      "instrument_id": "NSE-EQ-TCS",
+      "provider": "angelone",
+      "provider_instrument_id": "11536",
+      "provider_exchange": "NSE",
+      "provider_segment": "nse_cm",
+      "provider_symbol": "TCS",
+      "effective_from": null,
+      "effective_to": null
+    }
+  ]
+}

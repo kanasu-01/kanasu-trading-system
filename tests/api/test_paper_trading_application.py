@@ -232,6 +232,36 @@ def test_stop_without_active_session_is_conflict():
         application.stop()
 
 
+def test_expected_session_stop_rejects_different_active_session():
+    runtime = ControlledRuntime()
+    application = PaperTradingApplication(
+        lambda value: prepared(
+            "paper-current",
+            runtime,
+        )
+    )
+
+    application.start(request())
+    assert runtime.started.wait(timeout=1.0)
+
+    with pytest.raises(
+        PaperLifecycleConflict,
+        match="session changed",
+    ):
+        application.stop(
+            expected_session_id="paper-stale"
+        )
+
+    assert runtime.stop_calls == 0
+
+    stopped = application.stop(
+        expected_session_id="paper-current"
+    )
+    assert stopped.session_id == "paper-current"
+    assert stopped.status == "STOPPED"
+    assert runtime.stop_calls == 1
+
+
 def test_worker_failure_is_retained_as_failed_terminal_snapshot():
     runtime = ControlledRuntime(
         failure=ConnectionError(

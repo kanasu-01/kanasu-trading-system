@@ -47,6 +47,17 @@ export function AppNavbar() {
       </NavLink>
 
       <NavLink
+        to="/wfa"
+        style={({ isActive }) => ({
+          ...linkStyle,
+
+          background: isActive ? "#1e293b" : "transparent",
+        })}
+      >
+        WFA
+      </NavLink>
+
+      <NavLink
         to="/paper"
         style={({ isActive }) => ({
           ...linkStyle,

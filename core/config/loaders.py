@@ -55,6 +55,10 @@ def load_app_config() -> AppConfig:
             "RESEARCH_ARTIFACT_ROOT",
             "data/research_artifacts",
         ),
+        instrument_registry_path=os.getenv(
+            "INSTRUMENT_REGISTRY_PATH",
+            "config/instrument_registry.json",
+        ),
         historical_request_delay_sec=float(
             os.getenv("HISTORICAL_REQUEST_DELAY_SEC", 0.5)
         ),

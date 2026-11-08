@@ -28,7 +28,10 @@ from core.research.models.research_catalog import (
     ResearchArtifactKind,
 )
 from core.research.models.research_evidence import ResearchEvidenceStatus
-from core.research.research_artifact_store import research_artifact_reference
+from core.research.research_artifact_store import (
+    ArtifactIdentityMismatchError,
+    research_artifact_reference,
+)
 from core.research.sqlite_research_evidence_store import SQLiteResearchEvidenceStore
 from core.research.study_aggregation import (
     StudyAggregationError,
@@ -90,6 +93,47 @@ def _is_operational_failure(error: BaseException) -> bool:
             return True
         current = current.__cause__ or current.__context__
     return False
+
+
+def _is_deterministic_evidence_failure(error: BaseException) -> bool:
+    """Recognize proven evidence contradictions without hiding infrastructure faults."""
+
+    if _is_operational_failure(error):
+        return False
+
+    chain = []
+    current = error
+    seen = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+
+    if any(
+        isinstance(item, ArtifactIdentityMismatchError)
+        for item in chain
+    ):
+        return True
+
+    root = chain[-1]
+    if isinstance(
+        root,
+        (TypeError, ValueError, KeyError, FileNotFoundError),
+    ):
+        return True
+
+    if len(chain) == 1 and isinstance(error, StudyAggregationError):
+        return True
+
+    # _load_authoritative_historical_evidence deliberately translates a
+    # proven deterministic StudyAggregationError into ValueError. Preserve
+    # that semantic wrapper without treating deeper/unknown causal chains
+    # as deterministic. Operational causes were already excluded above.
+    return (
+        len(chain) == 2
+        and isinstance(chain[0], ValueError)
+        and isinstance(chain[1], StudyAggregationError)
+    )
 
 
 class CandidateWfaService:
@@ -287,7 +331,7 @@ class CandidateWfaService:
                 verified.result_artifact_id,
             )
         except StudyAggregationError as error:
-            if _is_operational_failure(error):
+            if not _is_deterministic_evidence_failure(error):
                 raise CandidateWfaOperationalError(
                     "historical Backtest evidence could not be reliably verified"
                 ) from error
@@ -571,11 +615,15 @@ class CandidateWfaService:
             )
         except CandidateWfaOperationalError:
             raise
-        except (TypeError, ValueError):
-            return self._invalid(
-                historical_decision,
-                "historical admitted result/evidence authority is contradictory",
-            )
+        except Exception as error:
+            if _is_deterministic_evidence_failure(error):
+                return self._invalid(
+                    historical_decision,
+                    "historical admitted result/evidence authority is contradictory",
+                )
+            raise CandidateWfaOperationalError(
+                "historical admitted result/evidence authority could not be reliably verified"
+            ) from error
 
         if (
             evidence.requested_range != plan.trial_range
@@ -593,14 +641,9 @@ class CandidateWfaService:
                 )
             )
         except Exception as error:
-            if _is_operational_failure(error):
-                raise CandidateWfaOperationalError(
-                    "historical DatasetReference admission could not be loaded"
-                ) from error
-            return self._invalid(
-                historical_decision,
-                "historical qualification DatasetReference admission is unavailable",
-            )
+            raise CandidateWfaOperationalError(
+                "historical DatasetReference admission could not be loaded"
+            ) from error
         if admitted_dataset_artifact_id is None:
             return self._invalid(
                 historical_decision,
@@ -615,14 +658,14 @@ class CandidateWfaService:
                 )
             )
         except Exception as error:
-            if _is_operational_failure(error):
-                raise CandidateWfaOperationalError(
-                    "historical DatasetReference could not be read"
-                ) from error
-            return self._invalid(
-                historical_decision,
-                "historical admitted DatasetReference is missing, corrupt or ambiguous",
-            )
+            if _is_deterministic_evidence_failure(error):
+                return self._invalid(
+                    historical_decision,
+                    "historical admitted DatasetReference is missing, corrupt or ambiguous",
+                )
+            raise CandidateWfaOperationalError(
+                "historical DatasetReference could not be read reliably"
+            ) from error
 
         source_identity = source_reference.identity
         if (
@@ -698,18 +741,9 @@ class CandidateWfaService:
                 "Git executable-compatibility verification failed operationally"
             ) from error
         except Exception as error:
-            if _is_operational_failure(error):
-                raise CandidateWfaOperationalError(
-                    "executable-compatibility verification failed operationally"
-                ) from error
-            return self._invalid(
-                historical_decision,
-                "historical fixed executable claim could not be verified",
-                evaluator_repository_revision=evaluator_revision,
-                dataset_reference_artifact_id=dataset_artifact_id,
-                dataset_id=source_identity.dataset_id,
-                dataset_fingerprint_value=experiment_spec.dataset_fingerprint,
-            )
+            raise CandidateWfaOperationalError(
+                "executable-compatibility verification failed unexpectedly"
+            ) from error
 
         if not compatibility.compatible:
             return self._invalid(
@@ -849,15 +883,15 @@ class CandidateWfaService:
                 experiment_spec
             )
         except Exception as error:
-            if _is_operational_failure(error):
-                raise CandidateWfaOperationalError(
-                    "historical Backtest manifest could not be read"
-                ) from error
-            return self._invalid(
-                historical_decision,
-                "historical Backtest manifest is invalid",
-                **known_dataset,
-            )
+            if _is_deterministic_evidence_failure(error):
+                return self._invalid(
+                    historical_decision,
+                    "historical Backtest manifest is invalid",
+                    **known_dataset,
+                )
+            raise CandidateWfaOperationalError(
+                "historical Backtest manifest could not be read reliably"
+            ) from error
 
         if (
             backtest_run_manifest_payload(current_manifest)
@@ -894,12 +928,16 @@ class CandidateWfaService:
                     prehistory_bars=resolved_prehistory_bars,
                 )
             )
-        except (TypeError, ValueError, RuntimeError):
-            return self._invalid(
-                historical_decision,
-                "fixed strategy WFA prehistory/window contract is invalid",
-                **known_dataset,
-            )
+        except Exception as error:
+            if _is_deterministic_evidence_failure(error):
+                return self._invalid(
+                    historical_decision,
+                    "fixed strategy WFA prehistory/window contract is invalid",
+                    **known_dataset,
+                )
+            raise CandidateWfaOperationalError(
+                "fixed strategy WFA prehistory/window resolution failed unexpectedly"
+            ) from error
 
         if not expected_windows:
             return self._insufficient(
@@ -918,15 +956,9 @@ class CandidateWfaService:
                 runtime_context=inputs.runtime_context,
             )
         except Exception as error:
-            if _is_operational_failure(error):
-                raise CandidateWfaOperationalError(
-                    "existing WFA execution failed operationally"
-                ) from error
-            return self._invalid(
-                historical_decision,
-                "existing WFA engine could not produce valid fixed-strategy evidence",
-                **known_dataset,
-            )
+            raise CandidateWfaOperationalError(
+                "existing WFA execution failed operationally"
+            ) from error
 
         if len(result.windows) != len(expected_windows):
             return self._invalid(

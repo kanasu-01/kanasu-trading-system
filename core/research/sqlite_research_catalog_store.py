@@ -1576,6 +1576,48 @@ class SQLiteResearchCatalogStore:
 
         return self._study_from_row(row)
 
+    def list_studies(
+        self,
+        *,
+        include_archived: bool = False,
+    ) -> tuple[Study, ...]:
+        """List Studies deterministically for workspace selectors."""
+
+        if type(include_archived) is not bool:
+            raise TypeError("include_archived must be a bool")
+
+        with closing(self._connect()) as connection:
+            if include_archived:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        study_id,
+                        created_at,
+                        display_title,
+                        archived
+                    FROM studies
+                    ORDER BY created_at, study_id
+                    """
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        study_id,
+                        created_at,
+                        display_title,
+                        archived
+                    FROM studies
+                    WHERE archived = 0
+                    ORDER BY created_at, study_id
+                    """
+                ).fetchall()
+
+        return tuple(
+            self._study_from_row(row)
+            for row in rows
+        )
+
     def update_study_metadata(
         self,
         study_id: str,

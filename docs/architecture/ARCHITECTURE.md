@@ -500,14 +500,14 @@ Authoritative details are tracked in [Deferred Work](../roadmap/DEFERRED_WORK.md
 - ordinary standalone Backtest execution remains request-scoped, while M9.4 now provides a separate durable registered Study/StudyRevision/Trial/ResearchJob workflow for research batches;
 - automatic Backtest research-result/evidence persistence remains implemented by M9.2, and M9.4 now adds registered Study/Trial/ResearchJob ownership plus truthful batch progress and aggregation;
 - M9.3 remains authoritative for canonical instrument/provider/dataset truth. M9.4 consumes explicit registered truth and intentionally does not manufacture default provider mappings; successor application activation remains explicit until authoritative canonical registry data is supplied;
-- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle, M9.5 fixed-candidate historical qualification, M9.6 Candidate-bound WFA qualification and M9.7 persistent qualified-Paper campaign authority are implemented; complete research-workspace integration remains M9.8;
-- M9.6 provides durable Candidate-bound WFA evidence/decisions without complete public HTTP/UI orchestration; M9.8 owns the research-workspace exposure;
-- versioned immutable `QualificationPolicy` and append-only `QualificationDecision` authority exist at the accepted M9.5 scope;
+- the persistent Study/StudyRevision/Trial/ResearchJob lifecycle, M9.5 fixed-candidate historical qualification, M9.6 Candidate-bound WFA qualification and M9.7 persistent qualified-Paper campaign authority are implemented; M9.8 adds the Study-scoped public workspace composition without changing those authorities;
+- M9.8 exposes registered Backtest, current-policy qualification, candidate-bound WFA and qualified Paper through `/api/research-workspace` and React module pages; the legacy standalone Backtest/Paper APIs remain separate compatibility/smoke surfaces;
+- versioned immutable `QualificationPolicy` and append-only `QualificationDecision` authority remain backend-owned; concurrent policy supersession is surfaced explicitly rather than misattributed;
 - M9.7 adds durable multi-session `PaperCampaign` lineage above the existing one-process Paper runtime, while continuous account/checkpoint restoration across sessions or restarts remains deferred under DW-021;
 - reusable broker authentication/session lifecycle remains an open hardening item;
 - the paper lifecycle does not expose separate `STARTING`/`STOPPING` states;
 - the legacy Replay performance panel reconstructs financial results from signal-close prices rather than authoritative execution evidence;
-- the application shell currently presents a static `Connected` label rather than backend health authority;
+- the application shell no longer presents a static `Connected` claim; module pages surface only their available backend/runtime state;
 - PivotBoss remains unvalidated;
 - legacy Replay/export/broker paths retain stale contracts; and
 - real-money execution remains outside V1.
