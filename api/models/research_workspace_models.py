@@ -6,6 +6,11 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from api.application_catalog import (
+    SUPPORTED_STRATEGIES,
+    SUPPORTED_TIMEFRAMES,
+    SUPPORTED_TIMEZONES,
+)
 from api.models.backtest_models import (
     BacktestRunResponse,
     SMACrossoverParams,
@@ -62,12 +67,36 @@ class WorkspaceBacktestRunRequest(StrictApiModel):
         default_factory=SMACrossoverParams
     )
 
-    @field_validator("symbol", "timeframe", "strategy_id", "timezone")
+    @field_validator("symbol")
     @classmethod
-    def strip_required_text(cls, value: str) -> str:
+    def validate_symbol(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
-            raise ValueError("value must not be empty")
+            raise ValueError("symbol must not be empty")
+        return normalized
+
+    @field_validator("timeframe")
+    @classmethod
+    def validate_timeframe(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in SUPPORTED_TIMEFRAMES:
+            raise ValueError(f"unsupported timeframe: {normalized}")
+        return normalized
+
+    @field_validator("strategy_id")
+    @classmethod
+    def validate_strategy_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in SUPPORTED_STRATEGIES:
+            raise ValueError(f"unsupported strategy_id: {normalized}")
+        return normalized
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in SUPPORTED_TIMEZONES:
+            raise ValueError(f"unsupported timezone: {normalized}")
         return normalized
 
     @model_validator(mode="after")
@@ -101,6 +130,7 @@ class WorkspaceStrategyState(StrictApiModel):
     strategy_label: str = Field(min_length=1)
     strategy_parameters: dict[str, Any]
     trial_disposition: str = Field(min_length=1)
+    trial_disposition_event_id: str = Field(min_length=1)
     qualification_outcome: str | None = None
     qualification_decision_id: str | None = None
     candidate_revision_id: str | None = None
@@ -114,6 +144,10 @@ class WorkspaceStrategyState(StrictApiModel):
 class WorkspaceStrategyListResponse(StrictApiModel):
     study_id: str = Field(min_length=1)
     strategies: list[WorkspaceStrategyState]
+
+
+class WorkspaceRetryRequest(StrictApiModel):
+    expected_disposition_event_id: str = Field(min_length=1)
 
 
 class WorkspaceQualificationRequest(StrictApiModel):
@@ -165,7 +199,26 @@ class WorkspaceWfaItemResponse(StrictApiModel):
 
 class WorkspaceWfaResponse(StrictApiModel):
     study_id: str = Field(min_length=1)
+    active_policy_id: str | None
     strategies: list[WorkspaceWfaItemResponse]
+
+
+class WorkspaceWfaRunRequest(StrictApiModel):
+    expected_policy_id: str | None
+
+
+class WorkspacePaperSendRequest(StrictApiModel):
+    expected_wfa_decision_ids: list[str]
+
+    @field_validator("expected_wfa_decision_ids")
+    @classmethod
+    def validate_expected_wfa_decision_ids(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip() for item in value]
+        if any(not item for item in normalized):
+            raise ValueError("expected WFA decision IDs must not be empty")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("expected WFA decision IDs must be unique")
+        return normalized
 
 
 class WorkspacePaperSendItemResponse(StrictApiModel):
@@ -207,6 +260,24 @@ class WorkspacePaperSessionResponse(StrictApiModel):
     terminal_at: datetime | None
     failure_type: str | None
     failure_message: str | None
+
+
+class WorkspacePaperStartRequest(StrictApiModel):
+    expected_latest_session_id: str | None
+
+    @field_validator("expected_latest_session_id")
+    @classmethod
+    def validate_expected_latest_session_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("expected_latest_session_id must not be empty")
+        return normalized
+
+
+class WorkspacePaperStopRequest(StrictApiModel):
+    expected_session_id: str = Field(min_length=1)
 
 
 class WorkspacePaperHistoryResponse(StrictApiModel):

@@ -127,7 +127,12 @@ export function WfaPage() {
     const runStudy = selectedStudy;
     const runSequence = ++studyLoadSequence.current;
     try {
-      const value = await runWorkspaceWfa(runStudy);
+      const value = await runWorkspaceWfa(
+        runStudy,
+        state?.active_policy_id
+          ?? config?.active_qualification_policy?.policy_id
+          ?? null,
+      );
       if (
         runSequence !== studyLoadSequence.current
         || runStudy !== selectedStudy
@@ -140,7 +145,17 @@ export function WfaPage() {
           ?.candidate_revision_id ?? "";
       setSelectedCandidate(first);
     } catch (cause) {
-      setError(message(cause, "WFA execution failed"));
+      try {
+        await refresh(runStudy, runSequence);
+      } catch {
+        // Preserve the original mutation uncertainty.
+      }
+      setError(
+        message(
+          cause,
+          "WFA response was uncertain; current state was reconciled",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -150,16 +165,37 @@ export function WfaPage() {
     if (!selectedStudy) {
       return;
     }
+    const sendStudy = selectedStudy;
+    const sendSequence = ++studyLoadSequence.current;
+    const expectedDecisionIds =
+      state?.strategies
+        .filter((item) => item.verdict === "PASS" && item.decision_id)
+        .map((item) => item.decision_id as string) ?? [];
     setBusy(true);
     setError(null);
     try {
-      const sendStudy = selectedStudy;
-      const value = await sendWorkspaceStrategiesToPaper(sendStudy);
-      if (sendStudy === selectedStudy) {
+      const value = await sendWorkspaceStrategiesToPaper(
+        sendStudy,
+        expectedDecisionIds,
+      );
+      if (
+        sendSequence === studyLoadSequence.current
+        && sendStudy === selectedStudy
+      ) {
         setPaperResult(value);
       }
     } catch (cause) {
-      setError(message(cause, "Failed to send strategies to Paper"));
+      try {
+        await refresh(sendStudy, sendSequence);
+      } catch {
+        // Preserve the original mutation uncertainty.
+      }
+      setError(
+        message(
+          cause,
+          "Send-to-Paper response was uncertain; current WFA state was reconciled",
+        ),
+      );
     } finally {
       setBusy(false);
     }

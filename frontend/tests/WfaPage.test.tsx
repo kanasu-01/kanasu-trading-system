@@ -61,6 +61,7 @@ const config = {
 
 const wfa = {
   study_id: "study-1",
+  active_policy_id: "policy-1",
   strategies: [
     {
       trial_id: "sha256:" + "1".repeat(64),
@@ -129,13 +130,17 @@ describe("WfaPage", () => {
     );
 
     await waitFor(() => {
-      expect(sendWorkspaceStrategiesToPaper).toHaveBeenCalledWith("study-1");
+      expect(sendWorkspaceStrategiesToPaper).toHaveBeenCalledWith(
+        "study-1",
+        ["wfa-1"],
+      );
     });
   });
 
   it("preserves operational error as ERROR rather than WFA FAIL", async () => {
     vi.mocked(getWorkspaceWfa).mockResolvedValueOnce({
       study_id: "study-1",
+      active_policy_id: "policy-1",
       strategies: [
         {
           trial_id: "sha256:" + "3".repeat(64),
@@ -163,6 +168,7 @@ describe("WfaPage", () => {
   it("shows historically eligible strategies as pending before WFA", async () => {
     vi.mocked(getWorkspaceWfa).mockResolvedValueOnce({
       study_id: "study-1",
+      active_policy_id: "policy-1",
       strategies: [
         {
           trial_id: "sha256:" + "5".repeat(64),
@@ -204,6 +210,7 @@ describe("WfaPage", () => {
     };
     const pendingStudyTwo: WorkspaceWfaResponse = {
       study_id: "study-2",
+      active_policy_id: "policy-1",
       strategies: [
         {
           trial_id: "sha256:" + "7".repeat(64),
@@ -220,6 +227,7 @@ describe("WfaPage", () => {
     };
     const completedStudyTwo: WorkspaceWfaResponse = {
       study_id: "study-2",
+      active_policy_id: "policy-1",
       strategies: [
         {
           ...wfa.strategies[0],
@@ -261,7 +269,10 @@ describe("WfaPage", () => {
       screen.getByRole("button", { name: "Start WFA" }),
     );
     await waitFor(() => {
-      expect(runWorkspaceWfa).toHaveBeenCalledWith("study-2");
+      expect(runWorkspaceWfa).toHaveBeenCalledWith(
+        "study-2",
+        "policy-1",
+      );
     });
     await waitFor(() => {
       expect(screen.getByText("PASS")).toBeInTheDocument();

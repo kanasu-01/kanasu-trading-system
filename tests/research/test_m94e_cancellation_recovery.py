@@ -2293,3 +2293,60 @@ def test_m94m_recovery_cannot_precede_durable_cancellation_request(
     assert catalog.recover_running_research_jobs(
         terminal_at=JUL,
     ) == ()
+
+
+def test_stale_retry_generation_cannot_retry_a_later_terminal_cycle(tmp_path):
+    catalog, trial, first_job = _environment(
+        tmp_path,
+        claim_job=False,
+    )
+
+    catalog.cancel_queued_research_job(
+        job_id=first_job.job_id,
+        terminal_at=MAY,
+    )
+    first_terminal_event = catalog.load_trial_disposition_events(
+        trial.trial_id
+    )[-1]
+    assert (
+        first_terminal_event.new_disposition
+        is TrialDisposition.CANCELLED
+    )
+
+    _pending_trial, retry_job, _retry_event = catalog.retry_trial(
+        trial.trial_id,
+        retry_requested_at=JUN,
+        expected_disposition_event_id=first_terminal_event.event_id,
+    )
+    catalog.cancel_queued_research_job(
+        job_id=retry_job.job_id,
+        terminal_at=JUL,
+    )
+    later_terminal_event = catalog.load_trial_disposition_events(
+        trial.trial_id
+    )[-1]
+    assert (
+        later_terminal_event.new_disposition
+        is TrialDisposition.CANCELLED
+    )
+    assert later_terminal_event.event_id != first_terminal_event.event_id
+
+    job_count_before = len(
+        catalog.list_research_jobs_for_trial(trial.trial_id)
+    )
+    with pytest.raises(
+        ValueError,
+        match="generation changed since caller observation",
+    ):
+        catalog.retry_trial(
+            trial.trial_id,
+            retry_requested_at=JUL + timedelta(seconds=1),
+            expected_disposition_event_id=first_terminal_event.event_id,
+        )
+
+    persisted = catalog.load_trial(trial.trial_id)
+    assert persisted is not None
+    assert persisted.disposition is TrialDisposition.CANCELLED
+    assert len(
+        catalog.list_research_jobs_for_trial(trial.trial_id)
+    ) == job_count_before

@@ -254,6 +254,46 @@ class ResearchWorkspaceApplication:
             threshold_pct=str(policy.net_profitable_trade_rate_threshold_pct),
         )
 
+
+    def _active_policy_id(self) -> str | None:
+        try:
+            policy = self.qualification_store.load_active_policy()
+        except Exception as error:
+            raise ResearchWorkspaceOperationalError(
+                "active QualificationPolicy could not be read reliably"
+            ) from error
+        return None if policy is None else policy.policy_id
+
+    def _require_policy_generation(self, expected_policy_id: str | None) -> None:
+        if self._active_policy_id() != expected_policy_id:
+            raise ResearchWorkspaceConflict(
+                "active QualificationPolicy changed since caller observation"
+            )
+
+    def _paper_authority_generation(self, campaigns) -> tuple:
+        policy_id = self._active_policy_id()
+        values = []
+        try:
+            for campaign in campaigns:
+                historical = self.qualification_store.load_current_decision(
+                    campaign.trial_id
+                )
+                wfa = self.wfa_store.load_current_decision(
+                    campaign.candidate_revision_id
+                )
+                values.append(
+                    (
+                        campaign.campaign_id,
+                        None if historical is None else historical.decision_id,
+                        None if wfa is None else wfa.decision_id,
+                    )
+                )
+        except Exception as error:
+            raise ResearchWorkspaceOperationalError(
+                "Paper authority generation could not be read reliably"
+            ) from error
+        return policy_id, tuple(values)
+
     def _symbol_options(self):
         values = {
             (item.symbol, item.exchange)
@@ -523,7 +563,11 @@ class ResearchWorkspaceApplication:
             execute_claimed_job=executor.execute,
         )
 
-    def _retry_trial(self, trial_id: str) -> None:
+    def _retry_trial(
+        self,
+        trial_id: str,
+        expected_disposition_event_id: str,
+    ) -> None:
         trial = self.catalog_store.load_trial(trial_id)
         if trial is None:
             raise ResearchWorkspaceNotFound(trial_id)
@@ -531,10 +575,14 @@ class ResearchWorkspaceApplication:
             raise ResearchWorkspaceConflict(
                 "Trial is not retryable from its current disposition"
             )
-        self.catalog_store.retry_trial(
-            trial_id,
-            retry_requested_at=self.clock(),
-        )
+        try:
+            self.catalog_store.retry_trial(
+                trial_id,
+                retry_requested_at=self.clock(),
+                expected_disposition_event_id=expected_disposition_event_id,
+            )
+        except ValueError as error:
+            raise ResearchWorkspaceConflict(str(error)) from error
         queue = ResearchJobQueueService(
             catalog_store=self.catalog_store,
             app_config=self.app_config,
@@ -750,8 +798,12 @@ class ResearchWorkspaceApplication:
             )
         return self._backtest_response_from_trial(trial)
 
-    def retry_backtest(self, trial_id: str) -> WorkspaceStrategyState:
-        self._retry_trial(trial_id)
+    def retry_backtest(
+        self,
+        trial_id: str,
+        expected_disposition_event_id: str,
+    ) -> WorkspaceStrategyState:
+        self._retry_trial(trial_id, expected_disposition_event_id)
         return self._strategy_state(self.catalog_store.load_trial(trial_id))
 
     def _strategy_label(self, procedure_id: str, params: dict) -> str:
@@ -803,6 +855,11 @@ class ResearchWorkspaceApplication:
         revision = self.catalog_store.load_study_revision(trial.study_revision_id)
         if revision is None:
             raise ResearchWorkspaceOperationalError("StudyRevision disappeared")
+        events = self.catalog_store.load_trial_disposition_events(trial.trial_id)
+        if not events:
+            raise ResearchWorkspaceOperationalError(
+                "Trial disposition generation is missing"
+            )
         plan = self.plan_resolver.resolve(trial.trial_id)
         instrument = self._instrument_for_plan(plan)
         qualification = self.qualification_store.load_current_decision(trial.trial_id)
@@ -835,6 +892,7 @@ class ResearchWorkspaceApplication:
             ),
             strategy_parameters=dict(plan.parameter_configuration),
             trial_disposition=trial.disposition.value,
+            trial_disposition_event_id=events[-1].event_id,
             qualification_outcome=(
                 None if qualification is None else qualification.outcome.value
             ),
@@ -851,12 +909,17 @@ class ResearchWorkspaceApplication:
 
     def study_strategies(self, study_id: str) -> WorkspaceStrategyListResponse:
         self._study(study_id)
+        policy_generation = self._active_policy_id()
         values = []
         for revision in self.catalog_store.list_study_revisions(study_id):
             for trial in self.catalog_store.list_registered_trials_for_revision(
                 revision.study_revision_id
             ):
                 values.append(self._strategy_state(trial))
+        if self._active_policy_id() != policy_generation:
+            raise ResearchWorkspaceConflict(
+                "QualificationPolicy changed while Study state was assembled"
+            )
         return WorkspaceStrategyListResponse(
             study_id=study_id,
             strategies=values,
@@ -1061,6 +1124,7 @@ class ResearchWorkspaceApplication:
 
     def wfa_state(self, study_id: str) -> WorkspaceWfaResponse:
         self._study(study_id)
+        policy_generation = self._active_policy_id()
         items = []
         for revision in self.catalog_store.list_study_revisions(study_id):
             try:
@@ -1115,12 +1179,26 @@ class ResearchWorkspaceApplication:
                             metrics=None,
                         )
                     )
-        return WorkspaceWfaResponse(study_id=study_id, strategies=items)
+        if self._active_policy_id() != policy_generation:
+            raise ResearchWorkspaceConflict(
+                "QualificationPolicy changed while WFA state was assembled"
+            )
+        return WorkspaceWfaResponse(
+            study_id=study_id,
+            active_policy_id=policy_generation,
+            strategies=items,
+        )
 
-    def run_wfa(self, study_id: str) -> WorkspaceWfaResponse:
+    def run_wfa(
+        self,
+        study_id: str,
+        expected_policy_id: str | None,
+    ) -> WorkspaceWfaResponse:
         self._study(study_id)
+        self._require_policy_generation(expected_policy_id)
         results = []
         for revision in self.catalog_store.list_study_revisions(study_id):
+            self._require_policy_generation(expected_policy_id)
             try:
                 historical_decisions = (
                     self.qualification_store.list_current_eligible_decisions(
@@ -1145,10 +1223,12 @@ class ResearchWorkspaceApplication:
             if not historical_decisions:
                 continue
 
+            self._require_policy_generation(expected_policy_id)
             try:
                 decisions = self.wfa_service.evaluate_study_revision(
                     revision.study_revision_id
                 )
+                self._require_policy_generation(expected_policy_id)
             except CandidateWfaOperationalError as error:
                 for historical in historical_decisions:
                     try:
@@ -1215,12 +1295,34 @@ class ResearchWorkspaceApplication:
                             metrics=None,
                         )
                     )
-        return WorkspaceWfaResponse(study_id=study_id, strategies=results)
+        self._require_policy_generation(expected_policy_id)
+        return WorkspaceWfaResponse(
+            study_id=study_id,
+            active_policy_id=expected_policy_id,
+            strategies=results,
+        )
 
-    def send_to_paper(self, study_id: str) -> WorkspacePaperSendResponse:
+    def send_to_paper(
+        self,
+        study_id: str,
+        expected_wfa_decision_ids: list[str],
+    ) -> WorkspacePaperSendResponse:
         self._study(study_id)
         items = []
         state = self.wfa_state(study_id)
+        current_pass_ids = sorted(
+            item.decision_id
+            for item in state.strategies
+            if (
+                item.decision_id is not None
+                and item.outcome == WfaQualificationOutcome.ELIGIBLE.value
+                and item.verdict == "PASS"
+            )
+        )
+        if current_pass_ids != sorted(expected_wfa_decision_ids):
+            raise ResearchWorkspaceConflict(
+                "current WFA PASS decision set changed since caller observation"
+            )
         for strategy in state.strategies:
             if strategy.outcome == "OPERATIONAL_ERROR":
                 items.append(
@@ -1322,12 +1424,18 @@ class ResearchWorkspaceApplication:
         campaigns = self.qualified_paper_application.list_campaigns_for_study(
             study_id
         )
+        generation = self._paper_authority_generation(campaigns)
+        responses = [
+            self._campaign_response(study_id, item)
+            for item in campaigns
+        ]
+        if self._paper_authority_generation(campaigns) != generation:
+            raise ResearchWorkspaceConflict(
+                "Paper authority changed while campaign state was assembled"
+            )
         return WorkspacePaperCampaignListResponse(
             study_id=study_id,
-            campaigns=[
-                self._campaign_response(study_id, item)
-                for item in campaigns
-            ],
+            campaigns=responses,
         )
 
     def paper_history(self, campaign_id: str) -> WorkspacePaperHistoryResponse:
@@ -1363,14 +1471,27 @@ class ResearchWorkspaceApplication:
             campaign_owns_runtime=owns_runtime,
         )
 
-    def start_paper(self, campaign_id: str) -> WorkspacePaperHistoryResponse:
-        self.qualified_paper_application.start_session(campaign_id)
+    def start_paper(
+        self,
+        campaign_id: str,
+        expected_latest_session_id: str | None,
+    ) -> WorkspacePaperHistoryResponse:
+        self.qualified_paper_application.start_session(
+            campaign_id,
+            expected_latest_session_id=expected_latest_session_id,
+        )
         return self.paper_history(campaign_id)
 
-    def stop_paper(self, campaign_id: str) -> WorkspacePaperHistoryResponse:
-        self.qualified_paper_application.stop_session(campaign_id)
+    def stop_paper(
+        self,
+        campaign_id: str,
+        expected_session_id: str,
+    ) -> WorkspacePaperHistoryResponse:
+        self.qualified_paper_application.stop_session(
+            campaign_id,
+            expected_session_id=expected_session_id,
+        )
         return self.paper_history(campaign_id)
-
 
 def build_research_workspace_application(
     *,
@@ -1408,8 +1529,9 @@ def build_research_workspace_application(
     candle_store = SQLiteCandleStore(Path(config.historical_database_path))
     retrieval = SuccessorHistoricalRetrievalService(
         store=candle_store,
-        provider=_LazyBindingAwareProvider(config),
         registry=registry,
+        policy=config.historical_source_policy,
+        provider_factory=lambda: _LazyBindingAwareProvider(config),
     )
 
     def resolver(plan):

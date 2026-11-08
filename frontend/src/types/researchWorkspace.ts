@@ -56,6 +56,7 @@ export interface WorkspaceStrategyState {
   strategy_label: string;
   strategy_parameters: Record<string, unknown>;
   trial_disposition: string;
+  trial_disposition_event_id: string;
   qualification_outcome: string | null;
   qualification_decision_id: string | null;
   candidate_revision_id: string | null;
@@ -115,6 +116,7 @@ export interface WorkspaceWfaItem {
 
 export interface WorkspaceWfaResponse {
   study_id: string;
+  active_policy_id: string | null;
   strategies: WorkspaceWfaItem[];
 }
 

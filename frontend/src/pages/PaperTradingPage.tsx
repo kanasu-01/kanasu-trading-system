@@ -547,7 +547,6 @@ export function PaperTradingPage() {
           <div className="mt-4 flex gap-2">
             <Button
               variant="outline"
-              disabled={controlsBusy || isActive}
               onClick={() => navigate("/paper")}
             >
               Qualified Research

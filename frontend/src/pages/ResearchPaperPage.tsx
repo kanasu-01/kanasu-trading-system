@@ -154,6 +154,8 @@ export function ResearchPaperPage() {
     useState<WorkspacePaperHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [mutationState, setMutationState] =
+    useState<"IDLE" | "MUTATING" | "RECONCILING" | "UNKNOWN">("IDLE");
   const [error, setError] = useState<string | null>(null);
   const [pollGeneration, setPollGeneration] = useState(0);
   const studyLoadSequence = useRef(0);
@@ -223,7 +225,11 @@ export function ResearchPaperPage() {
   }, []);
 
   useEffect(() => {
-    if (!history?.runtime?.active || !selectedCampaign) {
+    if (
+      mutationState === "UNKNOWN"
+      || !history?.runtime?.active
+      || !selectedCampaign
+    ) {
       return;
     }
 
@@ -279,7 +285,12 @@ export function ResearchPaperPage() {
         window.clearTimeout(timer);
       }
     };
-  }, [history?.runtime?.active, selectedCampaign, pollGeneration]);
+  }, [
+    history?.runtime?.active,
+    selectedCampaign,
+    pollGeneration,
+    mutationState,
+  ]);
 
   async function handleStudyChange(studyId: string) {
     const sequence = ++studyLoadSequence.current;
@@ -288,6 +299,7 @@ export function ResearchPaperPage() {
     setCampaigns([]);
     selectCampaign("");
     setHistory(null);
+    setMutationState("IDLE");
     setError(null);
     try {
       await loadCampaigns(studyId, sequence);
@@ -302,6 +314,7 @@ export function ResearchPaperPage() {
     const sequence = ++campaignLoadSequence.current;
     selectCampaign(campaignId);
     setHistory(null);
+    setMutationState("IDLE");
     setError(null);
     try {
       const value = await getWorkspacePaperHistory(campaignId);
@@ -315,16 +328,59 @@ export function ResearchPaperPage() {
     }
   }
 
+  async function reconcileCurrentCampaign(
+    campaignAtRequest: string,
+    selectionSequence: number,
+  ): Promise<boolean> {
+    setMutationState("RECONCILING");
+    try {
+      const value = await getWorkspacePaperHistory(campaignAtRequest);
+      if (
+        !shouldAcceptCampaignResponse(
+          selectionSequence,
+          campaignLoadSequence.current,
+          campaignAtRequest,
+          selectedCampaignRef.current,
+        )
+      ) {
+        return false;
+      }
+      setHistory(value);
+      setMutationState("IDLE");
+      return true;
+    } catch {
+      if (
+        shouldAcceptCampaignResponse(
+          selectionSequence,
+          campaignLoadSequence.current,
+          campaignAtRequest,
+          selectedCampaignRef.current,
+        )
+      ) {
+        setMutationState("UNKNOWN");
+      }
+      return false;
+    }
+  }
+
   async function handleStart() {
-    if (!selectedCampaign) {
+    if (!selectedCampaign || mutationState === "UNKNOWN") {
       return;
     }
+    const campaignAtRequest = selectedCampaign;
+    const selectionSequence = ++campaignLoadSequence.current;
+    const expectedLatestSessionId =
+      history && history.sessions.length > 0
+        ? history.sessions[history.sessions.length - 1].session_id
+        : null;
     setBusy(true);
+    setMutationState("MUTATING");
     setError(null);
     try {
-      const campaignAtRequest = selectedCampaign;
-      const selectionSequence = ++campaignLoadSequence.current;
-      const value = await startWorkspacePaper(campaignAtRequest);
+      const value = await startWorkspacePaper(
+        campaignAtRequest,
+        expectedLatestSessionId,
+      );
       if (
         shouldAcceptCampaignResponse(
           selectionSequence,
@@ -334,9 +390,21 @@ export function ResearchPaperPage() {
         )
       ) {
         setHistory(value);
+        setMutationState("IDLE");
       }
     } catch (cause) {
-      setError(message(cause, "Qualified Paper start failed"));
+      const recovered = await reconcileCurrentCampaign(
+        campaignAtRequest,
+        selectionSequence,
+      );
+      setError(
+        recovered
+          ? message(
+              cause,
+              "Qualified Paper start response was uncertain; current state was reconciled",
+            )
+          : "Qualified Paper start outcome is unknown; reconcile before another mutation",
+      );
     } finally {
       setPollGeneration((value) => value + 1);
       setBusy(false);
@@ -344,15 +412,27 @@ export function ResearchPaperPage() {
   }
 
   async function handleStop() {
-    if (!selectedCampaign) {
+    const expectedSessionId =
+      history?.campaign_owns_runtime
+        ? history.runtime?.snapshot?.session_id ?? null
+        : null;
+    if (
+      !selectedCampaign
+      || !expectedSessionId
+      || mutationState === "UNKNOWN"
+    ) {
       return;
     }
+    const campaignAtRequest = selectedCampaign;
+    const selectionSequence = ++campaignLoadSequence.current;
     setBusy(true);
+    setMutationState("MUTATING");
     setError(null);
     try {
-      const campaignAtRequest = selectedCampaign;
-      const selectionSequence = ++campaignLoadSequence.current;
-      const value = await stopWorkspacePaper(campaignAtRequest);
+      const value = await stopWorkspacePaper(
+        campaignAtRequest,
+        expectedSessionId,
+      );
       if (
         shouldAcceptCampaignResponse(
           selectionSequence,
@@ -362,13 +442,44 @@ export function ResearchPaperPage() {
         )
       ) {
         setHistory(value);
+        setMutationState("IDLE");
       }
     } catch (cause) {
-      setError(message(cause, "Qualified Paper stop failed"));
+      const recovered = await reconcileCurrentCampaign(
+        campaignAtRequest,
+        selectionSequence,
+      );
+      setError(
+        recovered
+          ? message(
+              cause,
+              "Qualified Paper stop response was uncertain; current state was reconciled",
+            )
+          : "Qualified Paper stop outcome is unknown; reconcile before another mutation",
+      );
     } finally {
       setPollGeneration((value) => value + 1);
       setBusy(false);
     }
+  }
+
+  async function handleReconcile() {
+    if (!selectedCampaign) {
+      return;
+    }
+    const campaignAtRequest = selectedCampaign;
+    const selectionSequence = ++campaignLoadSequence.current;
+    setBusy(true);
+    setError(null);
+    const recovered = await reconcileCurrentCampaign(
+      campaignAtRequest,
+      selectionSequence,
+    );
+    if (!recovered) {
+      setError("Qualified Paper state could not be reconciled");
+    }
+    setPollGeneration((value) => value + 1);
+    setBusy(false);
   }
 
   if (loading) {
@@ -404,7 +515,6 @@ export function ResearchPaperPage() {
             <Button>Qualified Research</Button>
             <Button
               variant="outline"
-              disabled={busy || anyRuntimeActive}
               onClick={() => navigate("/paper/standalone")}
             >
               Standalone Smoke
@@ -481,12 +591,22 @@ export function ResearchPaperPage() {
               ) : null}
 
               <div className="flex gap-2">
+                {mutationState === "UNKNOWN" ? (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void handleReconcile()}
+                  >
+                    Reconcile Current Session
+                  </Button>
+                ) : null}
                 <Button
                   disabled={
                     busy ||
                     !selectedCampaign ||
                     !history?.campaign.current_authority ||
-                    anyRuntimeActive
+                    anyRuntimeActive ||
+                    mutationState === "UNKNOWN"
                   }
                   onClick={() => void handleStart()}
                 >
@@ -494,7 +614,12 @@ export function ResearchPaperPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={busy || !anyRuntimeActive || !ownsRuntime}
+                  disabled={
+                    busy
+                    || !anyRuntimeActive
+                    || !ownsRuntime
+                    || mutationState === "UNKNOWN"
+                  }
                   onClick={() => void handleStop()}
                 >
                   Stop Paper Trading

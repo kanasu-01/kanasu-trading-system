@@ -18,6 +18,9 @@ class PaperCampaignAuthorityConflict(ValueError):
     """Expected qualified Paper authority is no longer current at durable write."""
 
 
+_SESSION_GENERATION_UNCHECKED = object()
+
+
 class SQLitePaperCampaignStore:
     """Persist immutable campaigns and append/transition Paper session history."""
 
@@ -316,7 +319,12 @@ class SQLitePaperCampaignStore:
             ).fetchall()
         return tuple(self._campaign_from_row(row) for row in rows)
 
-    def register_session(self, session: PaperCampaignSession) -> None:
+    def register_session(
+        self,
+        session: PaperCampaignSession,
+        *,
+        expected_latest_session_id=_SESSION_GENERATION_UNCHECKED,
+    ) -> None:
         if not isinstance(session, PaperCampaignSession):
             raise TypeError("session must be a PaperCampaignSession")
         if session.state is not PaperCampaignSessionState.CREATED:
@@ -348,6 +356,33 @@ class SQLitePaperCampaignStore:
                     raise ValueError(
                         "Paper campaign session cannot precede campaign creation"
                     )
+
+                if expected_latest_session_id is not _SESSION_GENERATION_UNCHECKED:
+                    if (
+                        expected_latest_session_id is not None
+                        and (
+                            not isinstance(expected_latest_session_id, str)
+                            or not expected_latest_session_id
+                        )
+                    ):
+                        raise ValueError(
+                            "expected_latest_session_id must be a non-empty string or None"
+                        )
+                    latest = connection.execute(
+                        """
+                        SELECT session_id
+                        FROM paper_campaign_sessions
+                        WHERE campaign_id = ?
+                        ORDER BY session_sequence DESC
+                        LIMIT 1
+                        """,
+                        (session.campaign_id,),
+                    ).fetchone()
+                    observed_latest = None if latest is None else latest[0]
+                    if observed_latest != expected_latest_session_id:
+                        raise PaperCampaignAuthorityConflict(
+                            "PaperCampaign session generation changed since caller observation"
+                        )
 
                 active = connection.execute(
                     """

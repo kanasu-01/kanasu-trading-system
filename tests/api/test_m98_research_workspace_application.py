@@ -381,7 +381,20 @@ def test_qualified_stop_passes_exact_active_session_identity_to_process_owner():
         paper_application=owner,
     )
 
-    assert app.stop_session("campaign-a") == "history-a"
+    assert (
+        app.stop_session(
+            "campaign-a",
+            expected_session_id="session-a",
+        )
+        == "history-a"
+    )
+    assert owner.expected_session_id == "session-a"
+
+    with pytest.raises(Exception):
+        app.stop_session(
+            "campaign-a",
+            expected_session_id="session-old",
+        )
     assert owner.expected_session_id == "session-a"
 
 
@@ -674,3 +687,91 @@ def test_start_does_not_implicitly_retry_failed_trial(tmp_path):
         assert "explicit Retry" in str(error)
     else:
         raise AssertionError("failed Trial Start must require explicit Retry")
+
+
+def _bare_workspace_for_generation_tests():
+    app = object.__new__(ResearchWorkspaceApplication)
+    app.clock = lambda: NOW
+    return app
+
+
+def test_study_strategy_projection_conflicts_if_policy_generation_changes():
+    app = _bare_workspace_for_generation_tests()
+    policy_ids = iter(("policy-a", "policy-b"))
+    app._study = lambda _study_id: object()
+    app._active_policy_id = lambda: next(policy_ids)
+    app.catalog_store = SimpleNamespace(
+        list_study_revisions=lambda _study_id: (),
+    )
+
+    with pytest.raises(ResearchWorkspaceConflict, match="QualificationPolicy changed"):
+        app.study_strategies("study-1")
+
+
+def test_wfa_projection_conflicts_if_policy_generation_changes():
+    app = _bare_workspace_for_generation_tests()
+    policy_ids = iter(("policy-a", "policy-b"))
+    app._study = lambda _study_id: object()
+    app._active_policy_id = lambda: next(policy_ids)
+    app.catalog_store = SimpleNamespace(
+        list_study_revisions=lambda _study_id: (),
+    )
+
+    with pytest.raises(ResearchWorkspaceConflict, match="QualificationPolicy changed"):
+        app.wfa_state("study-1")
+
+
+def test_run_wfa_rejects_stale_observed_policy_before_evaluator():
+    app = _bare_workspace_for_generation_tests()
+    app._study = lambda _study_id: object()
+    app._active_policy_id = lambda: "policy-new"
+    app.catalog_store = SimpleNamespace(
+        list_study_revisions=lambda _study_id: (
+            SimpleNamespace(study_revision_id="revision-1", revision_number=1),
+        ),
+    )
+    app.wfa_service = SimpleNamespace(
+        evaluate_study_revision=lambda _revision_id: (_ for _ in ()).throw(
+            AssertionError("stale WFA intent must not evaluate")
+        )
+    )
+
+    with pytest.raises(ResearchWorkspaceConflict, match="caller observation"):
+        app.run_wfa("study-1", "policy-old")
+
+
+def test_send_to_paper_rejects_unobserved_new_pass_decision():
+    app = _bare_workspace_for_generation_tests()
+    app._study = lambda _study_id: object()
+    app.wfa_state = lambda _study_id: SimpleNamespace(
+        strategies=(
+            SimpleNamespace(
+                decision_id="wfa-new",
+                outcome="ELIGIBLE",
+                verdict="PASS",
+            ),
+        ),
+    )
+    app.qualified_paper_application = SimpleNamespace(
+        create_or_reuse_campaign=lambda _candidate_id: (_ for _ in ()).throw(
+            AssertionError("stale send intent must not create campaign")
+        )
+    )
+
+    with pytest.raises(ResearchWorkspaceConflict, match="decision set changed"):
+        app.send_to_paper("study-1", ["wfa-old"])
+
+
+def test_paper_projection_conflicts_if_authority_generation_changes():
+    app = _bare_workspace_for_generation_tests()
+    app._study = lambda _study_id: object()
+    campaign = SimpleNamespace(campaign_id="campaign-1")
+    app.qualified_paper_application = SimpleNamespace(
+        list_campaigns_for_study=lambda _study_id: (campaign,),
+    )
+    generations = iter((("policy-a", ()), ("policy-b", ())))
+    app._paper_authority_generation = lambda _campaigns: next(generations)
+    app._campaign_response = lambda _study_id, _campaign: SimpleNamespace()
+
+    with pytest.raises(ResearchWorkspaceConflict, match="Paper authority changed"):
+        app.paper_state("study-1")

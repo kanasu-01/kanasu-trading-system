@@ -172,7 +172,20 @@ export function ResearchBacktestPage() {
       setResult(null);
       setQualification(null);
     } catch (cause) {
-      setError(message(cause, "Failed to create Study"));
+      try {
+        const value = await getResearchWorkspaceConfig();
+        if (sequence === studyLoadSequence.current) {
+          setConfig(value);
+        }
+      } catch {
+        // Preserve the original mutation uncertainty.
+      }
+      setError(
+        message(
+          cause,
+          "Study creation response was uncertain; workspace was reconciled",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -226,6 +239,8 @@ export function ResearchBacktestPage() {
       setError("SMA periods must be positive integers with fast < slow");
       return;
     }
+    const runStudy = selectedStudy;
+    const sequence = ++studyLoadSequence.current;
     try {
       const start = toRfc3339(startValue, selectedTimezone);
       const end = toRfc3339(endValue, selectedTimezone);
@@ -233,8 +248,6 @@ export function ResearchBacktestPage() {
         setError("End must be after start");
         return;
       }
-      const runStudy = selectedStudy;
-      const sequence = ++studyLoadSequence.current;
       setBusy(true);
       setResult(null);
       const value = await runWorkspaceBacktest({
@@ -256,7 +269,17 @@ export function ResearchBacktestPage() {
         await refreshStrategies(runStudy, sequence);
       }
     } catch (cause) {
-      setError(message(cause, "Registered Backtest failed"));
+      try {
+        await refreshStrategies(runStudy, sequence);
+      } catch {
+        // Preserve the original mutation uncertainty.
+      }
+      setError(
+        message(
+          cause,
+          "Registered Backtest response was uncertain; current state was reconciled",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -279,15 +302,33 @@ export function ResearchBacktestPage() {
   }
 
   async function handleRetry(trialId: string) {
+    const observed = strategies.find((item) => item.trial_id === trialId);
+    if (!observed?.trial_disposition_event_id) {
+      setError("Retry requires the current Trial disposition generation");
+      return;
+    }
     const retryStudy = selectedStudy;
     const sequence = ++studyLoadSequence.current;
     setBusy(true);
     setError(null);
     try {
-      await retryWorkspaceBacktest(trialId);
+      await retryWorkspaceBacktest(
+        trialId,
+        observed.trial_disposition_event_id,
+      );
       await refreshStrategies(retryStudy, sequence);
     } catch (cause) {
-      setError(message(cause, "Backtest retry failed"));
+      try {
+        await refreshStrategies(retryStudy, sequence);
+      } catch {
+        // Preserve the original mutation uncertainty.
+      }
+      setError(
+        message(
+          cause,
+          "Backtest retry response was uncertain; current state was reconciled",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -353,7 +394,21 @@ export function ResearchBacktestPage() {
           );
         }
       } else {
-        setError(message(cause, "Historical qualification failed"));
+        try {
+          const refreshed = await getResearchWorkspaceConfig();
+          if (sequence === studyLoadSequence.current) {
+            setConfig(refreshed);
+            await refreshStrategies(qualificationStudy, sequence);
+          }
+        } catch {
+          // Preserve the original mutation uncertainty.
+        }
+        setError(
+          message(
+            cause,
+            "Historical qualification response was uncertain; current state was reconciled",
+          ),
+        );
       }
     } finally {
       setBusy(false);

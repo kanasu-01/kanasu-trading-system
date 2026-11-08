@@ -14,14 +14,19 @@ from api.models.research_workspace_models import (
     WorkspaceBacktestRunResponse,
     WorkspacePaperCampaignListResponse,
     WorkspacePaperHistoryResponse,
+    WorkspacePaperSendRequest,
     WorkspacePaperSendResponse,
+    WorkspacePaperStartRequest,
+    WorkspacePaperStopRequest,
     WorkspaceQualificationRequest,
     WorkspaceQualificationResponse,
+    WorkspaceRetryRequest,
     WorkspaceStrategyListResponse,
     WorkspaceStrategyState,
     WorkspaceStudyCreateRequest,
     WorkspaceStudyResponse,
     WorkspaceWfaResponse,
+    WorkspaceWfaRunRequest,
 )
 from api.research_workspace_application import (
     ResearchWorkspaceConflict,
@@ -110,6 +115,12 @@ async def get_study_strategies(study_id: str):
         return await run_in_threadpool(app.study_strategies, study_id)
     except ResearchWorkspaceNotFound:
         return _error(404, "study_not_found", "Study was not found")
+    except ResearchWorkspaceConflict:
+        return _error(
+            409,
+            "study_state_conflict",
+            "Study authority changed while strategy state was being loaded",
+        )
     except Exception:
         logger.exception("Research workspace strategy list failed")
         return _error(
@@ -202,10 +213,17 @@ async def get_registered_backtest_result(trial_id: str):
         500: {"model": ApiErrorResponse},
     },
 )
-async def retry_registered_backtest(trial_id: str):
+async def retry_registered_backtest(
+    trial_id: str,
+    request: WorkspaceRetryRequest,
+):
     try:
         app = workspace_application_factory()
-        return await run_in_threadpool(app.retry_backtest, trial_id)
+        return await run_in_threadpool(
+            app.retry_backtest,
+            trial_id,
+            request.expected_disposition_event_id,
+        )
     except ResearchWorkspaceNotFound:
         return _error(404, "trial_not_found", "Trial was not found")
     except ResearchWorkspaceConflict:
@@ -273,6 +291,7 @@ async def qualify_study(
     response_model=WorkspaceWfaResponse,
     responses={
         404: {"model": ApiErrorResponse},
+        409: {"model": ApiErrorResponse},
         500: {"model": ApiErrorResponse},
     },
 )
@@ -282,6 +301,12 @@ async def get_wfa(study_id: str):
         return await run_in_threadpool(app.wfa_state, study_id)
     except ResearchWorkspaceNotFound:
         return _error(404, "study_not_found", "Study was not found")
+    except ResearchWorkspaceConflict:
+        return _error(
+            409,
+            "wfa_state_conflict",
+            "WFA authority changed while state was being loaded",
+        )
     except ResearchWorkspaceOperationalError:
         logger.exception("WFA state operational failure")
         return _error(
@@ -299,15 +324,26 @@ async def get_wfa(study_id: str):
     response_model=WorkspaceWfaResponse,
     responses={
         404: {"model": ApiErrorResponse},
+        409: {"model": ApiErrorResponse},
         500: {"model": ApiErrorResponse},
     },
 )
-async def run_wfa(study_id: str):
+async def run_wfa(study_id: str, request: WorkspaceWfaRunRequest):
     try:
         app = workspace_application_factory()
-        return await run_in_threadpool(app.run_wfa, study_id)
+        return await run_in_threadpool(
+            app.run_wfa,
+            study_id,
+            request.expected_policy_id,
+        )
     except ResearchWorkspaceNotFound:
         return _error(404, "study_not_found", "Study was not found")
+    except ResearchWorkspaceConflict:
+        return _error(
+            409,
+            "wfa_policy_conflict",
+            "Qualification policy changed since WFA was observed",
+        )
     except Exception:
         logger.exception("Study WFA failed")
         return _error(500, "wfa_run_failed", "WFA could not be completed reliably")
@@ -322,12 +358,25 @@ async def run_wfa(study_id: str):
         500: {"model": ApiErrorResponse},
     },
 )
-async def send_to_paper(study_id: str):
+async def send_to_paper(
+    study_id: str,
+    request: WorkspacePaperSendRequest,
+):
     try:
         app = workspace_application_factory()
-        return await run_in_threadpool(app.send_to_paper, study_id)
+        return await run_in_threadpool(
+            app.send_to_paper,
+            study_id,
+            request.expected_wfa_decision_ids,
+        )
     except ResearchWorkspaceNotFound:
         return _error(404, "study_not_found", "Study was not found")
+    except ResearchWorkspaceConflict:
+        return _error(
+            409,
+            "send_to_paper_conflict",
+            "Displayed WFA decisions are no longer current",
+        )
     except QualifiedPaperAdmissionError:
         return _error(
             409,
@@ -354,6 +403,7 @@ async def send_to_paper(study_id: str):
     response_model=WorkspacePaperCampaignListResponse,
     responses={
         404: {"model": ApiErrorResponse},
+        409: {"model": ApiErrorResponse},
         500: {"model": ApiErrorResponse},
     },
 )
@@ -363,6 +413,12 @@ async def get_paper_campaigns(study_id: str):
         return await run_in_threadpool(app.paper_state, study_id)
     except ResearchWorkspaceNotFound:
         return _error(404, "study_not_found", "Study was not found")
+    except ResearchWorkspaceConflict:
+        return _error(
+            409,
+            "paper_campaign_state_conflict",
+            "Paper authority changed while campaign state was being loaded",
+        )
     except Exception:
         logger.exception("Paper campaign list failed")
         return _error(
@@ -411,10 +467,17 @@ async def get_paper_history(campaign_id: str):
         500: {"model": ApiErrorResponse},
     },
 )
-async def start_paper(campaign_id: str):
+async def start_paper(
+    campaign_id: str,
+    request: WorkspacePaperStartRequest,
+):
     try:
         app = workspace_application_factory()
-        return await run_in_threadpool(app.start_paper, campaign_id)
+        return await run_in_threadpool(
+            app.start_paper,
+            campaign_id,
+            request.expected_latest_session_id,
+        )
     except PaperCampaignNotFound:
         return _error(404, "paper_campaign_not_found", "Paper campaign was not found")
     except QualifiedPaperOperationalError:
@@ -451,10 +514,17 @@ async def start_paper(campaign_id: str):
         500: {"model": ApiErrorResponse},
     },
 )
-async def stop_paper(campaign_id: str):
+async def stop_paper(
+    campaign_id: str,
+    request: WorkspacePaperStopRequest,
+):
     try:
         app = workspace_application_factory()
-        return await run_in_threadpool(app.stop_paper, campaign_id)
+        return await run_in_threadpool(
+            app.stop_paper,
+            campaign_id,
+            request.expected_session_id,
+        )
     except PaperCampaignNotFound:
         return _error(404, "paper_campaign_not_found", "Paper campaign was not found")
     except (PaperCampaignLifecycleConflict, PaperLifecycleConflict):

@@ -60,12 +60,20 @@ class FakeApplication:
         )
 
     def wfa_state(self, study_id):
-        return WorkspaceWfaResponse(study_id=study_id, strategies=[])
+        return WorkspaceWfaResponse(
+            study_id=study_id,
+            active_policy_id=None,
+            strategies=[],
+        )
 
-    def run_wfa(self, study_id):
-        return WorkspaceWfaResponse(study_id=study_id, strategies=[])
+    def run_wfa(self, study_id, expected_policy_id):
+        return WorkspaceWfaResponse(
+            study_id=study_id,
+            active_policy_id=expected_policy_id,
+            strategies=[],
+        )
 
-    def send_to_paper(self, study_id):
+    def send_to_paper(self, study_id, expected_wfa_decision_ids):
         return WorkspacePaperSendResponse(study_id=study_id, campaigns=[])
 
     def paper_state(self, study_id):
@@ -193,11 +201,13 @@ def test_workspace_qualification_wfa_and_paper_routes_delegate(monkeypatch):
         http,
         "POST",
         "/api/research-workspace/studies/study-1/wfa/run",
+        json_body={"expected_policy_id": None},
     )
     paper = request(
         http,
         "POST",
         "/api/research-workspace/studies/study-1/paper/send",
+        json_body={"expected_wfa_decision_ids": []},
     )
 
     assert qualification.status_code == 200
@@ -243,7 +253,7 @@ def test_paper_lifecycle_conflict_is_409_but_unexpected_runtime_failure_is_500(
     from api.paper_trading_application import PaperLifecycleConflict
 
     class ConflictApplication(FakeApplication):
-        def start_paper(self, _campaign_id):
+        def start_paper(self, _campaign_id, _expected_latest_session_id):
             raise PaperLifecycleConflict("already active")
 
     monkeypatch.setattr(
@@ -257,12 +267,13 @@ def test_paper_lifecycle_conflict_is_409_but_unexpected_runtime_failure_is_500(
         app,
         "POST",
         "/api/research-workspace/paper-campaigns/campaign-1/start",
+        json_body={"expected_latest_session_id": None},
     )
     assert conflict.status_code == 409
     assert conflict.json()["code"] == "qualified_paper_start_conflict"
 
     class FailureApplication(FakeApplication):
-        def start_paper(self, _campaign_id):
+        def start_paper(self, _campaign_id, _expected_latest_session_id):
             raise RuntimeError("unexpected persistence/runtime failure")
 
     monkeypatch.setattr(
@@ -275,6 +286,93 @@ def test_paper_lifecycle_conflict_is_409_but_unexpected_runtime_failure_is_500(
         app,
         "POST",
         "/api/research-workspace/paper-campaigns/campaign-1/start",
+        json_body={"expected_latest_session_id": None},
     )
     assert failure.status_code == 500
     assert failure.json()["code"] == "qualified_paper_start_failed"
+
+
+def test_invalid_timeframe_and_timezone_fail_before_application_factory(monkeypatch):
+    calls = []
+
+    def forbidden_factory():
+        calls.append(True)
+        raise AssertionError("application factory must not run")
+
+    monkeypatch.setattr(routes, "workspace_application_factory", forbidden_factory)
+    app = FastAPI()
+    app.include_router(routes.router, prefix="/api/research-workspace")
+    base = {
+        "study_id": "study-1",
+        "symbol": "RELIANCE",
+        "strategy_id": "sma_crossover",
+        "start": "2026-01-05T09:15:00+05:30",
+        "end": "2026-01-05T10:45:00+05:30",
+        "timezone": "Asia/Kolkata",
+        "initial_capital": 100000,
+        "strategy_params": {"fast_period": 20, "slow_period": 50},
+    }
+
+    invalid_timeframe = request(
+        app,
+        "POST",
+        "/api/research-workspace/backtests/run",
+        json_body={**base, "timeframe": "1m"},
+    )
+    invalid_timezone = request(
+        app,
+        "POST",
+        "/api/research-workspace/backtests/run",
+        json_body={**base, "timeframe": "15m", "timezone": "UTC"},
+    )
+
+    assert invalid_timeframe.status_code == 422
+    assert invalid_timezone.status_code == 422
+    assert calls == []
+
+
+def test_generation_conflicts_are_http_409(monkeypatch):
+    class ConflictApplication(FakeApplication):
+        def study_strategies(self, _study_id):
+            raise ResearchWorkspaceConflict("study generation changed")
+
+        def run_wfa(self, _study_id, _expected_policy_id):
+            raise ResearchWorkspaceConflict("policy generation changed")
+
+        def send_to_paper(self, _study_id, _expected_ids):
+            raise ResearchWorkspaceConflict("WFA decision set changed")
+
+        def paper_state(self, _study_id):
+            raise ResearchWorkspaceConflict("Paper generation changed")
+
+    monkeypatch.setattr(
+        routes,
+        "workspace_application_factory",
+        lambda: ConflictApplication(),
+    )
+    app = FastAPI()
+    app.include_router(routes.router, prefix="/api/research-workspace")
+
+    study = request(app, "GET", "/api/research-workspace/studies/study-1/strategies")
+    wfa = request(
+        app,
+        "POST",
+        "/api/research-workspace/studies/study-1/wfa/run",
+        json_body={"expected_policy_id": "policy-old"},
+    )
+    paper_send = request(
+        app,
+        "POST",
+        "/api/research-workspace/studies/study-1/paper/send",
+        json_body={"expected_wfa_decision_ids": ["wfa-old"]},
+    )
+    paper_state = request(
+        app,
+        "GET",
+        "/api/research-workspace/studies/study-1/paper",
+    )
+
+    assert study.status_code == 409
+    assert wfa.status_code == 409
+    assert paper_send.status_code == 409
+    assert paper_state.status_code == 409

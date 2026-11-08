@@ -67,6 +67,9 @@ class PaperCampaignLifecycleConflict(RuntimeError):
     """Requested campaign lifecycle action conflicts with durable state."""
 
 
+_SESSION_GENERATION_UNCHECKED = object()
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -757,6 +760,7 @@ class QualifiedPaperCampaignService:
         authority: QualifiedPaperSessionAuthority,
         *,
         session_id: str,
+        expected_latest_session_id=_SESSION_GENERATION_UNCHECKED,
     ) -> PaperCampaignSession:
         campaign = authority.campaign_authority.campaign
         if campaign is None:
@@ -790,7 +794,13 @@ class QualifiedPaperCampaignService:
             state=PaperCampaignSessionState.CREATED,
         )
         try:
-            self.campaign_store.register_session(session)
+            if expected_latest_session_id is _SESSION_GENERATION_UNCHECKED:
+                self.campaign_store.register_session(session)
+            else:
+                self.campaign_store.register_session(
+                    session,
+                    expected_latest_session_id=expected_latest_session_id,
+                )
         except PaperCampaignAuthorityConflict as error:
             raise QualifiedPaperAdmissionError(str(error)) from error
         except Exception as error:

@@ -461,3 +461,99 @@ def test_session_registration_rejects_wfa_supersession(tmp_path):
     with pytest.raises(PaperCampaignAuthorityConflict):
         store.register_session(session)
     assert store.load_session(session.session_id) is None
+
+
+def _paper_session(campaign, session_id, created_at):
+    from core.research.models.paper_campaign import (
+        PaperCampaignSession,
+        PaperCampaignSessionState,
+    )
+
+    return PaperCampaignSession(
+        session_id=session_id,
+        campaign_id=campaign.campaign_id,
+        created_at=created_at,
+        evaluator_repository_revision="revision-1",
+        live_binding_id="angelone-reliance-v1",
+        live_provider="angelone",
+        live_provider_instrument_id="2885",
+        live_provider_symbol="RELIANCE",
+        state=PaperCampaignSessionState.CREATED,
+    )
+
+
+def test_session_registration_binds_exact_latest_observed_generation(tmp_path):
+    from core.research.models.paper_campaign import PaperCampaignSessionState
+    from core.research.sqlite_paper_campaign_store import (
+        PaperCampaignAuthorityConflict,
+    )
+
+    path = tmp_path / "session-generation.sqlite3"
+    campaign = _campaign("paper-campaign-generation")
+    _seed_campaign_parents(path, campaign)
+    store = SQLitePaperCampaignStore(path)
+    store.create_campaign(campaign)
+
+    first = _paper_session(
+        campaign,
+        "paper-session-a",
+        NOW + timedelta(seconds=1),
+    )
+    store.register_session(
+        first,
+        expected_latest_session_id=None,
+    )
+    store.mark_running_if_created(
+        first.session_id,
+        started_at=NOW + timedelta(seconds=2),
+    )
+    store.terminalize_session(
+        first.session_id,
+        state=PaperCampaignSessionState.STOPPED,
+        terminal_at=NOW + timedelta(seconds=3),
+        terminal_snapshot_json="{}",
+        failure_type=None,
+        failure_message=None,
+    )
+
+    second = _paper_session(
+        campaign,
+        "paper-session-b",
+        NOW + timedelta(seconds=4),
+    )
+    store.register_session(
+        second,
+        expected_latest_session_id=first.session_id,
+    )
+    store.mark_running_if_created(
+        second.session_id,
+        started_at=NOW + timedelta(seconds=5),
+    )
+    store.terminalize_session(
+        second.session_id,
+        state=PaperCampaignSessionState.STOPPED,
+        terminal_at=NOW + timedelta(seconds=6),
+        terminal_snapshot_json="{}",
+        failure_type=None,
+        failure_message=None,
+    )
+
+    stale = _paper_session(
+        campaign,
+        "paper-session-stale",
+        NOW + timedelta(seconds=7),
+    )
+    with pytest.raises(
+        PaperCampaignAuthorityConflict,
+        match="generation changed since caller observation",
+    ):
+        store.register_session(
+            stale,
+            expected_latest_session_id=first.session_id,
+        )
+
+    assert store.load_session(stale.session_id) is None
+    assert [
+        item.session_id
+        for item in store.list_sessions(campaign.campaign_id)
+    ] == [first.session_id, second.session_id]

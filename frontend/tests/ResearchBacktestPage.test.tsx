@@ -119,6 +119,7 @@ const strategies = {
       strategy_label: "SMA Crossover 20/50",
       strategy_parameters: { fast_period: 20, slow_period: 50 },
       trial_disposition: "EXECUTED",
+      trial_disposition_event_id: "trial-event-1",
       qualification_outcome: null,
       qualification_decision_id: null,
       candidate_revision_id: null,
@@ -372,6 +373,38 @@ describe("ResearchBacktestPage", () => {
     expect(screen.getByText("Gross Realized PnL")).toBeInTheDocument();
     expect(screen.getByText("Account PnL")).toBeInTheDocument();
     expect(screen.getByText("Mean Instrument Return")).toBeInTheDocument();
+  });
+
+
+  it("sends Retry with the exact displayed Trial disposition generation", async () => {
+    const retryable = {
+      ...strategies,
+      strategies: [
+        {
+          ...strategies.strategies[0],
+          trial_disposition: "FAILED",
+          trial_disposition_event_id: "trial-event-failed-2",
+          retryable: true,
+        },
+      ],
+    };
+    vi.mocked(getWorkspaceStrategies).mockResolvedValue(retryable);
+  
+    render(
+      <MemoryRouter>
+        <ResearchBacktestPage />
+      </MemoryRouter>,
+    );
+  
+    await screen.findByText(/SMA Crossover 20\/50/);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  
+    await waitFor(() => {
+      expect(retryWorkspaceBacktest).toHaveBeenCalledWith(
+        retryable.strategies[0].trial_id,
+        "trial-event-failed-2",
+      );
+    });
   });
 
 });

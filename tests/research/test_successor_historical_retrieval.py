@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from core.config.historical_source_policy import HistoricalSourcePolicy
 from core.entities.candle import Candle
 from core.entities.instrument import Instrument
 from core.market_data.historical_coverage import (
@@ -192,6 +193,8 @@ def service_for(
     *,
     provider,
     registry,
+    policy=HistoricalSourcePolicy.LOCAL_FIRST,
+    provider_factory=None,
 ):
     store = SQLiteCandleStore(
         tmp_path / "candles.db"
@@ -200,7 +203,9 @@ def service_for(
     service = SuccessorHistoricalRetrievalService(
         store=store,
         provider=provider,
+        provider_factory=provider_factory,
         registry=registry,
+        policy=policy,
     )
 
     return store, service
@@ -781,4 +786,161 @@ def test_successor_retrieval_ignores_legacy_v1_cache(
             provider_binding.binding_id,
             request,
         )
+    ]
+
+
+def test_local_only_cold_fails_without_constructing_provider(tmp_path):
+    provider_binding = binding(
+        binding_id="angelone-abc-local-only",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    constructed = []
+
+    def provider_factory():
+        constructed.append(True)
+        return RecordingProvider()
+
+    store = SQLiteCandleStore(tmp_path / "local-only-cold.db")
+    service = SuccessorHistoricalRetrievalService(
+        store=store,
+        registry=registry_for(provider_binding),
+        policy=HistoricalSourcePolicy.LOCAL_ONLY,
+        provider_factory=provider_factory,
+    )
+
+    with pytest.raises(IncompleteHistoricalCoverageError):
+        service.retrieve(
+            CONTEXT,
+            TimeRange(START, MID),
+            instrument_id=INSTRUMENT_ID,
+            provider="angelone",
+            price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+        )
+
+    assert constructed == []
+
+
+def test_local_only_warm_uses_cache_without_provider(tmp_path):
+    provider_binding = binding(
+        binding_id="angelone-abc-local-only-warm",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    request = TimeRange(START, MID)
+    cached = candle_at(START + timedelta(minutes=15), 100.0)
+    constructed = []
+
+    def provider_factory():
+        constructed.append(True)
+        return RecordingProvider()
+
+    store = SQLiteCandleStore(tmp_path / "local-only-warm.db")
+    identity = stream_identity(provider_binding)
+    store.save_acquisition_stream_retrieval(
+        identity.stream_id,
+        [cached],
+        [request],
+    )
+    service = SuccessorHistoricalRetrievalService(
+        store=store,
+        registry=registry_for(provider_binding),
+        policy=HistoricalSourcePolicy.LOCAL_ONLY,
+        provider_factory=provider_factory,
+    )
+
+    result = service.retrieve(
+        CONTEXT,
+        request,
+        instrument_id=INSTRUMENT_ID,
+        provider="angelone",
+        price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+    )
+
+    assert result.candles == (cached,)
+    assert result.source == "acquisition_stream_cache"
+    assert constructed == []
+
+
+def test_provider_backed_warm_refetches_complete_binding_segment(tmp_path):
+    provider_binding = binding(
+        binding_id="angelone-abc-provider-backed",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    request = TimeRange(START, MID)
+    cached = candle_at(START + timedelta(minutes=15), 100.0)
+    provider = RecordingProvider(
+        {provider_binding.binding_id: (cached,)}
+    )
+
+    store = SQLiteCandleStore(tmp_path / "provider-backed-warm.db")
+    identity = stream_identity(provider_binding)
+    store.save_acquisition_stream_retrieval(
+        identity.stream_id,
+        [cached],
+        [request],
+    )
+    service = SuccessorHistoricalRetrievalService(
+        store=store,
+        registry=registry_for(provider_binding),
+        policy=HistoricalSourcePolicy.PROVIDER_BACKED,
+        provider=provider,
+    )
+
+    result = service.retrieve(
+        CONTEXT,
+        request,
+        instrument_id=INSTRUMENT_ID,
+        provider="angelone",
+        price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+    )
+
+    assert provider.calls == [(provider_binding.binding_id, request)]
+    assert result.stream_usages[0].fetched_ranges == (request,)
+    assert result.candles == (cached,)
+
+
+def test_provider_backed_multi_binding_refetches_each_exact_segment(tmp_path):
+    old_binding = binding(
+        binding_id="angelone-abc-provider-old",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    new_binding = binding(
+        binding_id="angelone-abc-provider-new",
+        token="200",
+        start=MID,
+        end=END,
+    )
+    old_candle = candle_at(START + timedelta(minutes=15), 100.0)
+    new_candle = candle_at(MID + timedelta(minutes=15), 200.0)
+    provider = RecordingProvider(
+        {
+            old_binding.binding_id: (old_candle,),
+            new_binding.binding_id: (new_candle,),
+        }
+    )
+    service = SuccessorHistoricalRetrievalService(
+        store=SQLiteCandleStore(tmp_path / "provider-backed-multi.db"),
+        registry=registry_for(old_binding, new_binding),
+        policy=HistoricalSourcePolicy.PROVIDER_BACKED,
+        provider=provider,
+    )
+
+    service.retrieve(
+        CONTEXT,
+        TimeRange(START, END),
+        instrument_id=INSTRUMENT_ID,
+        provider="angelone",
+        price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+    )
+
+    assert provider.calls == [
+        (old_binding.binding_id, TimeRange(START, MID)),
+        (new_binding.binding_id, TimeRange(MID, END)),
     ]

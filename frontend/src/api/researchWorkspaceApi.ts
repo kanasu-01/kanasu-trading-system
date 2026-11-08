@@ -73,10 +73,17 @@ export async function getWorkspaceBacktestResult(
 
 export async function retryWorkspaceBacktest(
   trialId: string,
+  expectedDispositionEventId: string,
 ): Promise<WorkspaceStrategyState> {
   return apiRequest<WorkspaceStrategyState>(
     `/research-workspace/trials/${encodeURIComponent(trialId)}/retry`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expected_disposition_event_id: expectedDispositionEventId,
+      }),
+    },
     "Registered Backtest retry failed",
   );
 }
@@ -112,20 +119,32 @@ export async function getWorkspaceWfa(
 
 export async function runWorkspaceWfa(
   studyId: string,
+  expectedPolicyId: string | null,
 ): Promise<WorkspaceWfaResponse> {
   return apiRequest<WorkspaceWfaResponse>(
     `/research-workspace/studies/${encodeURIComponent(studyId)}/wfa/run`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expected_policy_id: expectedPolicyId }),
+    },
     "WFA execution failed",
   );
 }
 
 export async function sendWorkspaceStrategiesToPaper(
   studyId: string,
+  expectedWfaDecisionIds: string[],
 ): Promise<WorkspacePaperSendResponse> {
   return apiRequest<WorkspacePaperSendResponse>(
     `/research-workspace/studies/${encodeURIComponent(studyId)}/paper/send`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expected_wfa_decision_ids: expectedWfaDecisionIds,
+      }),
+    },
     "Failed to send WFA-eligible strategies to Paper",
   );
 }
@@ -152,20 +171,32 @@ export async function getWorkspacePaperHistory(
 
 export async function startWorkspacePaper(
   campaignId: string,
+  expectedLatestSessionId: string | null,
 ): Promise<WorkspacePaperHistory> {
   return apiRequest<WorkspacePaperHistory>(
     `/research-workspace/paper-campaigns/${encodeURIComponent(campaignId)}/start`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expected_latest_session_id: expectedLatestSessionId,
+      }),
+    },
     "Qualified Paper start failed",
   );
 }
 
 export async function stopWorkspacePaper(
   campaignId: string,
+  expectedSessionId: string,
 ): Promise<WorkspacePaperHistory> {
   return apiRequest<WorkspacePaperHistory>(
     `/research-workspace/paper-campaigns/${encodeURIComponent(campaignId)}/stop`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expected_session_id: expectedSessionId }),
+    },
     "Qualified Paper stop failed",
   );
 }

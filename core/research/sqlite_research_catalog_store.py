@@ -5887,6 +5887,7 @@ class SQLiteResearchCatalogStore:
         trial_id: str,
         *,
         retry_requested_at: datetime,
+        expected_disposition_event_id: str | None = None,
     ) -> tuple[
         Trial,
         ResearchJob,
@@ -5955,6 +5956,25 @@ class SQLiteResearchCatalogStore:
                     disposition_at_value,
                     _experiment_spec_id,
                 ) = trial_row
+
+                if expected_disposition_event_id is not None:
+                    latest_event = connection.execute(
+                        """
+                        SELECT event_id
+                        FROM trial_disposition_events
+                        WHERE trial_id = ?
+                        ORDER BY sequence_number DESC, event_id DESC
+                        LIMIT 1
+                        """,
+                        (trial_id,),
+                    ).fetchone()
+                    if (
+                        latest_event is None
+                        or latest_event[0] != expected_disposition_event_id
+                    ):
+                        raise ValueError(
+                            "Trial disposition generation changed since caller observation"
+                        )
 
                 if previous_disposition not in retryable:
                     raise ValueError(

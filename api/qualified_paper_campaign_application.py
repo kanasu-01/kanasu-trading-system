@@ -180,6 +180,9 @@ def prepare_qualified_paper_trading(
     )
 
 
+_SESSION_GENERATION_UNCHECKED = object()
+
+
 class QualifiedPaperCampaignApplication:
     """Coordinate durable research campaign state with the existing Paper owner."""
 
@@ -216,7 +219,12 @@ class QualifiedPaperCampaignApplication:
     def active_session(self):
         return self.service.active_session()
 
-    def start_session(self, campaign_id: str):
+    def start_session(
+        self,
+        campaign_id: str,
+        *,
+        expected_latest_session_id=_SESSION_GENERATION_UNCHECKED,
+    ):
         authority = self.service.prepare_session(campaign_id)
         prepared = prepare_qualified_paper_trading(
             authority,
@@ -227,10 +235,17 @@ class QualifiedPaperCampaignApplication:
 
         def before_start(value: PreparedLivePaperRun) -> None:
             nonlocal registered
-            self.service.register_prepared_session(
-                authority,
-                session_id=value.session.session_id,
-            )
+            if expected_latest_session_id is _SESSION_GENERATION_UNCHECKED:
+                self.service.register_prepared_session(
+                    authority,
+                    session_id=value.session.session_id,
+                )
+            else:
+                self.service.register_prepared_session(
+                    authority,
+                    session_id=value.session.session_id,
+                    expected_latest_session_id=expected_latest_session_id,
+                )
             registered = True
 
         def terminal(snapshot) -> None:
@@ -260,22 +275,35 @@ class QualifiedPaperCampaignApplication:
             )
         return self.service.history(campaign_id)
 
-    def stop_session(self, campaign_id: str):
+    def stop_session(
+        self,
+        campaign_id: str,
+        *,
+        expected_session_id: str,
+    ):
+        if not isinstance(expected_session_id, str) or not expected_session_id:
+            raise PaperCampaignLifecycleConflict(
+                "expected qualified Paper session identity is required"
+            )
         active = self.service.active_session()
-        if active is None or active.campaign_id != campaign_id:
+        if (
+            active is None
+            or active.campaign_id != campaign_id
+            or active.session_id != expected_session_id
+        ):
             raise PaperCampaignLifecycleConflict(
                 "requested PaperCampaign does not own the active qualified session"
             )
         status = self.paper_application.status()
         if (
             status.snapshot is None
-            or status.snapshot.session_id != active.session_id
+            or status.snapshot.session_id != expected_session_id
         ):
             raise PaperCampaignLifecycleConflict(
                 "durable qualified session does not match process Paper ownership"
             )
         self.paper_application.stop(
-            expected_session_id=active.session_id
+            expected_session_id=expected_session_id
         )
         return self.service.history(campaign_id)
 

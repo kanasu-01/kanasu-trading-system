@@ -6,6 +6,7 @@ import {
   getResearchWorkspaceConfig,
   getWorkspacePaperCampaigns,
   getWorkspacePaperHistory,
+  startWorkspacePaper,
   stopWorkspacePaper,
 } from "@/api/researchWorkspaceApi";
 import { ResearchPaperPage } from "@/pages/ResearchPaperPage";
@@ -211,7 +212,10 @@ describe("ResearchPaperPage", () => {
       fireEvent.click(stopButton);
 
       await waitFor(() => {
-        expect(stopWorkspacePaper).toHaveBeenCalledWith("campaign-1");
+        expect(stopWorkspacePaper).toHaveBeenCalledWith(
+          "campaign-1",
+          "session-a",
+        );
       });
       await waitFor(() => {
         expect(screen.getAllByText("STOPPED").length).toBeGreaterThan(0);
@@ -424,6 +428,87 @@ describe("ResearchPaperPage", () => {
     } finally {
       timeoutSpy.mockRestore();
     }
+  });
+
+
+  it("reconciles a lost Start response without dispatching Start twice", async () => {
+    const initial = await vi.mocked(getWorkspacePaperHistory).getMockImplementation()?.(
+      "campaign-1",
+    );
+    const base = initial as WorkspacePaperHistory;
+    const running: WorkspacePaperHistory = {
+      ...base,
+      sessions: [
+        {
+          session_id: "session-started",
+          state: "RUNNING",
+          created_at: "2026-11-07T00:00:01Z",
+          started_at: "2026-11-07T00:00:02Z",
+          terminal_at: null,
+          failure_type: null,
+          failure_message: null,
+        },
+      ],
+      runtime: {
+        active: true,
+        snapshot: {
+          session_id: "session-started",
+          status: "RUNNING",
+          strategy_name: "SMA Crossover 20/50",
+          symbol: "RELIANCE",
+          started_at: "2026-11-07T00:00:02Z",
+          stopped_at: null,
+          initial_capital: 100000,
+          cash: 100000,
+          position_size: 0,
+          position_value: 0,
+          equity: 100000,
+          realized_pnl: 0,
+          unrealized_pnl: 0,
+          total_pnl: 0,
+          peak_equity: 100000,
+          drawdown: 0,
+          active_position: null,
+          completed_trade_count: 0,
+          last_execution_event: null,
+          last_execution_price: null,
+          last_execution_quantity: null,
+          failure_type: null,
+          failure_message: null,
+        },
+      },
+      campaign_owns_runtime: true,
+    };
+
+    vi.mocked(getWorkspacePaperHistory)
+      .mockResolvedValueOnce(base)
+      .mockResolvedValueOnce(running);
+    vi.mocked(startWorkspacePaper).mockRejectedValueOnce(
+      new Error("response lost"),
+    );
+
+    render(
+      <MemoryRouter>
+        <ResearchPaperPage />
+      </MemoryRouter>,
+    );
+
+    const start = await screen.findByRole("button", {
+      name: "Start Paper Trading",
+    });
+    fireEvent.click(start);
+
+    await waitFor(() => {
+      expect(startWorkspacePaper).toHaveBeenCalledTimes(1);
+      expect(startWorkspacePaper).toHaveBeenCalledWith(
+        "campaign-1",
+        null,
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("RUNNING").length).toBeGreaterThan(0);
+    });
+    expect(startWorkspacePaper).toHaveBeenCalledTimes(1);
   });
 
 
