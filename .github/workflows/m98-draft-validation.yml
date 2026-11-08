@@ -159,3 +159,88 @@ jobs:
           path: provider-master-evidence
           if-no-files-found: error
           retention-days: 90
+
+  mechanical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify candidate diff mechanics
+        run: |
+          git diff --check 035ad39c73e69e647dbf492c999424f78c9c87bc HEAD -- . ':(exclude).github/workflows/m98-draft-validation.yml'
+          python - <<'PY'
+          import subprocess
+
+          baseline = "035ad39c73e69e647dbf492c999424f78c9c87bc"
+          excluded = ".github/workflows/m98-draft-validation.yml"
+          expected_count = 47
+
+          output = subprocess.check_output(
+              ["git", "diff", "--name-status", baseline, "HEAD", "--", ".", f":(exclude){excluded}"],
+              text=True,
+          )
+          rows = [line for line in output.splitlines() if line.strip()]
+          if len(rows) != expected_count:
+              raise SystemExit(
+                  f"expected {expected_count} candidate paths, found {len(rows)}"
+              )
+          if any(line.startswith("D\t") for line in rows):
+              raise SystemExit("candidate contains an unexpected deletion")
+          print(f"CANDIDATE_PATHS={len(rows)}")
+          print(output)
+          PY
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Install browser smoke dependency
+        run: |
+          npm install --no-save @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run assembled browser navigation smoke
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/m98-vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill "$VITE_PID" || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          cat > /tmp/m98-browser.spec.cjs <<'JS'
+          const { test, expect } = require("@playwright/test");
+
+          test("M9.8 primary workspace routes render and remain navigable", async ({ page }) => {
+            await page.goto("http://127.0.0.1:4173/");
+            for (const label of ["Home", "Backtest", "Replay", "WFA", "Paper Trading", "Portfolio"]) {
+              await expect(page.getByRole("link", { name: label })).toBeVisible();
+            }
+
+            await page.getByRole("link", { name: "Backtest" }).click();
+            await expect(page).toHaveURL(/\/backtest$/);
+
+            await page.getByRole("link", { name: "WFA" }).click();
+            await expect(page).toHaveURL(/\/wfa$/);
+
+            await page.getByRole("link", { name: "Paper Trading" }).click();
+            await expect(page).toHaveURL(/\/paper$/);
+
+            await page.goto("http://127.0.0.1:4173/paper/standalone");
+            await expect(page).toHaveURL(/\/paper\/standalone$/);
+          });
+          JS
+          npx playwright test /tmp/m98-browser.spec.cjs --browser=chromium --reporter=line
+
