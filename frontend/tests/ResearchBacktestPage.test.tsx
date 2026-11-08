@@ -389,16 +389,16 @@ describe("ResearchBacktestPage", () => {
       ],
     };
     vi.mocked(getWorkspaceStrategies).mockResolvedValue(retryable);
-  
+
     render(
       <MemoryRouter>
         <ResearchBacktestPage />
       </MemoryRouter>,
     );
-  
+
     await screen.findByText(/SMA Crossover 20\/50/);
     fireEvent.click(screen.getByRole("button", { name: "Retry Backtest" }));
-  
+
     await waitFor(() => {
       expect(retryWorkspaceBacktest).toHaveBeenCalledWith(
         retryable.strategies[0].trial_id,

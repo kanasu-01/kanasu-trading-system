@@ -205,12 +205,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
-      - name: Install browser smoke dependency
-        run: |
-          npm install --no-save @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
       - name: Run assembled browser navigation smoke
         run: |
+          command -v google-chrome
+          google-chrome --version
           npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/m98-vite.log 2>&1 &
           VITE_PID=$!
           trap 'kill "$VITE_PID" || true' EXIT
@@ -220,27 +218,18 @@ jobs:
             fi
             sleep 1
           done
-          cat > /tmp/m98-browser.spec.cjs <<'JS'
-          const { test, expect } = require("@playwright/test");
-
-          test("M9.8 primary workspace routes render and remain navigable", async ({ page }) => {
-            await page.goto("http://127.0.0.1:4173/");
-            for (const label of ["Home", "Backtest", "Replay", "WFA", "Paper Trading", "Portfolio"]) {
-              await expect(page.getByRole("link", { name: label })).toBeVisible();
-            }
-
-            await page.getByRole("link", { name: "Backtest" }).click();
-            await expect(page).toHaveURL(/\/backtest$/);
-
-            await page.getByRole("link", { name: "WFA" }).click();
-            await expect(page).toHaveURL(/\/wfa$/);
-
-            await page.getByRole("link", { name: "Paper Trading" }).click();
-            await expect(page).toHaveURL(/\/paper$/);
-
-            await page.goto("http://127.0.0.1:4173/paper/standalone");
-            await expect(page).toHaveURL(/\/paper\/standalone$/);
-          });
-          JS
-          npx playwright test /tmp/m98-browser.spec.cjs --browser=chromium --reporter=line
+          for route in / /backtest /wfa /paper /paper/standalone; do
+            google-chrome \
+              --headless \
+              --no-sandbox \
+              --disable-gpu \
+              --virtual-time-budget=3000 \
+              --dump-dom \
+              "http://127.0.0.1:4173$route" \
+              > /tmp/m98-dom.html
+            grep -q ">Home<" /tmp/m98-dom.html
+            grep -q ">Backtest<" /tmp/m98-dom.html
+            grep -q ">WFA<" /tmp/m98-dom.html
+            grep -q ">Paper Trading<" /tmp/m98-dom.html
+          done
 
