@@ -278,8 +278,8 @@ jobs:
           VALIDATION_FREEZE_COMMIT: 87e7f059491c28a3701e4ee0ccc65c6ecdc9941a
           VALIDATION_FREEZE_TREE: 8ded634993915f634df0d735daa3034df7f864e7
           VALIDATION_WORKFLOW: .github/workflows/m98-draft-validation.yml
-          DRAFT_VALIDATION_RUN_ID: "42481473563"
-          NORMAL_TEST_RUN_ID: "42481473638"
+          DRAFT_VALIDATION_RUN_ID: "42481882404"
+          NORMAL_TEST_RUN_ID: "42481882385"
           PROVIDER_MASTER_SHA256: 92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437
           PROVIDER_MASTER_BYTES: "37983303"
           PROVIDER_MASTER_RECORDS: "161793"
@@ -397,6 +397,9 @@ jobs:
           validation={
               "candidate_id":candidate_id,
               "validated_candidate_bytes_commit":freeze_commit,
+              "lean_candidate_tree":expected_tree,
+              "exact_tree_validation_commit":"307ea67bb0c817cc4e830f1ed4f14f699202ec54",
+              "exact_tree_materialization":"PASS in backend/frontend/provider/mechanical/browser jobs",
               "draft_validation_run_id":int(os.environ["DRAFT_VALIDATION_RUN_ID"]),
               "normal_test_run_id":int(os.environ["NORMAL_TEST_RUN_ID"]),
               "normal_repository_pytest_count":1968,
@@ -445,8 +448,9 @@ jobs:
               "",
               "## Readiness evidence",
               "",
-              f"M9.8 DRAFT Validation run {os.environ['DRAFT_VALIDATION_RUN_ID']}: PASS.",
+              f"M9.8 exact-tree validation run {os.environ['DRAFT_VALIDATION_RUN_ID']}: PASS.",
               f"Kanasu Test Suite run {os.environ['NORMAL_TEST_RUN_ID']}: PASS.",
+              f"Backend/frontend/provider/mechanical/browser jobs each materialized and asserted lean tree {expected_tree} before validation.",
               "Full normal repository suite: 1968 passed.",
               "Frontend npm ci, tests, strict TypeScript/Vite production build, and ESLint: PASS.",
               "Candidate mechanical diff check, exact 47-path count, and no-delete check: PASS.",
@@ -485,6 +489,71 @@ jobs:
 
           ccrf_path=out/"M98_CAND009_CCRF.md"
           ccrf_path.write_text(ccrf,encoding="utf-8")
+
+          handoff_lines = [
+              "# M98-CAND-009 Independent Review 1 Handoff",
+              "",
+              "Perform an independent Review 1 of M98-CAND-009. Do not implement, modify, stage, commit, push, merge, or repair the candidate.",
+              "",
+              "## Immutable identity",
+              "",
+              f"- Repository: kanasu-01/kanasu-trading-system",
+              f"- Target branch: m9-v1-research-platform",
+              f"- Baseline commit: {baseline}",
+              f"- Baseline tree: {baseline_tree}",
+              f"- Candidate: {candidate_id}",
+              f"- Lean candidate tree: {expected_tree}",
+              "- Candidate scope: 47 paths = 28 MODIFY + 19 ADD, 0 DELETE",
+              "- Behavioral authority: KTS-M009-S008-SPEC002-V001",
+              "",
+              "The temporary validation workflow is not part of the candidate.",
+              "Before technical review, reconstruct from M98_CAND009.patch or candidate_manifest.json plus byte-exact payloads and require the exact Git tree above. Reconstruction mismatch is a Review 1 failure.",
+              "",
+              "## Review posture",
+              "",
+              "Review independently against the specification, the exact baseline, accepted M9.4-M9.7 semantics, and SOP-G-003-V014. Prior candidate decisions and preparer conclusions are evidence only, not authority.",
+              "Do not infer correctness from green tests. Perform bounded consequence/invariant traversal across callers, callees, readers, writers, persistence, authority/identity, concurrency, stale/duplicate requests, partial failure, restart/recovery, and user observation.",
+              "",
+              "## Mandatory challenge areas",
+              "",
+              "- HistoricalSourcePolicy: LOCAL_ONLY never constructs/contacts provider; LOCAL_FIRST fetches missing binding ranges only; PROVIDER_BACKED refreshes complete effective binding segments without destructive overwrite.",
+              "- Input boundary: only 5m/15m and Asia/Kolkata; symbols remain registry-controlled; invalid requests create no durable research lineage.",
+              "- Failure semantics: operational uncertainty must not mint INVALID/FAIL/ELIGIBLE authority; positively demonstrated deterministic corruption remains deterministic.",
+              "- Aggregate generation coherence for Study, WFA and Paper projections.",
+              "- Retry is bound to exact observed TrialDispositionEvent generation inside the atomic retry transaction.",
+              "- Qualified Paper Start is bound to exact latest observed campaign-session generation and Stop to exact observed active session; stale requests cannot affect replacements.",
+              "- Send-to-Paper is bound to the exact displayed PASS WFA decision set and transaction-time current M9.5/M9.6 authority.",
+              "- Ambiguous mutation responses are reconciled through authoritative reads without hidden automatic repeat; UNKNOWN fences further mutation where required.",
+              "- UI ordering, serialized polling, selection generations and owner navigation remain truthful under stale responses.",
+              "- Partial completion remains attributable; operational sibling failure does not erase completed immutable outcomes or fabricate economic rejection.",
+              "- Preserve M4 economics, M9.4 Trial/ResearchJob semantics, M9.5 sole profitable-trade-rate criterion, M9.6 WFA math/rules, M9.7 campaign/session authority, M8 standalone smoke, long-only/unlevered/no-live-money boundary.",
+              "- Provider truth: the retained 2026-11-08 AngelOne master verifies only the five observed starter bindings. Current-master truth must not be projected backward; earlier provider-backed ranges fail closed absent evidenced binding coverage.",
+              "- Candidate controls: exact manifest/modes/bytes, controlled-document ORIGINAL/PROPOSED, reconstruction and guarded publication/read-back mechanics.",
+              "",
+              "## Evidence to verify, not trust blindly",
+              "",
+              f"- Exact-tree M9.8 validation run: {os.environ['DRAFT_VALIDATION_RUN_ID']}",
+              f"- Normal Kanasu test run: {os.environ['NORMAL_TEST_RUN_ID']}",
+              "- Full backend: 1968 passed",
+              "- Frontend: 8 files / 33 tests passed",
+              "- npm ci / production TypeScript+Vite build / ESLint: PASS",
+              "- Mechanical diff/path/no-delete gate: PASS",
+              "- Headless Chrome assembled route smoke: PASS",
+              "- Official AngelOne master verification: PASS",
+              f"- Provider master SHA-256: {os.environ['PROVIDER_MASTER_SHA256']}",
+              "",
+              "## Required reviewer output",
+              "",
+              "Start with exactly: M98_REVIEW1=PASS or M98_REVIEW1=FAIL",
+              "If FAIL, enumerate every material finding with severity, affected invariant, exact file/function or package evidence, reproducible failure sequence, why existing protection is insufficient, and minimum required correction. Search for sibling manifestations of every accepted defect family.",
+              "If PASS, state that exact reconstruction, behavioral/preservation review, adversarial concurrency/failure review, provider-temporal boundary, and candidate-control review were independently completed with no material blocking finding.",
+              "Do not implement corrections during Review 1.",
+              "",
+          ]
+          (out/"M98_CAND009_REVIEW1_HANDOFF.md").write_text(
+              "\n".join(handoff_lines),
+              encoding="utf-8",
+          )
 
           sums=[]
           for p in sorted(x for x in out.rglob("*") if x.is_file()):
