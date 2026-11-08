@@ -397,7 +397,7 @@ describe("ResearchPaperPage", () => {
 
     vi.mocked(getWorkspacePaperHistory)
       .mockResolvedValueOnce(runningHistory)
-      .mockResolvedValueOnce(refreshedHistory);
+      .mockResolvedValue(refreshedHistory);
     vi.mocked(stopWorkspacePaper).mockRejectedValueOnce(
       new Error("stop failed"),
     );

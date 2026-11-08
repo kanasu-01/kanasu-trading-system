@@ -397,7 +397,7 @@ describe("ResearchBacktestPage", () => {
     );
   
     await screen.findByText(/SMA Crossover 20\/50/);
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry Backtest" }));
   
     await waitFor(() => {
       expect(retryWorkspaceBacktest).toHaveBeenCalledWith(
