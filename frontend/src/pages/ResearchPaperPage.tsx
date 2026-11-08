@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ApiRequestError } from "@/api/apiClient";
@@ -162,12 +162,15 @@ export function ResearchPaperPage() {
   const campaignLoadSequence = useRef(0);
   const selectedCampaignRef = useRef("");
 
-  function selectCampaign(campaignId: string) {
+  const selectCampaign = useCallback((campaignId: string) => {
     selectedCampaignRef.current = campaignId;
     setSelectedCampaign(campaignId);
-  }
+  }, []);
 
-  async function loadCampaigns(studyId: string, sequence?: number) {
+  const loadCampaigns = useCallback(async (
+    studyId: string,
+    sequence?: number,
+  ) => {
     if (!studyId) {
       setCampaigns([]);
       selectCampaign("");
@@ -202,7 +205,7 @@ export function ResearchPaperPage() {
       return;
     }
     setHistory(historyValue);
-  }
+  }, [selectCampaign]);
 
   useEffect(() => {
     async function load() {
@@ -222,7 +225,7 @@ export function ResearchPaperPage() {
       }
     }
     void load();
-  }, []);
+  }, [loadCampaigns]);
 
   useEffect(() => {
     if (
