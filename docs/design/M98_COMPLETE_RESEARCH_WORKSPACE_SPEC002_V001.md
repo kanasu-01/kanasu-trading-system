@@ -3,8 +3,8 @@
 **Specification:** `KTS-M009-S008-SPEC002-V001`
 **Milestone:** M9.8 — Complete Research-Workspace Integration
 **Implementation baseline:** `035ad39c73e69e647dbf492c999424f78c9c87bc`
-**Preparation state:** DRAFT under `SOP-G-003-V014`; a canonical M9.8 candidate is assigned only after every applicable Candidate Readiness gate passes.
-**Status:** PROPOSED M9.8 behavior. DRAFT engineering has no publication authority; Independent Review 1 begins only after READY freeze.
+**Preparation state:** `M98-CAND-008` is READY/FROZEN under `SOP-G-003-V014` after every applicable Candidate Readiness gate passed.
+**Status:** PROPOSED M9.8 behavior in `M98-CAND-008`; Independent Review 1 is pending and no implementation/publication authority exists before the remaining review and human-acceptance gates.
 **Supersession:** `M98-CAND-001 / KTS-M009-S008-SPEC001-V001` is withdrawn and has no behavioral authority.
 
 ## 1. Purpose
