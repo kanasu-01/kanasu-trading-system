@@ -233,3 +233,244 @@ jobs:
             grep -q ">Paper Trading<" /tmp/m98-dom.html
           done
 
+  candidate-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build exact M98-CAND-009 review package
+        env:
+          BASELINE_COMMIT: 035ad39c73e69e647dbf492c999424f78c9c87bc
+          BASELINE_TREE: 7304ad7d651e6768b7b9e0715527c9cbe4292543
+          CANDIDATE_ID: M98-CAND-009
+          EXPECTED_CANDIDATE_TREE: e908c707dd7ffef1fe93f01a516a8ee780a3887d
+          VALIDATION_FREEZE_COMMIT: 87e7f059491c28a3701e4ee0ccc65c6ecdc9941a
+          VALIDATION_FREEZE_TREE: 8ded634993915f634df0d735daa3034df7f864e7
+          VALIDATION_WORKFLOW: .github/workflows/m98-draft-validation.yml
+          DRAFT_VALIDATION_RUN_ID: "42481473563"
+          NORMAL_TEST_RUN_ID: "42481473638"
+          PROVIDER_MASTER_SHA256: 92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437
+          PROVIDER_MASTER_BYTES: "37983303"
+          PROVIDER_MASTER_RECORDS: "161793"
+          PROVIDER_OBSERVED_AT: "2026-11-08T12:31:00.275890+00:00"
+        run: |
+          set -euo pipefail
+          OUT=/tmp/m98-cand009
+          rm -rf "$OUT"
+          mkdir -p "$OUT/add_payloads" "$OUT/modified_original" "$OUT/modified_proposed"
+          mkdir -p "$OUT/controlled_docs/original" "$OUT/controlled_docs/proposed"
+
+          cp .git/index /tmp/candidate.index
+          GIT_INDEX_FILE=/tmp/candidate.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/candidate.index git rm -q --cached --ignore-unmatch "$VALIDATION_WORKFLOW"
+          LEAN_TREE="$(GIT_INDEX_FILE=/tmp/candidate.index git write-tree)"
+          test "$LEAN_TREE" = "$EXPECTED_CANDIDATE_TREE"
+
+          git diff --check "$BASELINE_COMMIT" HEAD -- . ":(exclude)$VALIDATION_WORKFLOW"
+          git diff --binary --full-index "$BASELINE_COMMIT" HEAD -- . ":(exclude)$VALIDATION_WORKFLOW" > "$OUT/M98_CAND009.patch"
+          git diff --name-status "$BASELINE_COMMIT" HEAD -- . ":(exclude)$VALIDATION_WORKFLOW" > "$OUT/candidate_name_status.tsv"
+
+          python - <<'PY'
+          import hashlib, json, os, subprocess, zipfile
+          from pathlib import Path
+
+          root = Path.cwd()
+          out = Path("/tmp/m98-cand009")
+          baseline = os.environ["BASELINE_COMMIT"]
+          baseline_tree = os.environ["BASELINE_TREE"]
+          candidate_id = os.environ["CANDIDATE_ID"]
+          expected_tree = os.environ["EXPECTED_CANDIDATE_TREE"]
+          freeze_commit = os.environ["VALIDATION_FREEZE_COMMIT"]
+          freeze_tree = os.environ["VALIDATION_FREEZE_TREE"]
+          workflow = os.environ["VALIDATION_WORKFLOW"]
+
+          def run(*args):
+              return subprocess.check_output(args, text=True).strip()
+
+          lines = run("git","diff","--name-status",baseline,"HEAD","--",".",f":(exclude){workflow}").splitlines()
+          rows=[]
+          for line in lines:
+              if not line:
+                  continue
+              status,path=line.split("\t",1)
+              if status not in ("A","M"):
+                  raise SystemExit("unsupported status: "+line)
+              content=(root/path).read_bytes()
+              mode=run("git","ls-tree","HEAD","--",path).split()[0]
+              succ=run("git","rev-parse","HEAD:"+path)
+              row={
+                  "path":path,
+                  "status":"added" if status=="A" else "modified",
+                  "mode":mode,
+                  "successor_blob_sha":succ,
+                  "successor_sha256":hashlib.sha256(content).hexdigest(),
+                  "bytes":len(content),
+              }
+              if status=="M":
+                  pred=run("git","rev-parse",baseline+":"+path)
+                  old=subprocess.check_output(["git","show",baseline+":"+path])
+                  row["predecessor_blob_sha"]=pred
+                  row["predecessor_sha256"]=hashlib.sha256(old).hexdigest()
+                  p=out/"modified_original"/path
+                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(old)
+                  p=out/"modified_proposed"/path
+                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(content)
+              else:
+                  try:
+                      subprocess.check_output(["git","cat-file","-e",baseline+":"+path],stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      pass
+                  else:
+                      raise SystemExit("ADD exists at baseline: "+path)
+                  p=out/"add_payloads"/path
+                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(content)
+              rows.append(row)
+
+          if len(rows)!=47 or sum(r["status"]=="modified" for r in rows)!=28 or sum(r["status"]=="added" for r in rows)!=19:
+              raise SystemExit("candidate manifest count mismatch")
+
+          manifest={
+              "schema":"kanasu.m98-candidate-manifest.v1",
+              "candidate_id":candidate_id,
+              "repository":"kanasu-01/kanasu-trading-system",
+              "target_branch":"m9-v1-research-platform",
+              "baseline_commit":baseline,
+              "baseline_tree":baseline_tree,
+              "validation_freeze_commit":freeze_commit,
+              "validation_freeze_tree":freeze_tree,
+              "lean_candidate_tree":expected_tree,
+              "candidate_path_count":47,
+              "modified_count":28,
+              "added_count":19,
+              "deleted_count":0,
+              "validation_only_excluded":workflow,
+              "paths":rows,
+          }
+          (out/"candidate_manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
+
+          controlled=["docs/PROJECT_STATUS.md","docs/architecture/ARCHITECTURE.md","docs/behavior/TRACEABILITY.md","docs/roadmap/ROADMAP.md"]
+          for path in controlled:
+              old=subprocess.check_output(["git","show",baseline+":"+path])
+              new=(root/path).read_bytes()
+              po=out/"controlled_docs/original"/path; po.parent.mkdir(parents=True,exist_ok=True); po.write_bytes(old)
+              pp=out/"controlled_docs/proposed"/path; pp.parent.mkdir(parents=True,exist_ok=True); pp.write_bytes(new)
+
+          source_zip=out/"M98_CAND009_FULL_SOURCE.zip"
+          tracked=run("git","ls-files").splitlines()
+          with zipfile.ZipFile(source_zip,"w",compression=zipfile.ZIP_DEFLATED) as z:
+              for path in tracked:
+                  if path==workflow:
+                      continue
+                  z.write(root/path,arcname=path)
+
+          validation={
+              "candidate_id":candidate_id,
+              "validated_candidate_bytes_commit":freeze_commit,
+              "draft_validation_run_id":int(os.environ["DRAFT_VALIDATION_RUN_ID"]),
+              "normal_test_run_id":int(os.environ["NORMAL_TEST_RUN_ID"]),
+              "normal_repository_pytest_count":1968,
+              "backend_full_pytest":"PASS",
+              "normal_repository_pytest":"PASS",
+              "frontend_npm_ci":"PASS",
+              "frontend_tests":"PASS",
+              "frontend_build":"PASS",
+              "frontend_lint":"PASS",
+              "mechanical_diff_check":"PASS",
+              "headless_chrome_navigation_smoke":"PASS",
+              "provider_master_validation":"PASS",
+              "provider_master":{
+                  "source_url":"https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
+                  "sha256":os.environ["PROVIDER_MASTER_SHA256"],
+                  "byte_count":int(os.environ["PROVIDER_MASTER_BYTES"]),
+                  "record_count":int(os.environ["PROVIDER_MASTER_RECORDS"]),
+                  "observed_at":os.environ["PROVIDER_OBSERVED_AT"],
+                  "bindings":{"HDFCBANK-EQ":"1333","INFY-EQ":"1594","RELIANCE-EQ":"2885","SBIN-EQ":"3045","TCS-EQ":"11536"},
+              },
+          }
+          (out/"validation_evidence.json").write_text(json.dumps(validation,indent=2,sort_keys=True)+"\n")
+
+          ccrf = f"""# M98-CAND-009 Candidate Change / Reconstruction File
+
+State: READY / FROZEN FOR INDEPENDENT REVIEW 1
+Behavioral authority: KTS-M009-S008-SPEC002-V001
+Repository: kanasu-01/kanasu-trading-system
+Target branch: m9-v1-research-platform
+Expected parent: {baseline}
+Expected parent tree: {baseline_tree}
+Validation freeze commit: {freeze_commit}
+Validation freeze tree: {freeze_tree}
+Lean candidate tree: {expected_tree}
+Candidate paths: 47 = 28 MODIFY + 19 ADD; 0 DELETE
+Validation-only path excluded: {workflow}
+
+## Candidate boundary
+
+This package defines the exact lean M9.8 successor. The temporary validation workflow is not part of the candidate.
+Every modified predecessor and proposed successor is included byte-for-byte. Every ADD payload is included byte-for-byte.
+M98_CAND009.patch is a full-index binary-capable reconstruction diff.
+
+CAND009 has no implementation or publication authority. It is frozen for Independent Review 1.
+
+## Readiness evidence
+
+M9.8 DRAFT Validation run {os.environ["DRAFT_VALIDATION_RUN_ID"]}: PASS.
+Kanasu Test Suite run {os.environ["NORMAL_TEST_RUN_ID"]}: PASS.
+Full normal repository suite: 1968 passed.
+Frontend npm ci, tests, strict TypeScript/Vite production build, and ESLint: PASS.
+Candidate mechanical diff check, exact 47-path count, and no-delete check: PASS.
+Headless Chrome assembled route/navigation smoke: PASS.
+Official AngelOne provider-master verification: PASS.
+
+Provider master source: https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json
+Provider master SHA-256: {os.environ["PROVIDER_MASTER_SHA256"]}
+Provider master bytes: {os.environ["PROVIDER_MASTER_BYTES"]}
+Provider master records: {os.environ["PROVIDER_MASTER_RECORDS"]}
+Provider observation time: {os.environ["PROVIDER_OBSERVED_AT"]}
+
+The retained bootstrap snapshot binds only the five reviewed NSE cash-equity rows. Current-master truth is not projected backward.
+
+## Reconstruction
+
+Apply M98_CAND009.patch to exact parent {baseline}, or use candidate_manifest.json plus the byte-exact payload directories.
+Reconstruction must yield Git tree {expected_tree}. Any different tree is not M98-CAND-009.
+
+## Independent Review 1 scope
+
+Review independently against KTS-M009-S008-SPEC002-V001, accepted earlier-milestone semantics, and SOP-G-003-V014.
+Challenge research authority, source policy, generation coherence, stale request fencing, Retry and Paper session identities,
+Send-to-Paper transaction authority, partial completion, UI ordering, provider temporal truth, accepted economics/WFA math,
+Trial/ResearchJob semantics, no-live-money boundary, and exact reconstruction.
+
+## Publication plan - descriptive only, not authorized
+
+Only after Review 1 PASS, human disposition, and separate implementation approval:
+re-read m9-v1-research-platform; require exact parent {baseline}; stage only the 47 manifest paths;
+prove staged tree equals {expected_tree}; create a commit with exact parent/tree; require separate push approval;
+use ordinary non-force push; read back remote commit/tree/manifest; stop fail-closed on any mismatch.
+Stage, commit and push remain separately protected operations. This CCRF grants none of them.
+"""
+          ccrf_path=out/"M98_CAND009_CCRF.md"
+          ccrf_path.write_text(ccrf,encoding="utf-8")
+
+          sums=[]
+          for p in sorted(x for x in out.rglob("*") if x.is_file()):
+              if p.name=="SHA256SUMS.txt":
+                  continue
+              sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(out).as_posix())
+          (out/"SHA256SUMS.txt").write_text("\n".join(sums)+"\n")
+          print("CANDIDATE_TREE="+expected_tree)
+          print("CANDIDATE_PATHS=47")
+          print("CCRF_SHA256="+hashlib.sha256(ccrf_path.read_bytes()).hexdigest())
+          print("SOURCE_ZIP_SHA256="+hashlib.sha256(source_zip.read_bytes()).hexdigest())
+          PY
+
+          grep -q "e908c707dd7ffef1fe93f01a516a8ee780a3887d" "$OUT/M98_CAND009_CCRF.md"
+          sha256sum "$OUT/M98_CAND009_CCRF.md" "$OUT/M98_CAND009_FULL_SOURCE.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M98-CAND-009-REVIEW-PACKAGE
+          path: /tmp/m98-cand009
+          if-no-files-found: error
+          retention-days: 90
+
