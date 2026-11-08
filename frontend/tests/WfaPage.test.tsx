@@ -85,7 +85,7 @@ const wfa = {
 
 describe("WfaPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     installRadixSelectDomStubs();
     vi.mocked(getResearchWorkspaceConfig).mockResolvedValue(config);
     vi.mocked(getWorkspaceWfa).mockResolvedValue(wfa);
@@ -249,8 +249,10 @@ describe("WfaPage", () => {
 
     await screen.findByText("75%");
     const studySelect = screen.getByRole("combobox");
-    fireEvent.pointerDown(studySelect, { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByText("SMA Research Two"));
+    fireEvent.keyDown(studySelect, { key: "Enter" });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "SMA Research Two" }),
+    );
     await waitFor(() => {
       expect(studySelect).toHaveTextContent("SMA Research Two");
     });

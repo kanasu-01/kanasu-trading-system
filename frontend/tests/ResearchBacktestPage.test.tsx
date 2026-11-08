@@ -133,7 +133,7 @@ const strategies = {
 
 describe("ResearchBacktestPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     installRadixSelectDomStubs();
     vi.mocked(getResearchWorkspaceConfig).mockResolvedValue(config);
     vi.mocked(getWorkspaceStrategies).mockResolvedValue(strategies);
@@ -333,8 +333,10 @@ describe("ResearchBacktestPage", () => {
 
     await screen.findByText(/SMA Crossover 20\/50/);
     const studySelect = screen.getAllByRole("combobox")[0];
-    fireEvent.pointerDown(studySelect, { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByText("Prior Study"));
+    fireEvent.keyDown(studySelect, { key: "Enter" });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Prior Study" }),
+    );
 
     fireEvent.change(screen.getByPlaceholderText("e.g. SMA Swing Research"), {
       target: { value: "New Study" },

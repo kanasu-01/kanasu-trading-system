@@ -21,7 +21,7 @@ vi.mock("@/api/researchWorkspaceApi", () => ({
 
 describe("ResearchPaperPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(getResearchWorkspaceConfig).mockResolvedValue({
       markets: [{ id: "NSE", name: "NSE" }],
       symbols: [{ symbol: "RELIANCE", exchange: "NSE" }],
