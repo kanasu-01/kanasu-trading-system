@@ -579,7 +579,12 @@ def test_unexpected_wfa_exception_is_operational_not_invalid(tmp_path):
         raise RuntimeError("unexpected WFA infrastructure failure")
 
     app.wfa_service.evaluate_study_revision = fail
-    response = app.run_wfa(study.study_id)
+    active_policy = app.qualification_store.load_active_policy()
+    assert active_policy is not None
+    response = app.run_wfa(
+        study.study_id,
+        active_policy.policy_id,
+    )
 
     assert response.strategies[0].outcome == "OPERATIONAL_ERROR"
     assert response.strategies[0].evidence_validity == "UNKNOWN"
@@ -594,12 +599,14 @@ def test_send_to_paper_preserves_partial_results_when_one_candidate_fails(tmp_pa
         strategies=[
             SimpleNamespace(
                 candidate_revision_id=first_id,
+                decision_id="wfa-1",
                 strategy_label="SMA Crossover 20/50",
                 outcome="ELIGIBLE",
                 verdict="PASS",
             ),
             SimpleNamespace(
                 candidate_revision_id=second_id,
+                decision_id="wfa-2",
                 strategy_label="SMA Crossover 25/55",
                 outcome="ELIGIBLE",
                 verdict="PASS",
@@ -616,7 +623,10 @@ def test_send_to_paper_preserves_partial_results_when_one_candidate_fails(tmp_pa
         return SimpleNamespace(campaign_id="paper-campaign-2"), True
 
     app.qualified_paper_application.create_or_reuse_campaign = create_or_reuse
-    response = app.send_to_paper(study.study_id)
+    response = app.send_to_paper(
+        study.study_id,
+        ["wfa-1", "wfa-2"],
+    )
 
     assert calls == [first_id, second_id]
     assert [item.outcome for item in response.campaigns] == [
@@ -634,6 +644,7 @@ def test_send_to_paper_preserves_preflight_operational_error(tmp_path):
         strategies=[
             SimpleNamespace(
                 candidate_revision_id=None,
+                decision_id=None,
                 strategy_label="Revision 1",
                 outcome="OPERATIONAL_ERROR",
                 verdict=None,
@@ -648,7 +659,7 @@ def test_send_to_paper_preserves_preflight_operational_error(tmp_path):
         )
     )
 
-    response = app.send_to_paper(study.study_id)
+    response = app.send_to_paper(study.study_id, [])
 
     assert len(response.campaigns) == 1
     assert response.campaigns[0].candidate_revision_id is None
