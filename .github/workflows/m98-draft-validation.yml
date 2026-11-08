@@ -69,15 +69,17 @@ jobs:
           if not isinstance(rows, list) or not rows:
               raise SystemExit("AngelOne instrument master is not a non-empty JSON array")
 
-          expected = {
-              "HDFCBANK-EQ": "1333",
-              "INFY-EQ": "1594",
-              "RELIANCE-EQ": "2885",
-              "SBIN-EQ": "3045",
-              "TCS-EQ": "11536",
-          }
+          snapshot = json.loads(
+              Path("config/provider_snapshots/angelone_nse_eq_starter_2026-11-08.json")
+              .read_text(encoding="utf-8")
+          )
+          registry = json.loads(
+              Path("config/instrument_registry.json").read_text(encoding="utf-8")
+          )
+          expected_rows = snapshot["selected_rows"]
           selected = {}
-          for symbol, token in expected.items():
+          for symbol, expected_row in expected_rows.items():
+              token = str(expected_row["token"])
               matches = [
                   row
                   for row in rows
@@ -93,7 +95,35 @@ jobs:
                   raise SystemExit(
                       f"{symbol}: expected token {token}, got {row.get('token')}"
                   )
+              if row != expected_row:
+                  raise SystemExit(
+                      f"{symbol}: current row differs from retained bootstrap snapshot"
+                  )
               selected[symbol] = row
+
+          if snapshot["full_master_sha256"] != "92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437":
+              raise SystemExit("retained bootstrap master SHA-256 changed unexpectedly")
+          if snapshot["observed_at"] != "2026-11-08T12:31:00.275890+00:00":
+              raise SystemExit("retained bootstrap observation time changed unexpectedly")
+
+          registry_by_symbol = {
+              binding["provider_symbol"]: binding
+              for binding in registry["provider_bindings"]
+              if binding["provider"] == "angelone"
+          }
+          for provider_symbol, expected_row in expected_rows.items():
+              runtime_symbol = expected_row["name"]
+              binding = registry_by_symbol.get(runtime_symbol)
+              if binding is None:
+                  raise SystemExit(f"{runtime_symbol}: registry binding missing")
+              if str(binding["provider_instrument_id"]) != str(expected_row["token"]):
+                  raise SystemExit(f"{runtime_symbol}: registry token disagrees with snapshot")
+              if binding["provider_exchange"] != expected_row["exch_seg"]:
+                  raise SystemExit(f"{runtime_symbol}: registry exchange disagrees with snapshot")
+              if binding["effective_from"] != snapshot["observed_at"]:
+                  raise SystemExit(f"{runtime_symbol}: registry effective_from is not snapshot-bound")
+              if binding["effective_to"] is not None:
+                  raise SystemExit(f"{runtime_symbol}: bootstrap current binding must remain open until superseded")
 
           evidence = Path("provider-master-evidence")
           evidence.mkdir()

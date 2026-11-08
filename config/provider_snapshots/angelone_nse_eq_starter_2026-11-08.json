@@ -1,0 +1,76 @@
+{
+  "schema": "kanasu.provider-master-bootstrap.v1",
+  "provider": "angelone",
+  "source_url": "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
+  "observed_at": "2026-11-08T12:31:00.275890+00:00",
+  "full_master_sha256": "92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437",
+  "full_master_byte_count": 37983303,
+  "full_master_record_count": 161793,
+  "selected_rows": {
+    "HDFCBANK-EQ": {
+      "exch_seg": "NSE",
+      "expiry": "",
+      "freeze_qty": "123333",
+      "instrumenttype": "",
+      "is_cas_enabled": true,
+      "lotsize": "1",
+      "name": "HDFCBANK",
+      "strike": "-1.000000",
+      "symbol": "HDFCBANK-EQ",
+      "tick_size": "5.000000",
+      "token": "1333"
+    },
+    "INFY-EQ": {
+      "exch_seg": "NSE",
+      "expiry": "",
+      "freeze_qty": "81164",
+      "instrumenttype": "",
+      "is_cas_enabled": true,
+      "lotsize": "1",
+      "name": "INFY",
+      "strike": "-1.000000",
+      "symbol": "INFY-EQ",
+      "tick_size": "10.000000",
+      "token": "1594"
+    },
+    "RELIANCE-EQ": {
+      "exch_seg": "NSE",
+      "expiry": "",
+      "freeze_qty": "67662",
+      "instrumenttype": "",
+      "is_cas_enabled": true,
+      "lotsize": "1",
+      "name": "RELIANCE",
+      "strike": "-1.000000",
+      "symbol": "RELIANCE-EQ",
+      "tick_size": "10.000000",
+      "token": "2885"
+    },
+    "SBIN-EQ": {
+      "exch_seg": "NSE",
+      "expiry": "",
+      "freeze_qty": "92307",
+      "instrumenttype": "",
+      "is_cas_enabled": true,
+      "lotsize": "1",
+      "name": "SBIN",
+      "strike": "-1.000000",
+      "symbol": "SBIN-EQ",
+      "tick_size": "5.000000",
+      "token": "3045"
+    },
+    "TCS-EQ": {
+      "exch_seg": "NSE",
+      "expiry": "",
+      "freeze_qty": "39798",
+      "instrumenttype": "",
+      "is_cas_enabled": true,
+      "lotsize": "1",
+      "name": "TCS",
+      "strike": "-1.000000",
+      "symbol": "TCS-EQ",
+      "tick_size": "10.000000",
+      "token": "11536"
+    }
+  }
+}

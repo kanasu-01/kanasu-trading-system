@@ -61,7 +61,7 @@
       "provider_exchange": "NSE",
       "provider_segment": "nse_cm",
       "provider_symbol": "HDFCBANK",
-      "effective_from": null,
+      "effective_from": "2026-11-08T12:31:00.275890+00:00",
       "effective_to": null
     },
     {
@@ -72,7 +72,7 @@
       "provider_exchange": "NSE",
       "provider_segment": "nse_cm",
       "provider_symbol": "INFY",
-      "effective_from": null,
+      "effective_from": "2026-11-08T12:31:00.275890+00:00",
       "effective_to": null
     },
     {
@@ -83,7 +83,7 @@
       "provider_exchange": "NSE",
       "provider_segment": "nse_cm",
       "provider_symbol": "RELIANCE",
-      "effective_from": null,
+      "effective_from": "2026-11-08T12:31:00.275890+00:00",
       "effective_to": null
     },
     {
@@ -94,7 +94,7 @@
       "provider_exchange": "NSE",
       "provider_segment": "nse_cm",
       "provider_symbol": "SBIN",
-      "effective_from": null,
+      "effective_from": "2026-11-08T12:31:00.275890+00:00",
       "effective_to": null
     },
     {
@@ -105,7 +105,7 @@
       "provider_exchange": "NSE",
       "provider_segment": "nse_cm",
       "provider_symbol": "TCS",
-      "effective_from": null,
+      "effective_from": "2026-11-08T12:31:00.275890+00:00",
       "effective_to": null
     }
   ]

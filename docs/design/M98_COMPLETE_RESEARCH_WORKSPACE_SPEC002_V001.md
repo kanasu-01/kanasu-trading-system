@@ -3,8 +3,8 @@
 **Specification:** `KTS-M009-S008-SPEC002-V001`
 **Milestone:** M9.8 — Complete Research-Workspace Integration
 **Implementation baseline:** `035ad39c73e69e647dbf492c999424f78c9c87bc`
-**Preparation state:** `M98-CAND-008` is READY/FROZEN under `SOP-G-003-V014` after every applicable Candidate Readiness gate passed.
-**Status:** PROPOSED M9.8 behavior in `M98-CAND-008`; Independent Review 1 is pending and no implementation/publication authority exists before the remaining review and human-acceptance gates.
+**Preparation state:** POST-CAND008 corrective DRAFT under `SOP-G-003-V014`; no successor candidate identity exists until the corrected successor passes Candidate Readiness.
+**Status:** PROPOSED M9.8 behavior. CAND008 failed Independent Review 1; corrective DRAFT engineering has no implementation/publication authority.
 **Supersession:** `M98-CAND-001 / KTS-M009-S008-SPEC001-V001` is withdrawn and has no behavioral authority.
 
 ## 1. Purpose
@@ -143,6 +143,24 @@ Provider tokens never become Kanasu's canonical instrument identity.
 The existing temporary legacy `RELIANCE → 2885` map may remain only where necessary to preserve standalone M8 compatibility. It is not registered-research authority.
 
 Provider-binding transitions use the existing M9.3 effective-dated mechanism rather than rewriting historical bindings.
+
+### 5.3 Bootstrap provider-master provenance
+
+The initial five AngelOne NSE cash-equity bindings are backed by the retained repository snapshot
+`config/provider_snapshots/angelone_nse_eq_starter_2026-11-08.json`.
+
+That snapshot records the exact five authoritative master rows plus the source URL, observation time,
+full-master SHA-256, byte count and record count. The corresponding provider bindings begin at that
+verified observation time. Kanasu does **not** project the current daily master backward into earlier
+historical periods.
+
+A provider-backed historical request before the earliest defensible binding interval therefore fails
+closed unless a separately retained historical binding snapshot establishes coverage. A future master
+change closes/supersedes the prior binding through the existing M9.3 effective-dated mechanism rather
+than rewriting historical provenance.
+
+Automatic daily broker-master synchronization remains outside M9.8 implementation scope; the retained
+bootstrap snapshot is the immutable starting evidence for that later startup/day-refresh mechanism.
 
 ## 6. Backtest workspace
 
