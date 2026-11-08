@@ -11,6 +11,26 @@ import {
 import { WfaPage } from "@/pages/WfaPage";
 import type { WorkspaceWfaResponse } from "@/types/researchWorkspace";
 
+
+function installRadixSelectDomStubs() {
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+    configurable: true,
+    value: () => false,
+  });
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+    configurable: true,
+    value: () => undefined,
+  });
+  Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", {
+    configurable: true,
+    value: () => undefined,
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => undefined,
+  });
+}
+
 vi.mock("@/api/researchWorkspaceApi", () => ({
   getResearchWorkspaceConfig: vi.fn(),
   getWorkspaceWfa: vi.fn(),
@@ -66,6 +86,7 @@ const wfa = {
 describe("WfaPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installRadixSelectDomStubs();
     vi.mocked(getResearchWorkspaceConfig).mockResolvedValue(config);
     vi.mocked(getWorkspaceWfa).mockResolvedValue(wfa);
     vi.mocked(runWorkspaceWfa).mockResolvedValue(wfa);

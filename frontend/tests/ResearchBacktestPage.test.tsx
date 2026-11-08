@@ -14,6 +14,26 @@ import {
 } from "@/api/researchWorkspaceApi";
 import { ResearchBacktestPage } from "@/pages/ResearchBacktestPage";
 
+
+function installRadixSelectDomStubs() {
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+    configurable: true,
+    value: () => false,
+  });
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+    configurable: true,
+    value: () => undefined,
+  });
+  Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", {
+    configurable: true,
+    value: () => undefined,
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => undefined,
+  });
+}
+
 vi.mock("@/api/researchWorkspaceApi", () => ({
   createWorkspaceStudy: vi.fn(),
   getResearchWorkspaceConfig: vi.fn(),
@@ -114,6 +134,7 @@ const strategies = {
 describe("ResearchBacktestPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installRadixSelectDomStubs();
     vi.mocked(getResearchWorkspaceConfig).mockResolvedValue(config);
     vi.mocked(getWorkspaceStrategies).mockResolvedValue(strategies);
     vi.mocked(getWorkspaceBacktestResult).mockResolvedValue(savedResult);
@@ -254,6 +275,9 @@ describe("ResearchBacktestPage", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Send Strategies to WFA" }),
     );
+    fireEvent.change(screen.getByLabelText("Qualification threshold"), {
+      target: { value: "50" },
+    });
     fireEvent.click(
       screen.getByRole("button", { name: "Apply and Send" }),
     );
@@ -272,19 +296,34 @@ describe("ResearchBacktestPage", () => {
     const oldRead = new Promise<typeof strategies>((resolve) => {
       resolveOld = resolve;
     });
-    const newStudy = {
+    const priorStudy = {
       study_id: "study-2",
-      display_title: "New Study",
+      display_title: "Prior Study",
       created_at: "2026-11-07T00:01:00Z",
       archived: false,
     };
-    const configAfterCreate = { ...config, studies: [...config.studies, newStudy] };
+    const newStudy = {
+      study_id: "study-3",
+      display_title: "New Study",
+      created_at: "2026-11-07T00:02:00Z",
+      archived: false,
+    };
+    const configBeforeCreate = {
+      ...config,
+      studies: [...config.studies, priorStudy],
+    };
+    const configAfterCreate = {
+      ...configBeforeCreate,
+      studies: [...configBeforeCreate.studies, newStudy],
+    };
 
-    vi.mocked(getWorkspaceStrategies).mockReturnValueOnce(oldRead);
-    vi.mocked(createWorkspaceStudy).mockResolvedValueOnce(newStudy);
     vi.mocked(getResearchWorkspaceConfig)
-      .mockResolvedValueOnce(config)
+      .mockResolvedValueOnce(configBeforeCreate)
       .mockResolvedValueOnce(configAfterCreate);
+    vi.mocked(getWorkspaceStrategies)
+      .mockResolvedValueOnce(strategies)
+      .mockReturnValueOnce(oldRead);
+    vi.mocked(createWorkspaceStudy).mockResolvedValueOnce(newStudy);
 
     render(
       <MemoryRouter>
@@ -292,12 +331,15 @@ describe("ResearchBacktestPage", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText("SMA Research");
-    fireEvent.click(screen.getByRole("button", { name: "New Study" }));
+    await screen.findByText(/SMA Crossover 20\/50/);
+    const studySelect = screen.getAllByRole("combobox")[0];
+    fireEvent.pointerDown(studySelect, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByText("Prior Study"));
+
     fireEvent.change(screen.getByPlaceholderText("e.g. SMA Swing Research"), {
       target: { value: "New Study" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Study" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createWorkspaceStudy).toHaveBeenCalledWith("New Study"));
     await act(async () => {

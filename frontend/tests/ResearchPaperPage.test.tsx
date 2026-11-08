@@ -172,11 +172,15 @@ describe("ResearchPaperPage", () => {
     };
 
     let pollHandler: (() => void) | null = null;
+    const realSetTimeout = window.setTimeout.bind(window);
     const timeoutSpy = vi
       .spyOn(window, "setTimeout")
-      .mockImplementation((handler) => {
-        pollHandler = handler as () => void;
-        return 1;
+      .mockImplementation((handler, timeout, ...args) => {
+        if (timeout === 2000) {
+          pollHandler = handler as () => void;
+          return 1;
+        }
+        return realSetTimeout(handler, timeout, ...args);
       });
     let resolvePoll!: (value: WorkspacePaperHistory) => void;
     const latePoll = new Promise<WorkspacePaperHistory>((resolve) => {
@@ -267,9 +271,13 @@ describe("ResearchPaperPage", () => {
     };
 
     const timeoutHandlers: Array<() => void> = [];
-    const timeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation((handler) => {
-      timeoutHandlers.push(handler as () => void);
-      return timeoutHandlers.length;
+    const realSetTimeout = window.setTimeout.bind(window);
+    const timeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation((handler, timeout, ...args) => {
+      if (timeout === 2000) {
+        timeoutHandlers.push(handler as () => void);
+        return timeoutHandlers.length;
+      }
+      return realSetTimeout(handler, timeout, ...args);
     });
     let resolvePoll!: (value: WorkspacePaperHistory) => void;
     const pendingPoll = new Promise<WorkspacePaperHistory>((resolve) => {
@@ -372,11 +380,15 @@ describe("ResearchPaperPage", () => {
     };
 
     const timeoutHandlers: Array<() => void> = [];
+    const realSetTimeout = window.setTimeout.bind(window);
     const timeoutSpy = vi
       .spyOn(window, "setTimeout")
-      .mockImplementation((handler) => {
-        timeoutHandlers.push(handler as () => void);
-        return timeoutHandlers.length;
+      .mockImplementation((handler, timeout, ...args) => {
+        if (timeout === 2000) {
+          timeoutHandlers.push(handler as () => void);
+          return timeoutHandlers.length;
+        }
+        return realSetTimeout(handler, timeout, ...args);
       });
 
     vi.mocked(getWorkspacePaperHistory)
