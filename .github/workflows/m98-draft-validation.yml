@@ -390,66 +390,69 @@ jobs:
           }
           (out/"validation_evidence.json").write_text(json.dumps(validation,indent=2,sort_keys=True)+"\n")
 
-          ccrf = f"""# M98-CAND-009 Candidate Change / Reconstruction File
+          ccrf_lines = [
+              "# M98-CAND-009 Candidate Change / Reconstruction File",
+              "",
+              "State: READY / FROZEN FOR INDEPENDENT REVIEW 1",
+              "Behavioral authority: KTS-M009-S008-SPEC002-V001",
+              "Repository: kanasu-01/kanasu-trading-system",
+              "Target branch: m9-v1-research-platform",
+              f"Expected parent: {baseline}",
+              f"Expected parent tree: {baseline_tree}",
+              f"Validation freeze commit: {freeze_commit}",
+              f"Validation freeze tree: {freeze_tree}",
+              f"Lean candidate tree: {expected_tree}",
+              "Candidate paths: 47 = 28 MODIFY + 19 ADD; 0 DELETE",
+              f"Validation-only path excluded: {workflow}",
+              "",
+              "## Candidate boundary",
+              "",
+              "This package defines the exact lean M9.8 successor. The temporary validation workflow is not part of the candidate.",
+              "Every modified predecessor and proposed successor is included byte-for-byte. Every ADD payload is included byte-for-byte.",
+              "M98_CAND009.patch is a full-index binary-capable reconstruction diff.",
+              "",
+              "CAND009 has no implementation or publication authority. It is frozen for Independent Review 1.",
+              "",
+              "## Readiness evidence",
+              "",
+              f"M9.8 DRAFT Validation run {os.environ['DRAFT_VALIDATION_RUN_ID']}: PASS.",
+              f"Kanasu Test Suite run {os.environ['NORMAL_TEST_RUN_ID']}: PASS.",
+              "Full normal repository suite: 1968 passed.",
+              "Frontend npm ci, tests, strict TypeScript/Vite production build, and ESLint: PASS.",
+              "Candidate mechanical diff check, exact 47-path count, and no-delete check: PASS.",
+              "Headless Chrome assembled route/navigation smoke: PASS.",
+              "Official AngelOne provider-master verification: PASS.",
+              "",
+              "Provider master source: https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
+              f"Provider master SHA-256: {os.environ['PROVIDER_MASTER_SHA256']}",
+              f"Provider master bytes: {os.environ['PROVIDER_MASTER_BYTES']}",
+              f"Provider master records: {os.environ['PROVIDER_MASTER_RECORDS']}",
+              f"Provider observation time: {os.environ['PROVIDER_OBSERVED_AT']}",
+              "",
+              "The retained bootstrap snapshot binds only the five reviewed NSE cash-equity rows. Current-master truth is not projected backward.",
+              "",
+              "## Reconstruction",
+              "",
+              f"Apply M98_CAND009.patch to exact parent {baseline}, or use candidate_manifest.json plus the byte-exact payload directories.",
+              f"Reconstruction must yield Git tree {expected_tree}. Any different tree is not M98-CAND-009.",
+              "",
+              "## Independent Review 1 scope",
+              "",
+              "Review independently against KTS-M009-S008-SPEC002-V001, accepted earlier-milestone semantics, and SOP-G-003-V014.",
+              "Challenge research authority, source policy, generation coherence, stale request fencing, Retry and Paper session identities,",
+              "Send-to-Paper transaction authority, partial completion, UI ordering, provider temporal truth, accepted economics/WFA math,",
+              "Trial/ResearchJob semantics, no-live-money boundary, and exact reconstruction.",
+              "",
+              "## Publication plan - descriptive only, not authorized",
+              "",
+              "Only after Review 1 PASS, human disposition, and separate implementation approval:",
+              f"re-read m9-v1-research-platform; require exact parent {baseline}; stage only the 47 manifest paths;",
+              f"prove staged tree equals {expected_tree}; create a commit with exact parent/tree; require separate push approval;",
+              "use ordinary non-force push; read back remote commit/tree/manifest; stop fail-closed on any mismatch.",
+              "Stage, commit and push remain separately protected operations. This CCRF grants none of them.",
+          ]
+          ccrf = "\n".join(ccrf_lines) + "\n"
 
-State: READY / FROZEN FOR INDEPENDENT REVIEW 1
-Behavioral authority: KTS-M009-S008-SPEC002-V001
-Repository: kanasu-01/kanasu-trading-system
-Target branch: m9-v1-research-platform
-Expected parent: {baseline}
-Expected parent tree: {baseline_tree}
-Validation freeze commit: {freeze_commit}
-Validation freeze tree: {freeze_tree}
-Lean candidate tree: {expected_tree}
-Candidate paths: 47 = 28 MODIFY + 19 ADD; 0 DELETE
-Validation-only path excluded: {workflow}
-
-## Candidate boundary
-
-This package defines the exact lean M9.8 successor. The temporary validation workflow is not part of the candidate.
-Every modified predecessor and proposed successor is included byte-for-byte. Every ADD payload is included byte-for-byte.
-M98_CAND009.patch is a full-index binary-capable reconstruction diff.
-
-CAND009 has no implementation or publication authority. It is frozen for Independent Review 1.
-
-## Readiness evidence
-
-M9.8 DRAFT Validation run {os.environ["DRAFT_VALIDATION_RUN_ID"]}: PASS.
-Kanasu Test Suite run {os.environ["NORMAL_TEST_RUN_ID"]}: PASS.
-Full normal repository suite: 1968 passed.
-Frontend npm ci, tests, strict TypeScript/Vite production build, and ESLint: PASS.
-Candidate mechanical diff check, exact 47-path count, and no-delete check: PASS.
-Headless Chrome assembled route/navigation smoke: PASS.
-Official AngelOne provider-master verification: PASS.
-
-Provider master source: https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json
-Provider master SHA-256: {os.environ["PROVIDER_MASTER_SHA256"]}
-Provider master bytes: {os.environ["PROVIDER_MASTER_BYTES"]}
-Provider master records: {os.environ["PROVIDER_MASTER_RECORDS"]}
-Provider observation time: {os.environ["PROVIDER_OBSERVED_AT"]}
-
-The retained bootstrap snapshot binds only the five reviewed NSE cash-equity rows. Current-master truth is not projected backward.
-
-## Reconstruction
-
-Apply M98_CAND009.patch to exact parent {baseline}, or use candidate_manifest.json plus the byte-exact payload directories.
-Reconstruction must yield Git tree {expected_tree}. Any different tree is not M98-CAND-009.
-
-## Independent Review 1 scope
-
-Review independently against KTS-M009-S008-SPEC002-V001, accepted earlier-milestone semantics, and SOP-G-003-V014.
-Challenge research authority, source policy, generation coherence, stale request fencing, Retry and Paper session identities,
-Send-to-Paper transaction authority, partial completion, UI ordering, provider temporal truth, accepted economics/WFA math,
-Trial/ResearchJob semantics, no-live-money boundary, and exact reconstruction.
-
-## Publication plan - descriptive only, not authorized
-
-Only after Review 1 PASS, human disposition, and separate implementation approval:
-re-read m9-v1-research-platform; require exact parent {baseline}; stage only the 47 manifest paths;
-prove staged tree equals {expected_tree}; create a commit with exact parent/tree; require separate push approval;
-use ordinary non-force push; read back remote commit/tree/manifest; stop fail-closed on any mismatch.
-Stage, commit and push remain separately protected operations. This CCRF grants none of them.
-"""
           ccrf_path=out/"M98_CAND009_CCRF.md"
           ccrf_path.write_text(ccrf,encoding="utf-8")
 
