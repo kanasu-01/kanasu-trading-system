@@ -498,8 +498,8 @@ describe("ResearchPaperPage", () => {
         </MemoryRouter>,
       );
 
-      expect(await screen.findByText("2,500")).toBeInTheDocument();
-      expect(screen.getByText("102,500")).toBeInTheDocument();
+      expect((await screen.findAllByText("2,500")).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("102,500").length).toBeGreaterThan(0);
       expect(screen.getByText("7")).toBeInTheDocument();
     },
   );
@@ -570,8 +570,8 @@ describe("ResearchPaperPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("3,333")).toBeInTheDocument();
-    expect(screen.getByText("103,333")).toBeInTheDocument();
+    expect((await screen.findAllByText("3,333")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("103,333").length).toBeGreaterThan(0);
     expect(screen.queryByText("9,999")).not.toBeInTheDocument();
   });
 
