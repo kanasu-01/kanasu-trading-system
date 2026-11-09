@@ -1,4 +1,4 @@
-name: M9.8 CAND012 PRE-FREEZE Validation
+name: M9.8 CAND012 Canonical HTML Freeze
 
 on:
   push:
@@ -10,475 +10,329 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run complete backend regression
-        run: pytest
-
-  paper-lifecycle-invariants:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run coherent Paper lifecycle and display-lineage controls
-        run: |
-          pytest tests/api/test_m98_research_workspace_application.py \
-            -k "paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot" -q
-          pytest tests/api/test_paper_trading_application.py -q
-          pytest tests/research/test_m97_qualified_paper_campaign.py -q
-
-  authority-data-invariants:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run authority, snapshot, provider-freshness and registry controls
-        run: |
-          pytest \
-            tests/api/test_m98_research_workspace_application.py \
-            tests/research/test_m96_candidate_bound_wfa.py \
-            tests/research/test_m98_workspace_store_extensions.py \
-            tests/research/test_successor_historical_retrieval.py \
-            tests/market_data/test_instrument_registry_loader.py -q
-
-  lifecycle-preservation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run Retry, duplicate, concurrency and exact-session preservation controls
-        run: |
-          pytest \
-            tests/api/test_m98_research_workspace_application.py \
-            tests/research/test_m98_workspace_store_extensions.py \
-            tests/api/test_paper_trading_application.py \
-            tests/research/test_m97_qualified_paper_campaign.py \
-            -k "start_does_not_implicitly_retry_failed_trial or send_to_paper_preserves_partial_results_when_one_candidate_fails or concurrent_send_to_paper_reuses_one_matching_campaign or session_registration_binds_exact_latest_observed_generation or expected_session_stop_rejects_different_active_session or concurrent_start_allows_only_one_composition or sqlite_campaign_session_survives_reopen_and_restart_recovery or new_session_after_interruption_rechecks_current_authority or paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot" -q
-
-  process-review-binding:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - name: Bind mandatory third-failure and RED reconstruction records
-        run: |
-          echo "THIRD_FAILURE_ROOT_CAUSE_SHA256=a0833450bb1e72b0f384093f598318d9911cfb930c0452b4bd2bffeeb35131ae"
-          echo "CAND012_RED_RECONSTRUCTION_SHA256=297ba3b7568ecb67837438218aa819615e195d96c8f68bbb792da21f6f501dd0"
-          echo "PREPARATION_METHOD=state-transition-and-invariant-family"
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify exact M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - run: npm run lint
-
-  provider-master:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Report current M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Verify current AngelOne instrument master
-        run: |
-          python - <<'PY'
-          import hashlib
-          import json
-          from decimal import Decimal
-          from pathlib import Path
-          import urllib.request
-
-          url = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
-          request = urllib.request.Request(
-              url,
-              headers={"User-Agent": "Kanasu-M9.8-validation/1.0"},
-          )
-          with urllib.request.urlopen(request, timeout=60) as response:
-              raw = response.read()
-
-          digest = hashlib.sha256(raw).hexdigest()
-          rows = json.loads(raw)
-          if not isinstance(rows, list) or not rows:
-              raise SystemExit("AngelOne instrument master is not a non-empty JSON array")
-
-          snapshot = json.loads(
-              Path("config/provider_snapshots/angelone_nse_eq_starter_2026-11-08.json")
-              .read_text(encoding="utf-8")
-          )
-          registry = json.loads(
-              Path("config/instrument_registry.json").read_text(encoding="utf-8")
-          )
-          expected_rows = snapshot["selected_rows"]
-          selected = {}
-          for symbol, expected_row in expected_rows.items():
-              token = str(expected_row["token"])
-              matches = [
-                  row
-                  for row in rows
-                  if row.get("exch_seg") == "NSE"
-                  and row.get("symbol") == symbol
-              ]
-              if len(matches) != 1:
-                  raise SystemExit(
-                      f"{symbol}: expected exactly one NSE row, found {len(matches)}"
-                  )
-              row = matches[0]
-              if str(row.get("token")) != token:
-                  raise SystemExit(
-                      f"{symbol}: expected token {token}, got {row.get('token')}"
-                  )
-              critical_fields = (
-                  "token",
-                  "symbol",
-                  "name",
-                  "exch_seg",
-                  "lotsize",
-                  "tick_size",
-              )
-              changed_critical = {
-                  field: {
-                      "retained": expected_row.get(field),
-                      "current": row.get(field),
-                  }
-                  for field in critical_fields
-                  if row.get(field) != expected_row.get(field)
-              }
-              if changed_critical:
-                  raise SystemExit(
-                      f"{symbol}: current authority fields changed: "
-                      f"{json.dumps(changed_critical, sort_keys=True)}"
-                  )
-              if row != expected_row:
-                  changed_non_authority = {
-                      field: {
-                          "retained": expected_row.get(field),
-                          "current": row.get(field),
-                      }
-                      for field in sorted(
-                          set(row) | set(expected_row)
-                      )
-                      if (
-                          field not in critical_fields
-                          and row.get(field) != expected_row.get(field)
-                      )
-                  }
-                  print(
-                      "ANGELONE_NON_AUTHORITY_ROW_DRIFT="
-                      + symbol
-                      + ":"
-                      + json.dumps(
-                          changed_non_authority,
-                          sort_keys=True,
-                          separators=(",", ":"),
-                      )
-                  )
-              selected[symbol] = row
-
-          if snapshot["full_master_sha256"] != "92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437":
-              raise SystemExit("retained bootstrap master SHA-256 changed unexpectedly")
-          if snapshot["observed_at"] != "2026-11-08T12:31:00.275890+00:00":
-              raise SystemExit("retained bootstrap observation time changed unexpectedly")
-
-          registry_by_symbol = {
-              binding["provider_symbol"]: binding
-              for binding in registry["provider_bindings"]
-              if binding["provider"] == "angelone"
-          }
-          registry_instruments = {
-              instrument["symbol"]: instrument
-              for instrument in registry["instruments"]
-          }
-          for provider_symbol, expected_row in expected_rows.items():
-              runtime_symbol = expected_row["name"]
-              binding = registry_by_symbol.get(runtime_symbol)
-              instrument = registry_instruments.get(runtime_symbol)
-              if binding is None:
-                  raise SystemExit(f"{runtime_symbol}: registry binding missing")
-              if instrument is None:
-                  raise SystemExit(f"{runtime_symbol}: registry instrument missing")
-              expected_tick = Decimal(str(expected_row["tick_size"])) / Decimal("100")
-              actual_tick = Decimal(str(instrument["tick_size"]))
-              if actual_tick != expected_tick:
-                  raise SystemExit(
-                      f"{runtime_symbol}: registry tick {actual_tick} disagrees "
-                      f"with provider-normalized tick {expected_tick}"
-                  )
-              if instrument["effective_from"] != snapshot["observed_at"]:
-                  raise SystemExit(
-                      f"{runtime_symbol}: instrument metadata is not snapshot-bound"
-                  )
-              if instrument["effective_to"] is not None:
-                  raise SystemExit(
-                      f"{runtime_symbol}: bootstrap instrument metadata must remain open until superseded"
-                  )
-              if str(binding["provider_instrument_id"]) != str(expected_row["token"]):
-                  raise SystemExit(f"{runtime_symbol}: registry token disagrees with snapshot")
-              if binding["provider_exchange"] != expected_row["exch_seg"]:
-                  raise SystemExit(f"{runtime_symbol}: registry exchange disagrees with snapshot")
-              if binding["effective_from"] != snapshot["observed_at"]:
-                  raise SystemExit(f"{runtime_symbol}: registry effective_from is not snapshot-bound")
-              if binding["effective_to"] is not None:
-                  raise SystemExit(f"{runtime_symbol}: bootstrap current binding must remain open until superseded")
-
-          evidence = Path("provider-master-evidence")
-          evidence.mkdir()
-          (evidence / "OpenAPIScripMaster.json").write_bytes(raw)
-          (evidence / "manifest.json").write_text(
-              json.dumps(
-                  {
-                      "source_url": url,
-                      "sha256": digest,
-                      "byte_count": len(raw),
-                      "record_count": len(rows),
-                      "selected_rows": selected,
-                  },
-                  indent=2,
-                  sort_keys=True,
-              )
-              + "\n",
-              encoding="utf-8",
-          )
-
-          print(f"ANGELONE_MASTER_SHA256={digest}")
-          print(f"ANGELONE_MASTER_BYTES={len(raw)}")
-          print(f"ANGELONE_MASTER_RECORDS={len(rows)}")
-          for symbol in sorted(selected):
-              print(
-                  f"ANGELONE_BINDING={symbol}:{selected[symbol].get('token')}:"
-                  f"{selected[symbol].get('exch_seg')}"
-              )
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: m98-angelone-provider-master
-          path: provider-master-evidence
-          if-no-files-found: error
-          retention-days: 90
-
-  mechanical:
+  canonical-html:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Report current M98-CAND-012 lean draft tree
+
+      - name: Verify exact candidate tree and target baseline
+        env:
+          BASELINE_COMMIT: 035ad39c73e69e647dbf492c999424f78c9c87bc
+          BASELINE_TREE: 7304ad7d651e6768b7b9e0715527c9cbe4292543
+          EXPECTED_TREE: 5ffb349ad0a6baf980744c3018a1411f8cf2d19b
+          WORKFLOW_PATH: .github/workflows/m98-draft-validation.yml
         run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          set -euo pipefail
+          test "$(git rev-parse "$BASELINE_COMMIT^{tree}")" = "$BASELINE_TREE"
+          INDEX_PATH="$(git rev-parse --git-path index)"
           case "$INDEX_PATH" in
             /*) ;;
             *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
           esac
           cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - name: Verify candidate diff mechanics
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git rm -q --cached --ignore-unmatch "$WORKFLOW_PATH"
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "$EXPECTED_TREE"
+
+      - name: Generate single canonical HTML CCRF draft
+        env:
+          BASELINE_COMMIT: 035ad39c73e69e647dbf492c999424f78c9c87bc
+          BASELINE_TREE: 7304ad7d651e6768b7b9e0715527c9cbe4292543
+          EXPECTED_TREE: 5ffb349ad0a6baf980744c3018a1411f8cf2d19b
+          VALIDATED_PREP_COMMIT: 979f83464434bde894bf5978d03774b97f5162de
+          VALIDATED_PREP_TREE: 7a5c84b51da07ff7027815b886d807d0931cb8c4
+          READINESS_RUN_ID: "42626748972"
+          NORMAL_RUN_ID: "42626748989"
+          RCA_SHA256: a0833450bb1e72b0f384093f598318d9911cfb930c0452b4bd2bffeeb35131ae
+          RED_SHA256: 297ba3b7568ecb67837438218aa819615e195d96c8f68bbb792da21f6f501dd0
+          WORKFLOW_PATH: .github/workflows/m98-draft-validation.yml
         run: |
-          git diff --check 035ad39c73e69e647dbf492c999424f78c9c87bc HEAD -- . ':(exclude).github/workflows/m98-draft-validation.yml'
           python - <<'PY'
+          import hashlib
+          import html
+          import json
+          import os
           import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
 
-          baseline = "035ad39c73e69e647dbf492c999424f78c9c87bc"
-          excluded = ".github/workflows/m98-draft-validation.yml"
-          expected_count = 47
+          root = Path.cwd()
+          out = Path("/tmp/M98_CAND012_CCRF_DRAFT.html")
+          baseline = os.environ["BASELINE_COMMIT"]
+          baseline_tree = os.environ["BASELINE_TREE"]
+          candidate_tree = os.environ["EXPECTED_TREE"]
+          workflow = os.environ["WORKFLOW_PATH"]
+          candidate_id = "M98-CAND-012"
+          spec_path = "docs/design/M98_COMPLETE_RESEARCH_WORKSPACE_SPEC002_V001.md"
 
-          output = subprocess.check_output(
-              ["git", "diff", "--name-status", baseline, "HEAD", "--", ".", f":(exclude){excluded}"],
-              text=True,
+          def run(*args):
+              return subprocess.check_output(args, text=True).strip()
+
+          def show(ref, path):
+              return subprocess.check_output(["git","show",f"{ref}:{path}"])
+
+          def esc_bytes(data):
+              try:
+                  return html.escape(data.decode("utf-8"))
+              except UnicodeDecodeError:
+                  return html.escape(
+                      "[binary/base64]\n"
+                      + __import__("base64").b64encode(data).decode("ascii")
+                  )
+
+          diff_lines = run(
+              "git","diff","--name-status",baseline,"HEAD","--",".",
+              f":(exclude){workflow}"
+          ).splitlines()
+          rows = []
+          for line in diff_lines:
+              if not line:
+                  continue
+              status, path = line.split("\t", 1)
+              if status not in {"A","M"}:
+                  raise SystemExit(f"unsupported candidate status: {line}")
+              successor = (root / path).read_bytes()
+              mode = run("git","ls-tree","HEAD","--",path).split()[0]
+              row = {
+                  "status": status,
+                  "path": path,
+                  "mode": mode,
+                  "successor_blob_sha": run("git","rev-parse","HEAD:"+path),
+                  "successor_sha256": hashlib.sha256(successor).hexdigest(),
+                  "successor_bytes": len(successor),
+              }
+              if status == "M":
+                  predecessor = show(baseline, path)
+                  row.update({
+                      "predecessor_blob_sha": run("git","rev-parse",baseline+":"+path),
+                      "predecessor_sha256": hashlib.sha256(predecessor).hexdigest(),
+                      "predecessor_bytes": len(predecessor),
+                  })
+              rows.append(row)
+
+          if len(rows) != 47:
+              raise SystemExit(f"expected 47 candidate paths, found {len(rows)}")
+          if sum(r["status"]=="M" for r in rows) != 28:
+              raise SystemExit("modified path count mismatch")
+          if sum(r["status"]=="A" for r in rows) != 19:
+              raise SystemExit("added path count mismatch")
+
+          patch = subprocess.check_output(
+              ["git","diff","--binary","--full-index",baseline,"HEAD","--",".",f":(exclude){workflow}"]
           )
-          rows = [line for line in output.splitlines() if line.strip()]
-          if len(rows) != expected_count:
-              raise SystemExit(
-                  f"expected {expected_count} candidate paths, found {len(rows)}"
-              )
-          if any(line.startswith("D\t") for line in rows):
-              raise SystemExit("candidate contains an unexpected deletion")
-          print(f"CANDIDATE_PATHS={len(rows)}")
-          print(output)
+          spec = (root / spec_path).read_bytes()
+          spec_blob = run("git","rev-parse","HEAD:"+spec_path)
+          spec_sha = hashlib.sha256(spec).hexdigest()
+          freeze_timestamp = datetime.now(timezone.utc).isoformat()
+
+          manifest = {
+              "schema": "kanasu.m98.canonical-html-manifest.v1",
+              "candidate_id": candidate_id,
+              "repository": "kanasu-01/kanasu-trading-system",
+              "target_branch": "m9-v1-research-platform",
+              "behavioral_authority": "KTS-M009-S008-SPEC002-V001",
+              "baseline_commit": baseline,
+              "baseline_tree": baseline_tree,
+              "validated_preparation_commit": os.environ["VALIDATED_PREP_COMMIT"],
+              "validated_preparation_tree": os.environ["VALIDATED_PREP_TREE"],
+              "canonical_html_generator_commit": os.environ["GITHUB_SHA"],
+              "lean_candidate_tree": candidate_tree,
+              "candidate_paths": 47,
+              "modified": 28,
+              "added": 19,
+              "deleted": 0,
+              "validation_only_excluded": workflow,
+              "spec_path": spec_path,
+              "spec_blob_sha": spec_blob,
+              "spec_sha256": spec_sha,
+              "readiness_run_id": int(os.environ["READINESS_RUN_ID"]),
+              "normal_repository_run_id": int(os.environ["NORMAL_RUN_ID"]),
+              "third_failure_root_cause_sha256": os.environ["RCA_SHA256"],
+              "red_reconstruction_sha256": os.environ["RED_SHA256"],
+              "freeze_timestamp_utc": freeze_timestamp,
+              "paths": rows,
+          }
+
+          css = """
+          body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#f5f7fa;color:#18212b}
+          main{max-width:1280px;margin:auto;padding:28px}
+          h1,h2,h3{color:#102a43}
+          .meta{background:#fff;border:1px solid #ccd6e0;border-radius:8px;padding:16px;margin:12px 0}
+          table{border-collapse:collapse;width:100%;background:white}
+          th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;text-align:left}
+          th{background:#eaf0f6}
+          pre{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;background:#fff;border:1px solid #ccd6e0;padding:14px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.35}
+          pre.original{color:#9b1c1c;text-decoration:line-through;background:#fff5f5}
+          pre.proposed{color:#116329;font-weight:700;background:#f2fff5}
+          pre.unstyled{color:#111;background:#fff;font-weight:400;text-decoration:none}
+          .warning{border-left:5px solid #b45309;background:#fff7ed;padding:12px}
+          .ok{border-left:5px solid #15803d;background:#f0fdf4;padding:12px}
+          details{margin:10px 0}
+          summary{cursor:pointer;font-weight:700}
+          code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+          """
+
+          parts = []
+          parts.append("<!doctype html><html><head><meta charset='utf-8'>")
+          parts.append("<title>M98-CAND-012 Canonical CCRF</title>")
+          parts.append(f"<style>{css}</style></head><body><main>")
+          parts.append("<h1>M98-CAND-012 — Canonical Candidate Change / Reconstruction File</h1>")
+          parts.append("<div class='warning'><strong>Review artifact rule:</strong> this HTML is the one canonical Review-1 artifact. No ZIP or companion review file is required. The external SHA-256 is carried in the final filename and must be verified independently; this document does not authenticate its own digest.</div>")
+          parts.append("<div class='meta'><pre class='unstyled'>"
+              + html.escape(json.dumps({
+                  "candidate_id": candidate_id,
+                  "state": "READY / FROZEN FOR INDEPENDENT REVIEW 1",
+                  "behavioral_authority": "KTS-M009-S008-SPEC002-V001",
+                  "repository": "kanasu-01/kanasu-trading-system",
+                  "target_branch": "m9-v1-research-platform",
+                  "baseline_commit": baseline,
+                  "baseline_tree": baseline_tree,
+                  "validated_preparation_commit": os.environ["VALIDATED_PREP_COMMIT"],
+                  "validated_preparation_tree": os.environ["VALIDATED_PREP_TREE"],
+                  "canonical_html_generator_commit": os.environ["GITHUB_SHA"],
+                  "lean_candidate_tree": candidate_tree,
+                  "candidate_scope": "47 paths = 28 MODIFY + 19 ADD, 0 DELETE",
+                  "freeze_timestamp_utc": freeze_timestamp,
+                  "readiness_run_id": int(os.environ["READINESS_RUN_ID"]),
+                  "normal_repository_run_id": int(os.environ["NORMAL_RUN_ID"]),
+              }, indent=2))
+              + "</pre></div>")
+
+          parts.append("<h2>1. Human-language specification — exact supplied authority</h2>")
+          parts.append("<p>The following is the complete exact human-language M9.8 specification being reviewed together with its exact implementation.</p>")
+          parts.append(f"<p><code>{html.escape(spec_path)}</code><br>Git blob: <code>{spec_blob}</code><br>SHA-256: <code>{spec_sha}</code></p>")
+          parts.append("<pre class='unstyled'>" + esc_bytes(spec) + "</pre>")
+
+          parts.append("<h2>2. Candidate lineage and prior Review-1 context</h2>")
+          parts.append("<p>M98-CAND-008, M98-CAND-009, and M98-CAND-011 are failed canonical candidates for this same controlled M9.8 objective after accepted material Review-1 findings. CAND011 findings F01/F02 required a third-failure process/root-cause review and a state-transition/invariant-family preparation method before CAND012 progression.</p>")
+          parts.append("<p><strong>CAND011 accepted findings:</strong> F01 — Paper history could remain RUNNING after terminal completion; F02 — STOPPED/FAILED qualified-Paper final metrics were hidden because active mutation ownership was reused as display lineage.</p>")
+          parts.append("<p>Third-failure RCA SHA-256: <code>" + os.environ["RCA_SHA256"] + "</code><br>RED reconstruction SHA-256: <code>" + os.environ["RED_SHA256"] + "</code></p>")
+          parts.append("<h3>Exact third-failure root-cause record</h3><pre class='unstyled'>__THIRD_FAILURE_RCA__</pre>")
+          parts.append("<h3>Exact CAND012 RED reconstruction record</h3><pre class='unstyled'>__RED_RECONSTRUCTION__</pre>")
+
+          parts.append("<h2>3. CAND012 corrective contract</h2>")
+          parts.append("""<ul>
+          <li><code>campaign_owns_runtime</code> means active lifecycle/mutation authority only.</li>
+          <li>Selected-session display evidence is independent of mutation ownership.</li>
+          <li>CREATED/RUNNING display snapshots may come only from the exact matching process runtime.</li>
+          <li>STOPPED/FAILED display snapshots may come only from validated durable <code>terminal_snapshot_json</code>.</li>
+          <li>INTERRUPTED never fabricates financial terminal evidence.</li>
+          <li><code>paper_history()</code> performs a bounded lifecycle-stabilization read; a settled response may not combine stale durable RUNNING/CREATED history with terminal runtime evidence.</li>
+          <li>Persistent disagreement fails closed.</li>
+          <li>An unrelated active runtime cannot hide or replace the selected campaign's terminal metrics.</li>
+          <li>Earlier CAND011 authority-binding, same-policy coherence, PROVIDER_BACKED freshness, provider unit/temporal truth, exact-session Stop, Retry, concurrency, restart and no-live-money boundaries remain unchanged.</li>
+          </ul>""")
+
+          parts.append("<h2>4. Candidate readiness evidence</h2>")
+          parts.append("""<table><tr><th>Gate</th><th>Result</th></tr>
+          <tr><td>Exact lean tree</td><td>PASS — 5ffb349ad0a6baf980744c3018a1411f8cf2d19b</td></tr>
+          <tr><td>Complete backend</td><td>PASS — 1986 tests</td></tr>
+          <tr><td>Independent normal repository workflow</td><td>PASS — 1986 tests</td></tr>
+          <tr><td>Paper lifecycle invariant family</td><td>PASS — 7 targeted workspace controls + 15 M7 API Paper tests + 29 M9.7 Paper tests</td></tr>
+          <tr><td>Authority/data invariant family</td><td>PASS — 164 tests</td></tr>
+          <tr><td>Lifecycle preservation subset</td><td>PASS — 15 controls</td></tr>
+          <tr><td>Frontend</td><td>PASS — 8 files / 36 tests + production build + lint</td></tr>
+          <tr><td>Assembled browser navigation smoke</td><td>PASS</td></tr>
+          <tr><td>Provider-master critical authority fields</td><td>PASS</td></tr>
+          <tr><td>Mechanical diff/scope/no-delete/tree check</td><td>PASS — 47 paths, no deletes</td></tr>
+          </table>""")
+          parts.append("<p>Readiness run: <code>42626748972</code>. Normal repository run: <code>42626748989</code>. Current live AngelOne master check found only non-authority INFY <code>freeze_qty</code> drift (retained 81164 → current 85222); token/symbol/name/exchange/lot/tick authority fields used by this candidate remained unchanged.</p>")
+
+          parts.append("<h2>5. External integration reviewability classification</h2>")
+          parts.append("""<table><tr><th>Surface</th><th>Review-1 classification</th></tr>
+          <tr><td>Retained AngelOne provider snapshot and exact five bindings/tick sizes</td><td>Mandatory and independently reproducible from repository evidence.</td></tr>
+          <tr><td>Current public AngelOne instrument master critical-field check</td><td>Supplementary live public check; readiness PASS recorded. Daily non-authority fields may drift.</td></tr>
+          <tr><td>Credentialed AngelOne broker/live-market execution</td><td>External operational validation, not mandatory Review-1 reproduction: it requires secrets, provider availability, market timing and external account state. Reviewer must verify deterministic adapter/wiring, exact provider binding authority, no-live-money boundary, and clearly report any unperformed credentialed live operation as an external limitation rather than an unreviewed code surface.</td></tr>
+          <tr><td>Real-money orders</td><td>Outside MVP V1 and prohibited by the candidate.</td></tr></table>""")
+
+          parts.append("<h2>6. Exact candidate manifest</h2>")
+          parts.append("<pre class='unstyled'>" + html.escape(json.dumps(manifest, indent=2, sort_keys=True)) + "</pre>")
+
+          parts.append("<h2>7. Exact predecessor → proposed comparisons</h2>")
+          for row in rows:
+              path = row["path"]
+              parts.append("<details><summary>" + html.escape(f'{row["status"]} {path}') + "</summary>")
+              if row["status"] == "M":
+                  predecessor = show(baseline, path)
+                  parts.append("<h3>ORIGINAL — exact baseline bytes</h3>")
+                  parts.append("<pre class='original'>" + esc_bytes(predecessor) + "</pre>")
+              else:
+                  parts.append("<p><strong>ORIGINAL:</strong> path absent at pinned baseline.</p>")
+              successor = (root / path).read_bytes()
+              parts.append("<h3>PROPOSED — exact candidate bytes</h3>")
+              parts.append("<pre class='proposed'>" + esc_bytes(successor) + "</pre></details>")
+
+          parts.append("<h2>8. Complete exact implementation diff</h2>")
+          parts.append("<p>Full-index binary-capable diff from the pinned accepted baseline to the frozen candidate, excluding only the validation workflow.</p>")
+          parts.append("<pre class='unstyled'>" + esc_bytes(patch) + "</pre>")
+
+          parts.append("<h2>9. Complete exact unstyled proposed successor</h2>")
+          parts.append("<p>This is the complete exact proposed content for every one of the 47 candidate paths. It is intentionally unstyled so the reviewer can inspect the actual successor independently of the colored comparison above.</p>")
+          for row in rows:
+              path = row["path"]
+              successor = (root / path).read_bytes()
+              parts.append("<details><summary>" + html.escape(path) + "</summary>")
+              parts.append("<pre class='unstyled'>" + esc_bytes(successor) + "</pre></details>")
+
+          parts.append("<h2>10. Guarded implementation/publication operations after Review 1 PASS</h2>")
+          parts.append(f"""<ol>
+          <li>Re-read <code>m9-v1-research-platform</code>; require HEAD exactly <code>{baseline}</code> and tree exactly <code>{baseline_tree}</code>.</li>
+          <li>Verify every modified predecessor blob/hash against this manifest and every ADD destination is absent at the baseline.</li>
+          <li>Construct exactly the reviewed successor; require resulting Git tree exactly <code>{candidate_tree}</code>.</li>
+          <li>Create exactly one implementation commit with parent <code>{baseline}</code>, tree <code>{candidate_tree}</code>, and message <code>Implement M9.8 complete research workspace</code>.</li>
+          <li>Re-read target branch immediately before remote update; require HEAD still equals the pinned baseline. Then perform one ordinary non-force expected-SHA update to the implementation commit.</li>
+          <li>Read back branch, commit parent/tree, exact 47-path manifest, modes and contents. Any mismatch stops fail-closed.</li>
+          <li>Run/verify actual-state CI and authoritative read-back, then Independent Review 2 on the published result.</li>
+          <li>Show actual relevant before/after differences to the human; final explicit human acceptance remains mandatory.</li>
+          </ol>
+          <p><strong>Not authorized:</strong> force update/push, merge, rebase, reset, clean, branch switch, deletion, extra candidate path, changed implementation content, regenerated implementation package, or any destructive/history-changing operation. Any changed scope/content, moved target baseline, predecessor mismatch, path collision, failed/ambiguous guard or new material fact requires stop and fresh candidate handling.</p>""")
+
+          parts.append("<h2>11. Independent Review 1 instructions</h2>")
+          parts.append("""<div class='meta'>
+          <p><strong>Review the exact human-language specification in §1 together with the exact frozen implementation in §§6–9.</strong> GitHub/repository sources are for independent verification of the baseline, accepted earlier-milestone authority, immutable identities and reconstruction; they are not a substitute for the supplied exact specification and code.</p>
+          <p>Read-only review only. Do not modify, implement, stage, commit, push, merge, repair or regenerate the candidate.</p>
+          <ol>
+          <li>Verify the external SHA-256 in this file's filename before substantive review.</li>
+          <li>Independently verify baseline commit/tree, candidate tree, 47-path manifest, file modes/hashes and specification identity.</li>
+          <li>Reconstruct the exact successor and require tree <code>5ffb349ad0a6baf980744c3018a1411f8cf2d19b</code>.</li>
+          <li>Review the whole candidate, not only the CAND011 F01/F02 corrections. Search for sibling manifestations.</li>
+          <li>Challenge cross-authority lifecycle coherence for CREATED/RUNNING/STOPPED/FAILED/INTERRUPTED, mutation ownership vs display lineage, terminal metric persistence, unrelated runtime isolation, polling cessation and restart behavior.</li>
+          <li>Re-challenge CAND009 families: exact observed WFA/qualification authority propagation, same-policy snapshot coherence, fresh PROVIDER_BACKED segment completeness, provider unit/temporal truth.</li>
+          <li>Challenge unchanged adjacent invariants: Retry identity, partial/duplicate outcomes, exact-session Stop, campaign→session stale authority, concurrency/restart, delayed UI responses, M4 economics, M9.5 sole criterion, M9.6 WFA math, M9.7 Paper causality and no-live-money scope.</li>
+          <li>Verify readiness evidence where reasonably reproducible. Credentialed live broker execution is classified in §5 and must not silently convert deterministic code review into PARTIAL without stating the external limitation separately.</li>
+          <li>Continue feasible material review after the first finding so defect families are batched.</li>
+          </ol>
+          <p><strong>Required output:</strong></p>
+          <pre class='unstyled'>TECHNICAL_VERDICT: PASS | FAIL | BLOCKED
+REVIEW_COMPLETENESS: COMPLETE | PARTIAL
+
+Then list:
+- all material findings;
+- exact independently verified identities and reconstruction result;
+- readiness reproduction performed;
+- defect-family coverage;
+- any external operational limitation separately from code-review completeness;
+- any remaining unreviewed material code/specification surface;
+- confirmation that the attachment, checkout and repository state were not modified.
+
+A PASS requires COMPLETE applicable code/specification coverage.</pre>
+          </div>""")
+
+          parts.append("</main></body></html>")
+          out.write_text("".join(parts), encoding="utf-8")
+          print("DRAFT_HTML="+str(out))
+          print("DRAFT_BYTES="+str(out.stat().st_size))
+          print("SPEC_SHA256="+spec_sha)
+          print("CANDIDATE_TREE="+candidate_tree)
           PY
 
-  browser-smoke:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Report current M98-CAND-012 lean draft tree
-        run: |
-          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
-          case "$INDEX_PATH" in
-            /*) ;;
-            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
-          esac
-          cp "$INDEX_PATH" /tmp/m98-cand012.index
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
-          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
-      - uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - name: Run assembled browser navigation smoke
-        run: |
-          command -v google-chrome
-          google-chrome --version
-          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/m98-vite.log 2>&1 &
-          VITE_PID=$!
-          trap 'kill "$VITE_PID" || true' EXIT
-          for attempt in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
-              break
-            fi
-            sleep 1
-          done
-          for route in / /backtest /wfa /paper /paper/standalone; do
-            google-chrome \
-              --headless \
-              --no-sandbox \
-              --disable-gpu \
-              --virtual-time-budget=3000 \
-              --dump-dom \
-              "http://127.0.0.1:4173$route" \
-              > /tmp/m98-dom.html
-            grep -q ">Home<" /tmp/m98-dom.html
-            grep -q ">Backtest<" /tmp/m98-dom.html
-            grep -q ">WFA<" /tmp/m98-dom.html
-            grep -q ">Paper Trading<" /tmp/m98-dom.html
-          done
-
+          name: M98-CAND-012-CANONICAL-HTML-DRAFT
+          path: /tmp/M98_CAND012_CCRF_DRAFT.html
+          if-no-files-found: error
+          retention-days: 90
