@@ -1,6 +1,7 @@
 """SQLite persistence for the minimal M9.5 qualification gate."""
 
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 import json
@@ -15,6 +16,11 @@ from core.research.models.qualification import (
     QualificationOutcome,
 )
 from core.research.models.qualification_policy import QualificationPolicy
+from core.research.models.wfa_qualification import (
+    CandidateWfaDecision,
+    WfaEvidenceValidity,
+    WfaQualificationOutcome,
+)
 from core.research.models.dataset_reference import (
     DATASET_REFERENCE_SCHEMA_ID,
 )
@@ -26,6 +32,13 @@ from core.research.research_schema import initialize_research_schema
 
 class QualificationPolicyConcurrencyConflict(RuntimeError):
     """Active global QualificationPolicy changed since caller observation."""
+
+
+@dataclass(frozen=True)
+class CurrentQualificationWfaAuthority:
+    trial_id: str
+    qualification_decision: QualificationDecision | None
+    wfa_decision: CandidateWfaDecision | None
 
 
 class SQLiteQualificationStore:
@@ -545,6 +558,141 @@ class SQLiteQualificationStore:
                 connection.commit()
 
         return None if row is None else self._decision_from_row(row)
+
+    @staticmethod
+    def _wfa_decision_from_row(row) -> CandidateWfaDecision:
+        return CandidateWfaDecision(
+            decision_id=row[0],
+            created_at=datetime.fromisoformat(row[1]),
+            evaluator_version=row[2],
+            study_revision_id=row[3],
+            trial_id=row[4],
+            candidate_revision_id=row[5],
+            historical_qualification_decision_id=row[6],
+            evaluator_repository_revision=row[7],
+            dataset_reference_artifact_id=row[8],
+            dataset_id=row[9],
+            dataset_fingerprint=row[10],
+            wfa_configuration_fingerprint=row[11],
+            result_artifact_id=row[12],
+            evidence_validity=WfaEvidenceValidity(row[13]),
+            wfa_verdict=row[14],
+            outcome=WfaQualificationOutcome(row[15]),
+            reason=row[16],
+        )
+
+    def load_study_current_authority(
+        self,
+        study_id: str,
+    ) -> tuple[str | None, tuple[CurrentQualificationWfaAuthority, ...]]:
+        """Read one Study's current M9.5/M9.6 authority from one SQLite snapshot."""
+
+        if not isinstance(study_id, str) or not study_id:
+            raise ValueError("study_id must be a non-empty string")
+
+        with closing(self._connect()) as connection:
+            try:
+                connection.execute("BEGIN")
+                policy_row = connection.execute(
+                    """
+                    SELECT policy_id
+                    FROM qualification_policy_activations
+                    ORDER BY activation_sequence DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+                policy_id = None if policy_row is None else policy_row[0]
+                trial_rows = connection.execute(
+                    """
+                    SELECT t.trial_id
+                    FROM trials AS t
+                    JOIN study_revisions AS r
+                      ON r.study_revision_id = t.study_revision_id
+                    WHERE r.study_id = ?
+                    ORDER BY r.revision_number, t.trial_id
+                    """,
+                    (study_id,),
+                ).fetchall()
+
+                values = []
+                for (trial_id,) in trial_rows:
+                    qualification = None
+                    wfa = None
+                    if policy_id is not None:
+                        qualification_row = connection.execute(
+                            """
+                            SELECT
+                                decision_id, created_at, evaluator_version,
+                                policy_id, policy_version, threshold_text,
+                                study_revision_id, trial_id,
+                                candidate_revision_id, attempt_id, evidence_id,
+                                result_artifact_id, evidence_validity,
+                                criterion_outcome, outcome,
+                                profitable_trade_count, completed_trade_count,
+                                rate_numerator, rate_denominator, reason
+                            FROM qualification_decisions
+                            WHERE trial_id = ? AND policy_id = ?
+                            ORDER BY decision_sequence DESC
+                            LIMIT 1
+                            """,
+                            (trial_id, policy_id),
+                        ).fetchone()
+                        if qualification_row is not None:
+                            qualification = self._decision_from_row(
+                                qualification_row
+                            )
+
+                    if (
+                        qualification is not None
+                        and qualification.candidate_revision_id is not None
+                    ):
+                        wfa_row = connection.execute(
+                            """
+                            SELECT
+                                decision_id, created_at, evaluator_version,
+                                study_revision_id, trial_id,
+                                candidate_revision_id,
+                                historical_qualification_decision_id,
+                                evaluator_repository_revision,
+                                dataset_reference_artifact_id, dataset_id,
+                                dataset_fingerprint,
+                                wfa_configuration_fingerprint,
+                                result_artifact_id, evidence_validity,
+                                wfa_verdict, outcome, reason
+                            FROM candidate_wfa_decisions
+                            WHERE candidate_revision_id = ?
+                            ORDER BY decision_sequence DESC
+                            LIMIT 1
+                            """,
+                            (qualification.candidate_revision_id,),
+                        ).fetchone()
+                        if wfa_row is not None:
+                            observed_wfa = self._wfa_decision_from_row(
+                                wfa_row
+                            )
+                            if (
+                                observed_wfa.trial_id == trial_id
+                                and observed_wfa.candidate_revision_id
+                                == qualification.candidate_revision_id
+                                and observed_wfa.historical_qualification_decision_id
+                                == qualification.decision_id
+                            ):
+                                wfa = observed_wfa
+
+                    values.append(
+                        CurrentQualificationWfaAuthority(
+                            trial_id=trial_id,
+                            qualification_decision=qualification,
+                            wfa_decision=wfa,
+                        )
+                    )
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+
+        return policy_id, tuple(values)
 
     def list_current_eligible_decisions(
         self,

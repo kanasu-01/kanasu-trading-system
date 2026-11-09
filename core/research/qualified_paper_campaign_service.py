@@ -353,7 +353,17 @@ class QualifiedPaperCampaignService:
     def _resolve_candidate_authority(
         self,
         candidate_revision_id: str,
+        *,
+        expected_wfa_decision_id: str | None = None,
     ) -> QualifiedPaperCampaignAuthority:
+        if expected_wfa_decision_id is not None and (
+            not isinstance(expected_wfa_decision_id, str)
+            or not expected_wfa_decision_id
+        ):
+            raise ValueError(
+                "expected_wfa_decision_id must be a non-empty string or None"
+            )
+
         try:
             candidate = self.qualification_store.load_candidate_revision(
                 candidate_revision_id
@@ -379,6 +389,13 @@ class QualifiedPaperCampaignService:
         if wfa_decision is None:
             raise QualifiedPaperAdmissionError(
                 "CandidateRevision has no current WFA decision"
+            )
+        if (
+            expected_wfa_decision_id is not None
+            and wfa_decision.decision_id != expected_wfa_decision_id
+        ):
+            raise QualifiedPaperAdmissionError(
+                "current WFA decision changed since caller observation"
             )
         if (
             wfa_decision.evidence_validity is not WfaEvidenceValidity.VALID
@@ -598,8 +615,13 @@ class QualifiedPaperCampaignService:
     def create_or_reuse_campaign(
         self,
         candidate_revision_id: str,
+        *,
+        expected_wfa_decision_id: str | None = None,
     ) -> tuple[PaperCampaign, bool]:
-        authority = self._resolve_candidate_authority(candidate_revision_id)
+        authority = self._resolve_candidate_authority(
+            candidate_revision_id,
+            expected_wfa_decision_id=expected_wfa_decision_id,
+        )
         campaign = PaperCampaign(
             campaign_id=self._campaign_id_factory(),
             created_at=self._clock(),

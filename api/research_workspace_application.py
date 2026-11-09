@@ -849,7 +849,12 @@ class ResearchWorkspaceApplication:
             return None
         return decision
 
-    def _strategy_state(self, trial) -> WorkspaceStrategyState:
+    def _strategy_state(
+        self,
+        trial,
+        *,
+        current_authority=None,
+    ) -> WorkspaceStrategyState:
         if trial is None:
             raise ResearchWorkspaceNotFound("trial")
         revision = self.catalog_store.load_study_revision(trial.study_revision_id)
@@ -862,11 +867,21 @@ class ResearchWorkspaceApplication:
             )
         plan = self.plan_resolver.resolve(trial.trial_id)
         instrument = self._instrument_for_plan(plan)
-        qualification = self.qualification_store.load_current_decision(trial.trial_id)
+        if current_authority is None:
+            qualification = self.qualification_store.load_current_decision(
+                trial.trial_id
+            )
+            wfa = self._current_wfa_for_historical(qualification)
+        else:
+            if current_authority.trial_id != trial.trial_id:
+                raise ResearchWorkspaceOperationalError(
+                    "Study authority snapshot trial identity mismatch"
+                )
+            qualification = current_authority.qualification_decision
+            wfa = current_authority.wfa_decision
         candidate_id = (
             None if qualification is None else qualification.candidate_revision_id
         )
-        wfa = self._current_wfa_for_historical(qualification)
         campaign = (
             None
             if (
@@ -909,13 +924,33 @@ class ResearchWorkspaceApplication:
 
     def study_strategies(self, study_id: str) -> WorkspaceStrategyListResponse:
         self._study(study_id)
-        policy_generation = self._active_policy_id()
+        try:
+            policy_generation, authority_values = (
+                self.qualification_store.load_study_current_authority(study_id)
+            )
+        except Exception as error:
+            raise ResearchWorkspaceOperationalError(
+                "Study qualification/WFA authority snapshot could not be read reliably"
+            ) from error
+        authority_by_trial = {
+            value.trial_id: value for value in authority_values
+        }
         values = []
         for revision in self.catalog_store.list_study_revisions(study_id):
             for trial in self.catalog_store.list_registered_trials_for_revision(
                 revision.study_revision_id
             ):
-                values.append(self._strategy_state(trial))
+                current_authority = authority_by_trial.get(trial.trial_id)
+                if current_authority is None:
+                    raise ResearchWorkspaceOperationalError(
+                        "registered Trial is missing from Study authority snapshot"
+                    )
+                values.append(
+                    self._strategy_state(
+                        trial,
+                        current_authority=current_authority,
+                    )
+                )
         if self._active_policy_id() != policy_generation:
             raise ResearchWorkspaceConflict(
                 "QualificationPolicy changed while Study state was assembled"
@@ -1124,35 +1159,37 @@ class ResearchWorkspaceApplication:
 
     def wfa_state(self, study_id: str) -> WorkspaceWfaResponse:
         self._study(study_id)
-        policy_generation = self._active_policy_id()
+        revisions = self.catalog_store.list_study_revisions(study_id)
+        try:
+            policy_generation, authority_values = (
+                self.qualification_store.load_study_current_authority(study_id)
+            )
+        except Exception as error:
+            raise ResearchWorkspaceOperationalError(
+                "WFA qualification/WFA authority snapshot could not be read reliably"
+            ) from error
+        authority_by_trial = {
+            value.trial_id: value for value in authority_values
+        }
         items = []
-        for revision in self.catalog_store.list_study_revisions(study_id):
-            try:
-                historical_decisions = (
-                    self.qualification_store.list_current_eligible_decisions(
-                        revision.study_revision_id
+        for revision in revisions:
+            for trial in self.catalog_store.list_registered_trials_for_revision(
+                revision.study_revision_id
+            ):
+                current_authority = authority_by_trial.get(trial.trial_id)
+                if current_authority is None:
+                    raise ResearchWorkspaceOperationalError(
+                        "registered Trial is missing from WFA authority snapshot"
                     )
-                )
-            except Exception as error:
-                items.append(
-                    WorkspaceWfaItemResponse(
-                        trial_id=revision.study_revision_id,
-                        candidate_revision_id=None,
-                        strategy_label=f"Revision {revision.revision_number}",
-                        evidence_validity="UNKNOWN",
-                        outcome="OPERATIONAL_ERROR",
-                        verdict=None,
-                        decision_id=None,
-                        reason=str(error) or type(error).__name__,
-                        metrics=None,
-                    )
-                )
-                continue
-            for historical in historical_decisions:
-                if historical.candidate_revision_id is None:
+                historical = current_authority.qualification_decision
+                if (
+                    historical is None
+                    or historical.outcome is not QualificationOutcome.ELIGIBLE
+                    or historical.candidate_revision_id is None
+                ):
                     continue
                 try:
-                    decision = self._current_wfa_for_historical(historical)
+                    decision = current_authority.wfa_decision
                     items.append(
                         self._pending_wfa_item(historical)
                         if decision is None
@@ -1226,7 +1263,8 @@ class ResearchWorkspaceApplication:
             self._require_policy_generation(expected_policy_id)
             try:
                 decisions = self.wfa_service.evaluate_study_revision(
-                    revision.study_revision_id
+                    revision.study_revision_id,
+                    observed_eligible_decisions=historical_decisions,
                 )
                 self._require_policy_generation(expected_policy_id)
             except CandidateWfaOperationalError as error:
@@ -1338,6 +1376,7 @@ class ResearchWorkspaceApplication:
                 continue
             if (
                 strategy.candidate_revision_id is None
+                or strategy.decision_id is None
                 or strategy.outcome != WfaQualificationOutcome.ELIGIBLE.value
                 or strategy.verdict != "PASS"
             ):
@@ -1345,7 +1384,8 @@ class ResearchWorkspaceApplication:
             try:
                 campaign, created = (
                     self.qualified_paper_application.create_or_reuse_campaign(
-                        strategy.candidate_revision_id
+                        strategy.candidate_revision_id,
+                        expected_wfa_decision_id=strategy.decision_id,
                     )
                 )
                 items.append(

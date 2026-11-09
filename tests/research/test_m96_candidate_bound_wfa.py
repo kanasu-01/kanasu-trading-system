@@ -748,6 +748,37 @@ def test_zero_one_many_stage_scope_is_not_single_candidate_limited(
         for trial in trials
     ]
 
+def test_cand010_observed_eligible_decisions_are_not_reresolved(monkeypatch):
+    service = CandidateWfaService.__new__(CandidateWfaService)
+    trial = SimpleNamespace(trial_id="trial-1")
+    observed = SimpleNamespace(
+        study_revision_id="revision-1",
+        trial_id=trial.trial_id,
+        candidate_revision_id=F("1"),
+        outcome=QualificationOutcome.ELIGIBLE,
+    )
+    service.catalog_store = SimpleNamespace(
+        list_registered_trials_for_revision=lambda _revision: (trial,),
+    )
+    service.qualification_store = SimpleNamespace(
+        list_current_eligible_decisions=lambda _revision: (_ for _ in ()).throw(
+            AssertionError("observed authority must not be re-resolved")
+        ),
+    )
+    seen = []
+    monkeypatch.setattr(
+        service,
+        "_evaluate_one",
+        lambda decision, value: seen.append((decision, value)) or "ok",
+    )
+
+    assert service.evaluate_study_revision(
+        "revision-1",
+        observed_eligible_decisions=(observed,),
+    ) == ("ok",)
+    assert seen == [(observed, trial)]
+
+
 def test_operational_eligibility_read_failure_creates_no_strategy_decision():
     service = CandidateWfaService.__new__(CandidateWfaService)
     service.catalog_store = SimpleNamespace(
@@ -2195,6 +2226,26 @@ def test_internal_wfa_writer_requires_current_historical_eligibility(tmp_path):
         decision_id="wfa-stale-historical-eligibility",
         created_at=NOW + timedelta(seconds=32),
         reason="stale historical eligibility",
+    )
+    with pytest.raises(ValueError, match="no longer current"):
+        fixture.wfa_store._append_decision(changed)
+
+
+def test_cand010_internal_wfa_writer_rejects_same_policy_supersession(tmp_path):
+    fixture, decision = _completed_real_wfa_fixture(tmp_path)
+    newer = replace(
+        fixture.historical_decision,
+        decision_id="qualification-newer-same-policy",
+        created_at=NOW + timedelta(seconds=32),
+        reason="newer same-policy qualification generation",
+    )
+    fixture.qualification_store.append_decision(newer)
+
+    changed = replace(
+        decision,
+        decision_id="wfa-stale-same-policy-qualification",
+        created_at=NOW + timedelta(seconds=33),
+        reason="stale same-policy historical eligibility",
     )
     with pytest.raises(ValueError, match="no longer current"):
         fixture.wfa_store._append_decision(changed)

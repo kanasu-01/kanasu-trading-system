@@ -1075,6 +1075,8 @@ class CandidateWfaService:
     def evaluate_study_revision(
         self,
         study_revision_id: str,
+        *,
+        observed_eligible_decisions=None,
     ) -> tuple[CandidateWfaDecision, ...]:
         if not isinstance(study_revision_id, str) or not study_revision_id:
             raise ValueError("study_revision_id must be a non-empty string")
@@ -1083,15 +1085,33 @@ class CandidateWfaService:
             trials = self.catalog_store.list_registered_trials_for_revision(
                 study_revision_id
             )
-            eligible_decisions = (
-                self.qualification_store.list_current_eligible_decisions(
-                    study_revision_id
-                )
-            )
         except Exception as error:
             raise CandidateWfaOperationalError(
-                "current historical qualification/population authority could not be loaded"
+                "authoritative Trial population could not be loaded"
             ) from error
+
+        if observed_eligible_decisions is None:
+            try:
+                eligible_decisions = (
+                    self.qualification_store.list_current_eligible_decisions(
+                        study_revision_id
+                    )
+                )
+            except Exception as error:
+                raise CandidateWfaOperationalError(
+                    "current historical qualification authority could not be loaded"
+                ) from error
+        else:
+            eligible_decisions = tuple(observed_eligible_decisions)
+            if any(
+                decision.study_revision_id != study_revision_id
+                or decision.outcome is not QualificationOutcome.ELIGIBLE
+                or decision.candidate_revision_id is None
+                for decision in eligible_decisions
+            ):
+                raise CandidateWfaOperationalError(
+                    "observed historical qualification authority is inconsistent"
+                )
 
         trials_by_id = {trial.trial_id: trial for trial in trials}
         results = []

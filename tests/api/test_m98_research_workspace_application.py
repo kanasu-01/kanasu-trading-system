@@ -12,6 +12,10 @@ from api.research_workspace_application import (
     ResearchWorkspaceConflict,
 )
 from api.qualified_paper_campaign_application import QualifiedPaperCampaignApplication
+from core.research.qualified_paper_campaign_service import (
+    QualifiedPaperAdmissionError,
+    QualifiedPaperCampaignService,
+)
 from core.config.app_config import AppConfig
 from core.entities.candle import Candle
 from core.entities.instrument import Instrument
@@ -708,9 +712,11 @@ def _bare_workspace_for_generation_tests():
 
 def test_study_strategy_projection_conflicts_if_policy_generation_changes():
     app = _bare_workspace_for_generation_tests()
-    policy_ids = iter(("policy-a", "policy-b"))
     app._study = lambda _study_id: object()
-    app._active_policy_id = lambda: next(policy_ids)
+    app._active_policy_id = lambda: "policy-b"
+    app.qualification_store = SimpleNamespace(
+        load_study_current_authority=lambda _study_id: ("policy-a", ()),
+    )
     app.catalog_store = SimpleNamespace(
         list_study_revisions=lambda _study_id: (),
     )
@@ -721,9 +727,11 @@ def test_study_strategy_projection_conflicts_if_policy_generation_changes():
 
 def test_wfa_projection_conflicts_if_policy_generation_changes():
     app = _bare_workspace_for_generation_tests()
-    policy_ids = iter(("policy-a", "policy-b"))
     app._study = lambda _study_id: object()
-    app._active_policy_id = lambda: next(policy_ids)
+    app._active_policy_id = lambda: "policy-b"
+    app.qualification_store = SimpleNamespace(
+        load_study_current_authority=lambda _study_id: ("policy-a", ()),
+    )
     app.catalog_store = SimpleNamespace(
         list_study_revisions=lambda _study_id: (),
     )
@@ -771,6 +779,100 @@ def test_send_to_paper_rejects_unobserved_new_pass_decision():
 
     with pytest.raises(ResearchWorkspaceConflict, match="decision set changed"):
         app.send_to_paper("study-1", ["wfa-old"])
+
+
+def test_cand010_run_wfa_passes_exact_observed_qualification_set():
+    app = _bare_workspace_for_generation_tests()
+    app._study = lambda _study_id: object()
+    app._require_policy_generation = lambda _expected: None
+    revision = SimpleNamespace(
+        study_revision_id="revision-1",
+        revision_number=1,
+    )
+    observed = (
+        SimpleNamespace(
+            study_revision_id="revision-1",
+            trial_id="trial-1",
+            candidate_revision_id="candidate-1",
+            outcome=QualificationOutcome.ELIGIBLE,
+        ),
+    )
+    app.catalog_store = SimpleNamespace(
+        list_study_revisions=lambda _study_id: (revision,),
+    )
+    app.qualification_store = SimpleNamespace(
+        list_current_eligible_decisions=lambda _revision_id: observed,
+    )
+    seen = []
+
+    def evaluate(_revision_id, *, observed_eligible_decisions=None):
+        seen.append(observed_eligible_decisions)
+        return ()
+
+    app.wfa_service = SimpleNamespace(
+        evaluate_study_revision=evaluate,
+    )
+
+    response = app.run_wfa("study-1", "policy-1")
+
+    assert seen == [observed]
+    assert response.strategies == []
+
+
+def test_cand010_send_to_paper_binds_exact_observed_wfa_decision():
+    app = _bare_workspace_for_generation_tests()
+    app._study = lambda _study_id: object()
+    strategy = SimpleNamespace(
+        decision_id="wfa-observed",
+        candidate_revision_id="candidate-1",
+        strategy_label="SMA",
+        outcome="ELIGIBLE",
+        verdict="PASS",
+        reason="ready",
+    )
+    app.wfa_state = lambda _study_id: SimpleNamespace(
+        strategies=(strategy,),
+    )
+    seen = []
+
+    def create(candidate_id, *, expected_wfa_decision_id=None):
+        seen.append((candidate_id, expected_wfa_decision_id))
+        return SimpleNamespace(campaign_id="campaign-1"), True
+
+    app.qualified_paper_application = SimpleNamespace(
+        create_or_reuse_campaign=create,
+    )
+
+    response = app.send_to_paper(
+        "study-1",
+        ["wfa-observed"],
+    )
+
+    assert seen == [("candidate-1", "wfa-observed")]
+    assert response.campaigns[0].outcome == "READY"
+
+
+def test_cand010_qualified_paper_rejects_unseen_wfa_substitution():
+    service = QualifiedPaperCampaignService.__new__(
+        QualifiedPaperCampaignService
+    )
+    service.qualification_store = SimpleNamespace(
+        load_candidate_revision=lambda _candidate_id: object(),
+    )
+    service.wfa_store = SimpleNamespace(
+        load_current_decision=lambda _candidate_id: SimpleNamespace(
+            decision_id="wfa-new",
+        ),
+    )
+
+    with pytest.raises(
+        QualifiedPaperAdmissionError,
+        match="changed since caller observation",
+    ):
+        service._resolve_candidate_authority(
+            "candidate-1",
+            expected_wfa_decision_id="wfa-old",
+        )
 
 
 def test_paper_projection_conflicts_if_authority_generation_changes():

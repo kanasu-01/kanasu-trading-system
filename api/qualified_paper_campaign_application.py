@@ -202,8 +202,16 @@ class QualifiedPaperCampaignApplication:
     def create_campaign(self, candidate_revision_id: str):
         return self.service.create_campaign(candidate_revision_id)
 
-    def create_or_reuse_campaign(self, candidate_revision_id: str):
-        return self.service.create_or_reuse_campaign(candidate_revision_id)
+    def create_or_reuse_campaign(
+        self,
+        candidate_revision_id: str,
+        *,
+        expected_wfa_decision_id: str | None = None,
+    ):
+        return self.service.create_or_reuse_campaign(
+            candidate_revision_id,
+            expected_wfa_decision_id=expected_wfa_decision_id,
+        )
 
     def list_campaigns_for_study(self, study_id: str):
         return self.service.list_campaigns_for_study(study_id)

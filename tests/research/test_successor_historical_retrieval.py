@@ -157,6 +157,45 @@ class RecordingProvider:
         )
 
 
+class SelectivePartialCoverageProvider(RecordingProvider):
+    def __init__(self, partial_binding_id):
+        super().__init__()
+        self.partial_binding_id = partial_binding_id
+
+    def fetch(
+        self,
+        context,
+        request,
+        *,
+        provider_binding,
+    ):
+        self.calls.append(
+            (
+                provider_binding.binding_id,
+                request,
+            )
+        )
+        if provider_binding.binding_id != self.partial_binding_id:
+            return HistoricalFetchResult(
+                candles=(),
+                coverage=(request,),
+            )
+
+        midpoint = (
+            request.start
+            + ((request.end - request.start) / 2)
+        )
+        return HistoricalFetchResult(
+            candles=(),
+            coverage=(
+                TimeRange(
+                    request.start,
+                    midpoint,
+                ),
+            ),
+        )
+
+
 class PartialCoverageProvider(RecordingProvider):
     def fetch(
         self,
@@ -904,6 +943,45 @@ def test_provider_backed_warm_refetches_complete_binding_segment(tmp_path):
     assert result.candles == (cached,)
 
 
+def test_cand010_provider_backed_warm_cache_cannot_mask_partial_fresh_coverage(
+    tmp_path,
+):
+    provider_binding = binding(
+        binding_id="angelone-abc-provider-backed-partial",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    request = TimeRange(START, MID)
+    cached = candle_at(START + timedelta(minutes=15), 100.0)
+    provider = PartialCoverageProvider()
+
+    store = SQLiteCandleStore(tmp_path / "provider-backed-partial-warm.db")
+    identity = stream_identity(provider_binding)
+    store.save_acquisition_stream_retrieval(
+        identity.stream_id,
+        [cached],
+        [request],
+    )
+    service = SuccessorHistoricalRetrievalService(
+        store=store,
+        registry=registry_for(provider_binding),
+        policy=HistoricalSourcePolicy.PROVIDER_BACKED,
+        provider=provider,
+    )
+
+    with pytest.raises(IncompleteHistoricalCoverageError):
+        service.retrieve(
+            CONTEXT,
+            request,
+            instrument_id=INSTRUMENT_ID,
+            provider="angelone",
+            price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+        )
+
+    assert provider.calls == [(provider_binding.binding_id, request)]
+
+
 def test_provider_backed_multi_binding_refetches_each_exact_segment(tmp_path):
     old_binding = binding(
         binding_id="angelone-abc-provider-old",
@@ -939,6 +1017,44 @@ def test_provider_backed_multi_binding_refetches_each_exact_segment(tmp_path):
         provider="angelone",
         price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
     )
+
+    assert provider.calls == [
+        (old_binding.binding_id, TimeRange(START, MID)),
+        (new_binding.binding_id, TimeRange(MID, END)),
+    ]
+
+
+def test_cand010_provider_backed_multi_binding_fails_if_one_fresh_segment_is_partial(
+    tmp_path,
+):
+    old_binding = binding(
+        binding_id="angelone-abc-provider-old-complete",
+        token="100",
+        start=START,
+        end=MID,
+    )
+    new_binding = binding(
+        binding_id="angelone-abc-provider-new-partial",
+        token="200",
+        start=MID,
+        end=END,
+    )
+    provider = SelectivePartialCoverageProvider(new_binding.binding_id)
+    service = SuccessorHistoricalRetrievalService(
+        store=SQLiteCandleStore(tmp_path / "provider-backed-partial-multi.db"),
+        registry=registry_for(old_binding, new_binding),
+        policy=HistoricalSourcePolicy.PROVIDER_BACKED,
+        provider=provider,
+    )
+
+    with pytest.raises(IncompleteHistoricalCoverageError):
+        service.retrieve(
+            CONTEXT,
+            TimeRange(START, END),
+            instrument_id=INSTRUMENT_ID,
+            provider="angelone",
+            price_adjustment_basis=PriceAdjustmentBasis.UNKNOWN,
+        )
 
     assert provider.calls == [
         (old_binding.binding_id, TimeRange(START, MID)),

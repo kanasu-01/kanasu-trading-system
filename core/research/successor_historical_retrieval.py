@@ -216,6 +216,15 @@ class SuccessorHistoricalRetrievalService:
                     provider_binding=binding,
                 )
                 validate_historical_fetch_result(fetch_range, result)
+                if self.policy is HistoricalSourcePolicy.PROVIDER_BACKED:
+                    fresh_missing = find_missing_ranges(
+                        fetch_range,
+                        list(result.coverage),
+                    )
+                    if fresh_missing:
+                        raise IncompleteHistoricalCoverageError(
+                            fresh_missing
+                        )
                 self.store.save_acquisition_stream_retrieval(
                     stream_identity.stream_id,
                     list(result.candles),

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 import sqlite3
 
 import pytest
@@ -385,6 +386,121 @@ def test_current_wfa_helper_rejects_wfa_when_active_policy_has_changed(tmp_path)
         )
         is None
     )
+
+
+def _append_same_policy_eligible_decision(path, campaign, decision_id, created_at):
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO qualification_decisions (
+                decision_id, created_at, evaluator_version, policy_id,
+                policy_version, threshold_text, study_revision_id, trial_id,
+                candidate_revision_id, attempt_id, evidence_id,
+                result_artifact_id, evidence_validity, criterion_outcome,
+                outcome, profitable_trade_count, completed_trade_count,
+                rate_numerator, rate_denominator, reason
+            ) VALUES (?, ?, 'fixture', ?, 1, '0', ?, ?, ?,
+                      NULL, NULL, ?, 'VALID', 'SATISFIED', 'ELIGIBLE',
+                      1, 1, 100, 1, 'same-policy supersession')
+            """,
+            (
+                decision_id,
+                created_at.isoformat(),
+                fp("f"),
+                campaign.study_revision_id,
+                campaign.trial_id,
+                campaign.candidate_revision_id,
+                fp("a"),
+            ),
+        )
+        connection.commit()
+
+
+def test_cand010_study_snapshot_drops_wfa_after_same_policy_supersession(tmp_path):
+    path = tmp_path / "study-snapshot.sqlite3"
+    campaign = _campaign("paper-campaign-snapshot")
+    _seed_campaign_parents(path, campaign)
+    store = SQLiteQualificationStore(path)
+
+    policy_id, before = store.load_study_current_authority("study-sqlite")
+    assert policy_id == fp("f")
+    assert before[0].qualification_decision.decision_id == "historical-sqlite"
+    assert before[0].wfa_decision.decision_id == campaign.wfa_decision_id
+
+    _append_same_policy_eligible_decision(
+        path,
+        campaign,
+        "historical-sqlite-new",
+        NOW + timedelta(seconds=1),
+    )
+
+    _, after = store.load_study_current_authority("study-sqlite")
+    assert after[0].qualification_decision.decision_id == "historical-sqlite-new"
+    assert after[0].wfa_decision is None
+
+
+def test_cand010_study_snapshot_is_coherent_during_same_policy_mutation(tmp_path):
+    path = tmp_path / "study-snapshot-race.sqlite3"
+    campaign = _campaign("paper-campaign-snapshot-race")
+    _seed_campaign_parents(path, campaign)
+    with sqlite3.connect(path) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.commit()
+
+    store = SQLiteQualificationStore(path)
+    original_connect = store._connect
+    qualification_read_reached = Event()
+    mutation_done = Event()
+
+    class BarrierConnection:
+        def __init__(self, connection):
+            self.connection = connection
+            self.blocked = False
+
+        def execute(self, sql, parameters=()):
+            if (
+                not self.blocked
+                and "FROM qualification_decisions" in sql
+            ):
+                self.blocked = True
+                qualification_read_reached.set()
+                assert mutation_done.wait(timeout=5)
+            return self.connection.execute(sql, parameters)
+
+        def commit(self):
+            return self.connection.commit()
+
+        def rollback(self):
+            return self.connection.rollback()
+
+        def close(self):
+            return self.connection.close()
+
+    store._connect = lambda: BarrierConnection(original_connect())
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(
+            store.load_study_current_authority,
+            "study-sqlite",
+        )
+        assert qualification_read_reached.wait(timeout=5)
+        _append_same_policy_eligible_decision(
+            path,
+            campaign,
+            "historical-sqlite-racing",
+            NOW + timedelta(seconds=1),
+        )
+        mutation_done.set()
+        policy_id, snapshot = future.result(timeout=5)
+
+    assert policy_id == fp("f")
+    assert snapshot[0].qualification_decision.decision_id == "historical-sqlite"
+    assert snapshot[0].wfa_decision.decision_id == campaign.wfa_decision_id
+
+    store._connect = original_connect
+    _, current = store.load_study_current_authority("study-sqlite")
+    assert current[0].qualification_decision.decision_id == "historical-sqlite-racing"
+    assert current[0].wfa_decision is None
 
 
 def test_campaign_persistence_rejects_policy_supersession(tmp_path):

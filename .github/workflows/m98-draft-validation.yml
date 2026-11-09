@@ -1,4 +1,4 @@
-name: M9.8 DRAFT Validation
+name: M9.8 CAND010 PRE-FREEZE DRAFT Validation
 
 on:
   push:
@@ -14,12 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Materialize exact M98-CAND-009 tree
+      - name: Report current M98-CAND-010 lean draft tree
         run: |
-          git -C "$GITHUB_WORKSPACE" rm -f .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND009_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "e908c707dd7ffef1fe93f01a516a8ee780a3887d"
+          cp .git/index /tmp/m98-cand010.index
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git write-tree)"
+          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -29,6 +30,59 @@ jobs:
           pip install pytest
       - run: pytest
 
+  cand010-adversarial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run CAND010 defect-family adversarial regressions
+        run: |
+          pytest             tests/api/test_m98_research_workspace_application.py             tests/research/test_m96_candidate_bound_wfa.py             tests/research/test_m98_workspace_store_extensions.py             tests/research/test_successor_historical_retrieval.py             tests/market_data/test_instrument_registry_loader.py             -k cand010
+
+  preparation-diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record SOP-G-003-V014 requirement-70 preparation diagnostic
+        run: |
+          cat > M98_CAND010_PREPARATION_DIAGNOSTIC.md <<'EOF'
+          # M98-CAND-010 pre-freeze preparation diagnostic
+
+          Trigger: M98-CAND-008 and M98-CAND-009 are two accepted failed canonical candidates for the same M9.8 controlled objective. M98-CAND-010 must not freeze until this diagnostic and the changed preparation method are exercised.
+
+          Known escape pattern: pre-freeze qualification proved many direct behaviors but did not fully prove causal continuity of caller-observed authority through later re-resolution and durable writes, same-policy decision-generation coherence, fresh PROVIDER_BACKED coverage independently of warm cache, and provider metadata unit/temporal truth.
+
+          CAND009 material findings: F01 unseen WFA substitution in Send-to-Paper; F02 stale Start-WFA re-resolution/persistence risk; F03 warm cache masking incomplete fresh provider coverage; F04 mixed same-policy qualification/WFA generations; F05 starter-instrument metadata contradicted retained provider rows and lacked defensible temporal application.
+
+          Defect families:
+          - Authority substitution / TOCTOU: F01, F02.
+          - Snapshot coherence under same-policy supersession: F04.
+          - Fresh provider evidence truth independent of cache: F03.
+          - Provider metadata unit/temporal truth: F05.
+
+          Preparation-method changes before any CAND010 freeze:
+          1. Propagate exact observed authority to the durable writer; re-resolution may validate but never substitute.
+          2. Add deterministic stale-policy and same-policy supersession regressions.
+          3. Read Study qualification plus dependent WFA authority in one SQLite snapshot and test a deterministic concurrent mutation.
+          4. Require each PROVIDER_BACKED fresh binding segment to be complete before cache union and test warm-cache plus multi-binding partial responses.
+          5. Verify all five instrument tick sizes against retained AngelOne master rows with paise-to-rupee normalization and bind instrument metadata to the retained observation time rather than projecting it backward.
+          6. Run focused defect-family gates, complete backend regression, frontend tests/build/lint, provider-master validation, assembled browser smoke, diff/reconstruction checks, and exact lean-tree freeze verification.
+          7. Keep CAND010 non-canonical until every mandatory gate passes; any material unresolved failure keeps DRAFT/BLOCKED.
+          EOF
+          sha256sum M98_CAND010_PREPARATION_DIAGNOSTIC.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m98-cand010-preparation-diagnostic
+          path: M98_CAND010_PREPARATION_DIAGNOSTIC.md
+          if-no-files-found: error
+          retention-days: 90
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -36,12 +90,13 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - name: Materialize exact M98-CAND-009 tree
+      - name: Report current M98-CAND-010 lean draft tree
         run: |
-          git -C "$GITHUB_WORKSPACE" rm -f .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND009_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "e908c707dd7ffef1fe93f01a516a8ee780a3887d"
+          cp .git/index /tmp/m98-cand010.index
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git write-tree)"
+          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -57,12 +112,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Materialize exact M98-CAND-009 tree
+      - name: Report current M98-CAND-010 lean draft tree
         run: |
-          git -C "$GITHUB_WORKSPACE" rm -f .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND009_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "e908c707dd7ffef1fe93f01a516a8ee780a3887d"
+          cp .git/index /tmp/m98-cand010.index
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git write-tree)"
+          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -71,6 +127,7 @@ jobs:
           python - <<'PY'
           import hashlib
           import json
+          from decimal import Decimal
           from pathlib import Path
           import urllib.request
 
@@ -129,11 +186,33 @@ jobs:
               for binding in registry["provider_bindings"]
               if binding["provider"] == "angelone"
           }
+          registry_instruments = {
+              instrument["symbol"]: instrument
+              for instrument in registry["instruments"]
+          }
           for provider_symbol, expected_row in expected_rows.items():
               runtime_symbol = expected_row["name"]
               binding = registry_by_symbol.get(runtime_symbol)
+              instrument = registry_instruments.get(runtime_symbol)
               if binding is None:
                   raise SystemExit(f"{runtime_symbol}: registry binding missing")
+              if instrument is None:
+                  raise SystemExit(f"{runtime_symbol}: registry instrument missing")
+              expected_tick = Decimal(str(expected_row["tick_size"])) / Decimal("100")
+              actual_tick = Decimal(str(instrument["tick_size"]))
+              if actual_tick != expected_tick:
+                  raise SystemExit(
+                      f"{runtime_symbol}: registry tick {actual_tick} disagrees "
+                      f"with provider-normalized tick {expected_tick}"
+                  )
+              if instrument["effective_from"] != snapshot["observed_at"]:
+                  raise SystemExit(
+                      f"{runtime_symbol}: instrument metadata is not snapshot-bound"
+                  )
+              if instrument["effective_to"] is not None:
+                  raise SystemExit(
+                      f"{runtime_symbol}: bootstrap instrument metadata must remain open until superseded"
+                  )
               if str(binding["provider_instrument_id"]) != str(expected_row["token"]):
                   raise SystemExit(f"{runtime_symbol}: registry token disagrees with snapshot")
               if binding["provider_exchange"] != expected_row["exch_seg"]:
@@ -184,12 +263,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Materialize exact M98-CAND-009 tree
+      - name: Report current M98-CAND-010 lean draft tree
         run: |
-          git -C "$GITHUB_WORKSPACE" rm -f .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND009_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "e908c707dd7ffef1fe93f01a516a8ee780a3887d"
+          cp .git/index /tmp/m98-cand010.index
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git write-tree)"
+          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
       - name: Verify candidate diff mechanics
         run: |
           git diff --check 035ad39c73e69e647dbf492c999424f78c9c87bc HEAD -- . ':(exclude).github/workflows/m98-draft-validation.yml'
@@ -222,12 +302,13 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - name: Materialize exact M98-CAND-009 tree
+      - name: Report current M98-CAND-010 lean draft tree
         run: |
-          git -C "$GITHUB_WORKSPACE" rm -f .github/workflows/m98-draft-validation.yml
-          ACTUAL_TREE="$(git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND009_TREE=$ACTUAL_TREE"
-          test "$ACTUAL_TREE" = "e908c707dd7ffef1fe93f01a516a8ee780a3887d"
+          cp .git/index /tmp/m98-cand010.index
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand010.index git rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git write-tree)"
+          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -264,6 +345,7 @@ jobs:
           done
 
   candidate-package:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

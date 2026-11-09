@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -122,12 +123,27 @@ def test_repository_bootstrap_bindings_start_at_verified_master_observation():
         "NSE-EQ-SBIN",
         "NSE-EQ-TCS",
     ):
+        instrument = next(
+            item
+            for item in registry.instruments
+            if item.instrument_id == instrument_id
+        )
+        assert instrument.effective_from == observed_at
+        assert instrument.effective_to is None
+
         binding = registry.bindings_for(
             instrument_id=instrument_id,
             provider="angelone",
         )[0]
         assert binding.effective_from == observed_at
         assert binding.effective_to is None
+
+        with pytest.raises(InstrumentRegistryError):
+            registry.resolve_symbol(
+                symbol=instrument.symbol,
+                exchange="NSE",
+                at=datetime(2026, 11, 8, 12, 30, tzinfo=timezone.utc),
+            )
 
         with pytest.raises(
             ProviderBindingResolutionError,
@@ -160,6 +176,10 @@ def test_repository_bootstrap_snapshot_matches_registry_bindings():
     assert snapshot["full_master_record_count"] == 161793
     assert snapshot["observed_at"] == "2026-11-08T12:31:00.275890+00:00"
 
+    instruments_by_symbol = {
+        instrument.symbol: instrument
+        for instrument in registry.instruments
+    }
     by_symbol = {
         instrument.symbol: registry.bindings_for(
             instrument_id=instrument.instrument_id,
@@ -169,8 +189,12 @@ def test_repository_bootstrap_snapshot_matches_registry_bindings():
     }
     for provider_symbol, row in snapshot["selected_rows"].items():
         runtime_symbol = row["name"]
+        instrument = instruments_by_symbol[runtime_symbol]
         binding = by_symbol[runtime_symbol]
         assert provider_symbol == f"{runtime_symbol}-EQ"
         assert binding.provider_instrument_id == str(row["token"])
         assert binding.provider_exchange == row["exch_seg"]
         assert binding.provider_symbol == runtime_symbol
+        assert Decimal(str(instrument.tick_size)) == (
+            Decimal(str(row["tick_size"])) / Decimal("100")
+        )
