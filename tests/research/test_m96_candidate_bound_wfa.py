@@ -2231,6 +2231,62 @@ def test_internal_wfa_writer_requires_current_historical_eligibility(tmp_path):
         fixture.wfa_store._append_decision(changed)
 
 
+def test_cand010_start_wfa_policy_supersession_persists_no_stale_decision(tmp_path):
+    fixture = _real_registered_fixture(tmp_path)
+    observed = fixture.historical_decision
+    newer_policy = QualificationPolicy(2, Decimal("0"))
+    fixture.qualification_store.register_policy(
+        newer_policy,
+        created_at=NOW + timedelta(seconds=30),
+    )
+    fixture.qualification_store.activate_policy(
+        newer_policy.policy_id,
+        activated_at=NOW + timedelta(seconds=31),
+    )
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="durably persisted",
+    ):
+        fixture.service.evaluate_study_revision(
+            fixture.registration.revision.study_revision_id,
+            observed_eligible_decisions=(observed,),
+        )
+
+    assert (
+        fixture.wfa_store.load_decision("integration-wfa-decision")
+        is None
+    )
+
+
+def test_cand010_start_wfa_same_policy_supersession_persists_no_stale_decision(
+    tmp_path,
+):
+    fixture = _real_registered_fixture(tmp_path)
+    observed = fixture.historical_decision
+    newer = replace(
+        observed,
+        decision_id="qualification-newer-same-policy-before-wfa",
+        created_at=NOW + timedelta(seconds=30),
+        reason="newer same-policy qualification generation",
+    )
+    fixture.qualification_store.append_decision(newer)
+
+    with pytest.raises(
+        CandidateWfaOperationalError,
+        match="durably persisted",
+    ):
+        fixture.service.evaluate_study_revision(
+            fixture.registration.revision.study_revision_id,
+            observed_eligible_decisions=(observed,),
+        )
+
+    assert (
+        fixture.wfa_store.load_decision("integration-wfa-decision")
+        is None
+    )
+
+
 def test_cand010_internal_wfa_writer_rejects_same_policy_supersession(tmp_path):
     fixture, decision = _completed_real_wfa_fixture(tmp_path)
     newer = replace(
