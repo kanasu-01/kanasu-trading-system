@@ -24,7 +24,7 @@ jobs:
       - name: Run Paper terminal-coherence GREEN controls
         run: |
           pytest tests/api/test_m98_research_workspace_application.py \
-            -k "cand012_red or paper_projection_conflicts_if_authority_generation_changes" -q
+            -k "paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot or paper_projection_conflicts_if_authority_generation_changes" -q
           pytest tests/api/test_paper_trading_application.py \
             -k "stop_controls_runtime_waits_worker_and_retains_terminal_snapshot or expected_session_stop_rejects_different_active_session or worker_failure_is_retained_as_failed_terminal_snapshot or later_start_replaces_retained_terminal_session or natural_worker_completion_retains_stopped_snapshot" -q
           pytest tests/research/test_m97_qualified_paper_campaign.py \

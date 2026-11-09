@@ -978,7 +978,7 @@ def _cand012_red_history(state, *, terminal_snapshot_json=None):
         (PaperCampaignSessionState.FAILED, "FAILED"),
     ],
 )
-def test_cand012_red_paper_history_reconciles_terminalization_between_reads(
+def test_paper_history_reconciles_terminalization_between_reads(
     monkeypatch,
     terminal_state,
     runtime_status,
@@ -1018,7 +1018,7 @@ def test_cand012_red_paper_history_reconciles_terminalization_between_reads(
 
 
 @pytest.mark.parametrize("runtime_status", ["STOPPED", "FAILED"])
-def test_cand012_red_paper_history_projects_durable_terminal_display_snapshot(
+def test_paper_history_projects_durable_terminal_display_snapshot(
     monkeypatch,
     runtime_status,
 ):
@@ -1067,7 +1067,7 @@ def test_cand012_red_paper_history_projects_durable_terminal_display_snapshot(
 
 
 
-def test_cand012_paper_history_persistent_mixed_lifecycle_fails_closed(
+def test_paper_history_persistent_mixed_lifecycle_fails_closed(
     monkeypatch,
 ):
     app = _bare_workspace_for_generation_tests()
@@ -1101,7 +1101,7 @@ def test_cand012_paper_history_persistent_mixed_lifecycle_fails_closed(
         app.paper_history("campaign-1")
 
 
-def test_cand012_selected_terminal_snapshot_survives_unrelated_active_runtime(
+def test_selected_terminal_snapshot_survives_unrelated_active_runtime(
     monkeypatch,
 ):
     selected = _cand012_red_snapshot(
@@ -1151,7 +1151,7 @@ def test_cand012_selected_terminal_snapshot_survives_unrelated_active_runtime(
     assert response.latest_session_snapshot.total_pnl == 3333.0
 
 
-def test_cand012_interrupted_session_never_fabricates_display_snapshot(
+def test_interrupted_session_never_fabricates_display_snapshot(
     monkeypatch,
 ):
     history = _cand012_red_history(PaperCampaignSessionState.RUNNING)

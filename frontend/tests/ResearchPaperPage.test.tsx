@@ -437,7 +437,7 @@ describe("ResearchPaperPage", () => {
 
 
   it.each(["STOPPED", "FAILED"] as const)(
-    "CAND012 RED: keeps final qualified Paper metrics visible after %s",
+    "keeps final qualified Paper metrics visible after %s",
     async (terminalStatus) => {
       const initial = await vi.mocked(getWorkspacePaperHistory)
         .getMockImplementation()?.("campaign-1");
@@ -505,7 +505,7 @@ describe("ResearchPaperPage", () => {
   );
 
 
-  it("CAND012 RED: selected terminal metrics survive an unrelated active runtime", async () => {
+  it("selected terminal metrics survive an unrelated active runtime", async () => {
     const initial = await vi.mocked(getWorkspacePaperHistory)
       .getMockImplementation()?.("campaign-1");
     const base = initial as WorkspacePaperHistory;
