@@ -1066,6 +1066,139 @@ def test_cand012_red_paper_history_projects_durable_terminal_display_snapshot(
     assert projected["equity"] == 102500.0
 
 
+
+def test_cand012_paper_history_persistent_mixed_lifecycle_fails_closed(
+    monkeypatch,
+):
+    app = _bare_workspace_for_generation_tests()
+    running = _cand012_red_history(PaperCampaignSessionState.RUNNING)
+    app.qualified_paper_application = SimpleNamespace(
+        history=lambda _campaign_id: running,
+        active_session=lambda: None,
+    )
+    app.catalog_store = SimpleNamespace(
+        load_study_revision=lambda _revision_id: SimpleNamespace(
+            study_id="study-1"
+        ),
+    )
+    app._campaign_response = (
+        lambda _study_id, _campaign: _cand012_red_campaign_response()
+    )
+    monkeypatch.setattr(
+        "api.research_workspace_application.paper_trading_application",
+        SimpleNamespace(
+            status=lambda: PaperTradingStatusResponse(
+                active=False,
+                snapshot=_cand012_red_snapshot(status="STOPPED"),
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ResearchWorkspaceConflict,
+        match="Paper lifecycle changed",
+    ):
+        app.paper_history("campaign-1")
+
+
+def test_cand012_selected_terminal_snapshot_survives_unrelated_active_runtime(
+    monkeypatch,
+):
+    selected = _cand012_red_snapshot(
+        status="STOPPED",
+        session_id="session-1",
+        total_pnl=3333.0,
+    )
+    app = _bare_workspace_for_generation_tests()
+    app.qualified_paper_application = SimpleNamespace(
+        history=lambda _campaign_id: _cand012_red_history(
+            PaperCampaignSessionState.STOPPED,
+            terminal_snapshot_json=selected.model_dump_json(),
+        ),
+        active_session=lambda: SimpleNamespace(
+            session_id="session-other",
+            campaign_id="campaign-other",
+            state=PaperCampaignSessionState.RUNNING,
+        ),
+    )
+    app.catalog_store = SimpleNamespace(
+        load_study_revision=lambda _revision_id: SimpleNamespace(
+            study_id="study-1"
+        ),
+    )
+    app._campaign_response = (
+        lambda _study_id, _campaign: _cand012_red_campaign_response()
+    )
+    monkeypatch.setattr(
+        "api.research_workspace_application.paper_trading_application",
+        SimpleNamespace(
+            status=lambda: PaperTradingStatusResponse(
+                active=True,
+                snapshot=_cand012_red_snapshot(
+                    status="RUNNING",
+                    session_id="session-other",
+                    total_pnl=9999.0,
+                ),
+            )
+        ),
+    )
+
+    response = app.paper_history("campaign-1")
+
+    assert response.campaign_owns_runtime is False
+    assert response.latest_session_snapshot is not None
+    assert response.latest_session_snapshot.session_id == "session-1"
+    assert response.latest_session_snapshot.total_pnl == 3333.0
+
+
+def test_cand012_interrupted_session_never_fabricates_display_snapshot(
+    monkeypatch,
+):
+    history = _cand012_red_history(PaperCampaignSessionState.RUNNING)
+    interrupted = SimpleNamespace(
+        **{
+            **vars(history.sessions[0]),
+            "state": PaperCampaignSessionState.INTERRUPTED,
+            "terminal_at": NOW + timedelta(seconds=2),
+            "terminal_snapshot_json": None,
+            "failure_type": "ApplicationRestart",
+            "failure_message": "prior process ended before terminal persistence",
+        }
+    )
+    history = SimpleNamespace(
+        campaign=history.campaign,
+        sessions=(interrupted,),
+    )
+    app = _bare_workspace_for_generation_tests()
+    app.qualified_paper_application = SimpleNamespace(
+        history=lambda _campaign_id: history,
+        active_session=lambda: None,
+    )
+    app.catalog_store = SimpleNamespace(
+        load_study_revision=lambda _revision_id: SimpleNamespace(
+            study_id="study-1"
+        ),
+    )
+    app._campaign_response = (
+        lambda _study_id, _campaign: _cand012_red_campaign_response()
+    )
+    monkeypatch.setattr(
+        "api.research_workspace_application.paper_trading_application",
+        SimpleNamespace(
+            status=lambda: PaperTradingStatusResponse(
+                active=False,
+                snapshot=None,
+            )
+        ),
+    )
+
+    response = app.paper_history("campaign-1")
+
+    assert response.sessions[-1].state == "INTERRUPTED"
+    assert response.latest_session_snapshot is None
+    assert response.campaign_owns_runtime is False
+
+
 def test_paper_projection_conflicts_if_authority_generation_changes():
     app = _bare_workspace_for_generation_tests()
     app._study = lambda _study_id: object()
