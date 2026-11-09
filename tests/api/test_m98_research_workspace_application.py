@@ -6,7 +6,14 @@ NOW = datetime(2026, 11, 7, tzinfo=timezone.utc)
 
 import pytest
 
-from api.models.research_workspace_models import WorkspaceBacktestRunRequest
+from api.models.paper_trading_models import (
+    PaperTradingSnapshotResponse,
+    PaperTradingStatusResponse,
+)
+from api.models.research_workspace_models import (
+    WorkspaceBacktestRunRequest,
+    WorkspacePaperCampaignResponse,
+)
 from api.research_workspace_application import (
     ResearchWorkspaceApplication,
     ResearchWorkspaceConflict,
@@ -23,6 +30,7 @@ from core.market_data.historical_retrieval import HistoricalFetchResult
 from core.market_data.instrument_registry import StaticInstrumentRegistry
 from core.market_data.provider_instrument_binding import ProviderInstrumentBinding
 from core.market_data.sqlite_candle_store import SQLiteCandleStore
+from core.research.models.paper_campaign import PaperCampaignSessionState
 from core.research.models.registered_study import TrialDisposition
 from core.research.models.qualification import EvidenceValidity, QualificationOutcome
 from core.research.registered_trial_execution_plan import (
@@ -882,6 +890,180 @@ def test_cand010_qualified_paper_rejects_unseen_wfa_substitution():
             "candidate-1",
             expected_wfa_decision_id="wfa-old",
         )
+
+
+
+def _cand012_red_campaign_response():
+    return WorkspacePaperCampaignResponse(
+        campaign_id="campaign-1",
+        study_id="study-1",
+        study_revision_id="revision-1",
+        trial_id="trial-1",
+        candidate_revision_id="candidate-1",
+        strategy_label="SMA Crossover 20/50",
+        wfa_decision_id="wfa-1",
+        created_at=NOW,
+        current_authority=True,
+    )
+
+
+def _cand012_red_snapshot(
+    *,
+    status: str,
+    session_id: str = "session-1",
+    total_pnl: float = 2500.0,
+):
+    return PaperTradingSnapshotResponse(
+        session_id=session_id,
+        status=status,
+        strategy_name="SMA Crossover 20/50",
+        symbol="RELIANCE",
+        started_at="2026-11-07T00:00:01Z",
+        stopped_at=(
+            "2026-11-07T00:00:02Z"
+            if status in {"STOPPED", "FAILED"}
+            else None
+        ),
+        initial_capital=100000.0,
+        cash=102500.0,
+        position_size=0.0,
+        position_value=0.0,
+        equity=102500.0,
+        realized_pnl=2500.0,
+        unrealized_pnl=0.0,
+        total_pnl=total_pnl,
+        peak_equity=103000.0,
+        drawdown=500.0,
+        active_position=None,
+        completed_trade_count=7,
+        last_execution_event="SELL",
+        last_execution_price=2500.0,
+        last_execution_quantity=1,
+        failure_type="RuntimeError" if status == "FAILED" else None,
+        failure_message="provider disconnected" if status == "FAILED" else None,
+    )
+
+
+def _cand012_red_history(state, *, terminal_snapshot_json=None):
+    terminal = state in {
+        PaperCampaignSessionState.STOPPED,
+        PaperCampaignSessionState.FAILED,
+    }
+    session = SimpleNamespace(
+        session_id="session-1",
+        campaign_id="campaign-1",
+        state=state,
+        created_at=NOW,
+        started_at=NOW + timedelta(seconds=1),
+        terminal_at=(NOW + timedelta(seconds=2)) if terminal else None,
+        terminal_snapshot_json=terminal_snapshot_json,
+        failure_type="RuntimeError" if state is PaperCampaignSessionState.FAILED else None,
+        failure_message=(
+            "provider disconnected"
+            if state is PaperCampaignSessionState.FAILED
+            else None
+        ),
+    )
+    campaign = SimpleNamespace(
+        campaign_id="campaign-1",
+        study_revision_id="revision-1",
+    )
+    return SimpleNamespace(campaign=campaign, sessions=(session,))
+
+
+@pytest.mark.parametrize(
+    ("terminal_state", "runtime_status"),
+    [
+        (PaperCampaignSessionState.STOPPED, "STOPPED"),
+        (PaperCampaignSessionState.FAILED, "FAILED"),
+    ],
+)
+def test_cand012_red_paper_history_reconciles_terminalization_between_reads(
+    monkeypatch,
+    terminal_state,
+    runtime_status,
+):
+    app = _bare_workspace_for_generation_tests()
+    running = _cand012_red_history(PaperCampaignSessionState.RUNNING)
+    terminal = _cand012_red_history(terminal_state)
+    reads = iter((running, terminal))
+    app.qualified_paper_application = SimpleNamespace(
+        history=lambda _campaign_id: next(reads),
+        active_session=lambda: None,
+    )
+    app.catalog_store = SimpleNamespace(
+        load_study_revision=lambda _revision_id: SimpleNamespace(
+            study_id="study-1"
+        ),
+    )
+    app._campaign_response = (
+        lambda _study_id, _campaign: _cand012_red_campaign_response()
+    )
+    monkeypatch.setattr(
+        "api.research_workspace_application.paper_trading_application",
+        SimpleNamespace(
+            status=lambda: PaperTradingStatusResponse(
+                active=False,
+                snapshot=_cand012_red_snapshot(status=runtime_status),
+            )
+        ),
+    )
+
+    response = app.paper_history("campaign-1")
+
+    assert response.sessions[-1].state == terminal_state.value
+    assert response.runtime is not None
+    assert response.runtime.snapshot is not None
+    assert response.runtime.snapshot.status == runtime_status
+
+
+@pytest.mark.parametrize("runtime_status", ["STOPPED", "FAILED"])
+def test_cand012_red_paper_history_projects_durable_terminal_display_snapshot(
+    monkeypatch,
+    runtime_status,
+):
+    snapshot = _cand012_red_snapshot(status=runtime_status)
+    terminal_json = snapshot.model_dump_json()
+    state = (
+        PaperCampaignSessionState.STOPPED
+        if runtime_status == "STOPPED"
+        else PaperCampaignSessionState.FAILED
+    )
+    app = _bare_workspace_for_generation_tests()
+    app.qualified_paper_application = SimpleNamespace(
+        history=lambda _campaign_id: _cand012_red_history(
+            state,
+            terminal_snapshot_json=terminal_json,
+        ),
+        active_session=lambda: None,
+    )
+    app.catalog_store = SimpleNamespace(
+        load_study_revision=lambda _revision_id: SimpleNamespace(
+            study_id="study-1"
+        ),
+    )
+    app._campaign_response = (
+        lambda _study_id, _campaign: _cand012_red_campaign_response()
+    )
+    monkeypatch.setattr(
+        "api.research_workspace_application.paper_trading_application",
+        SimpleNamespace(
+            status=lambda: PaperTradingStatusResponse(
+                active=False,
+                snapshot=None,
+            )
+        ),
+    )
+
+    response = app.paper_history("campaign-1")
+    payload = response.model_dump(mode="json")
+    projected = payload.get("latest_session_snapshot")
+
+    assert projected is not None
+    assert projected["session_id"] == "session-1"
+    assert projected["status"] == runtime_status
+    assert projected["total_pnl"] == 2500.0
+    assert projected["equity"] == 102500.0
 
 
 def test_paper_projection_conflicts_if_authority_generation_changes():

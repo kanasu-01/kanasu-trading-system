@@ -431,6 +431,147 @@ describe("ResearchPaperPage", () => {
   });
 
 
+
+  it.each(["STOPPED", "FAILED"] as const)(
+    "CAND012 RED: keeps final qualified Paper metrics visible after %s",
+    async (terminalStatus) => {
+      const initial = await vi.mocked(getWorkspacePaperHistory)
+        .getMockImplementation()?.("campaign-1");
+      const base = initial as WorkspacePaperHistory;
+      const terminalSnapshot = {
+        session_id: "session-terminal",
+        status: terminalStatus,
+        strategy_name: "SMA Crossover 20/50",
+        symbol: "RELIANCE",
+        started_at: "2026-11-07T00:00:01Z",
+        stopped_at: "2026-11-07T00:00:02Z",
+        initial_capital: 100000,
+        cash: 102500,
+        position_size: 0,
+        position_value: 0,
+        equity: 102500,
+        realized_pnl: 2500,
+        unrealized_pnl: 0,
+        total_pnl: 2500,
+        peak_equity: 103000,
+        drawdown: 500,
+        active_position: null,
+        completed_trade_count: 7,
+        last_execution_event: "SELL",
+        last_execution_price: 2500,
+        last_execution_quantity: 1,
+        failure_type: terminalStatus === "FAILED" ? "RuntimeError" : null,
+        failure_message:
+          terminalStatus === "FAILED" ? "provider disconnected" : null,
+      };
+      const terminalHistory = {
+        ...base,
+        sessions: [
+          {
+            session_id: "session-terminal",
+            state: terminalStatus,
+            created_at: "2026-11-07T00:00:00Z",
+            started_at: "2026-11-07T00:00:01Z",
+            terminal_at: "2026-11-07T00:00:02Z",
+            failure_type:
+              terminalStatus === "FAILED" ? "RuntimeError" : null,
+            failure_message:
+              terminalStatus === "FAILED"
+                ? "provider disconnected"
+                : null,
+          },
+        ],
+        runtime: { active: false, snapshot: null },
+        campaign_owns_runtime: false,
+        latest_session_snapshot: terminalSnapshot,
+      } as unknown as WorkspacePaperHistory;
+
+      vi.mocked(getWorkspacePaperHistory).mockResolvedValue(terminalHistory);
+
+      render(
+        <MemoryRouter>
+          <ResearchPaperPage />
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByText("2,500")).toBeInTheDocument();
+      expect(screen.getByText("102,500")).toBeInTheDocument();
+      expect(screen.getByText("7")).toBeInTheDocument();
+    },
+  );
+
+
+  it("CAND012 RED: selected terminal metrics survive an unrelated active runtime", async () => {
+    const initial = await vi.mocked(getWorkspacePaperHistory)
+      .getMockImplementation()?.("campaign-1");
+    const base = initial as WorkspacePaperHistory;
+    const selectedSnapshot = {
+      session_id: "session-selected-terminal",
+      status: "STOPPED" as const,
+      strategy_name: "SMA Crossover 20/50",
+      symbol: "RELIANCE",
+      started_at: "2026-11-07T00:00:01Z",
+      stopped_at: "2026-11-07T00:00:02Z",
+      initial_capital: 100000,
+      cash: 103333,
+      position_size: 0,
+      position_value: 0,
+      equity: 103333,
+      realized_pnl: 3333,
+      unrealized_pnl: 0,
+      total_pnl: 3333,
+      peak_equity: 104000,
+      drawdown: 667,
+      active_position: null,
+      completed_trade_count: 9,
+      last_execution_event: "SELL",
+      last_execution_price: 2500,
+      last_execution_quantity: 1,
+      failure_type: null,
+      failure_message: null,
+    };
+    const history = {
+      ...base,
+      sessions: [
+        {
+          session_id: "session-selected-terminal",
+          state: "STOPPED",
+          created_at: "2026-11-07T00:00:00Z",
+          started_at: "2026-11-07T00:00:01Z",
+          terminal_at: "2026-11-07T00:00:02Z",
+          failure_type: null,
+          failure_message: null,
+        },
+      ],
+      runtime: {
+        active: true,
+        snapshot: {
+          ...selectedSnapshot,
+          session_id: "session-other-runtime",
+          status: "RUNNING",
+          stopped_at: null,
+          total_pnl: 9999,
+          equity: 109999,
+        },
+      },
+      campaign_owns_runtime: false,
+      latest_session_snapshot: selectedSnapshot,
+    } as unknown as WorkspacePaperHistory;
+
+    vi.mocked(getWorkspacePaperHistory).mockResolvedValue(history);
+
+    render(
+      <MemoryRouter>
+        <ResearchPaperPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("3,333")).toBeInTheDocument();
+    expect(screen.getByText("103,333")).toBeInTheDocument();
+    expect(screen.queryByText("9,999")).not.toBeInTheDocument();
+  });
+
+
   it("reconciles a lost Start response without dispatching Start twice", async () => {
     const initial = await vi.mocked(getWorkspacePaperHistory).getMockImplementation()?.(
       "campaign-1",
