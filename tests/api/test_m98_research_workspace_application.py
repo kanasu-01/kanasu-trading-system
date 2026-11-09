@@ -620,8 +620,14 @@ def test_send_to_paper_preserves_partial_results_when_one_candidate_fails(tmp_pa
 
     calls = []
 
-    def create_or_reuse(candidate_revision_id):
-        calls.append(candidate_revision_id)
+    def create_or_reuse(
+        candidate_revision_id,
+        *,
+        expected_wfa_decision_id=None,
+    ):
+        calls.append(
+            (candidate_revision_id, expected_wfa_decision_id)
+        )
         if candidate_revision_id == first_id:
             raise PermissionError("campaign store unavailable")
         return SimpleNamespace(campaign_id="paper-campaign-2"), True
@@ -632,7 +638,10 @@ def test_send_to_paper_preserves_partial_results_when_one_candidate_fails(tmp_pa
         ["wfa-1", "wfa-2"],
     )
 
-    assert calls == [first_id, second_id]
+    assert calls == [
+        (first_id, "wfa-1"),
+        (second_id, "wfa-2"),
+    ]
     assert [item.outcome for item in response.campaigns] == [
         "OPERATIONAL_ERROR",
         "READY",
