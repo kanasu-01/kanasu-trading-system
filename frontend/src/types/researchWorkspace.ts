@@ -3,6 +3,7 @@ import type {
   BacktestRunResponse,
 } from "@/types/backtest";
 import type {
+  PaperTradingSnapshot,
   PaperTradingStatusResponse,
 } from "@/types/paperTrading";
 
@@ -166,4 +167,5 @@ export interface WorkspacePaperHistory {
   sessions: WorkspacePaperSession[];
   runtime: PaperTradingStatusResponse | null;
   campaign_owns_runtime: boolean;
+  latest_session_snapshot: PaperTradingSnapshot | null;
 }

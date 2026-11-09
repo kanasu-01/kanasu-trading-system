@@ -13,6 +13,10 @@ from api.models.backtest_models import (
     BacktestSummaryResponse,
     BacktestTradeResponse,
 )
+from api.models.paper_trading_models import (
+    PaperTradingSnapshotResponse,
+    PaperTradingStatusResponse,
+)
 from api.models.research_workspace_models import (
     ResearchWorkspaceConfigResponse,
     WorkspaceBacktestRunRequest,
@@ -1478,37 +1482,156 @@ class ResearchWorkspaceApplication:
             campaigns=responses,
         )
 
+    @staticmethod
+    def _paper_runtime_generation(
+        runtime: PaperTradingStatusResponse,
+    ) -> tuple[bool, str | None, str | None]:
+        snapshot = runtime.snapshot
+        return (
+            runtime.active,
+            None if snapshot is None else snapshot.session_id,
+            None if snapshot is None else snapshot.status,
+        )
+
+    @staticmethod
+    def _paper_terminal_display_snapshot(session):
+        if session is None:
+            return None
+        state = session.state.value
+        if state not in {"STOPPED", "FAILED"}:
+            return None
+        if session.terminal_snapshot_json is None:
+            return None
+        try:
+            snapshot = PaperTradingSnapshotResponse.model_validate_json(
+                session.terminal_snapshot_json
+            )
+        except Exception as error:
+            raise ResearchWorkspaceOperationalError(
+                "durable terminal Paper snapshot is invalid"
+            ) from error
+        if (
+            snapshot.session_id != session.session_id
+            or snapshot.status != state
+        ):
+            raise ResearchWorkspaceOperationalError(
+                "durable terminal Paper snapshot lineage mismatch"
+            )
+        return snapshot
+
     def paper_history(self, campaign_id: str) -> WorkspacePaperHistoryResponse:
-        history = self.qualified_paper_application.history(campaign_id)
-        revision = self.catalog_store.load_study_revision(
-            history.campaign.study_revision_id
-        )
-        if revision is None:
-            raise ResearchWorkspaceOperationalError("campaign StudyRevision disappeared")
-        runtime = paper_trading_application.status()
-        durable_active = self.qualified_paper_application.active_session()
-        owns_runtime = (
-            durable_active is not None
-            and durable_active.campaign_id == campaign_id
-            and runtime.snapshot is not None
-            and runtime.snapshot.session_id == durable_active.session_id
-        )
-        return WorkspacePaperHistoryResponse(
-            campaign=self._campaign_response(revision.study_id, history.campaign),
-            sessions=[
-                WorkspacePaperSessionResponse(
-                    session_id=item.session_id,
-                    state=item.state.value,
-                    created_at=item.created_at,
-                    started_at=item.started_at,
-                    terminal_at=item.terminal_at,
-                    failure_type=item.failure_type,
-                    failure_message=item.failure_message,
+        for _attempt in range(3):
+            runtime_before = paper_trading_application.status()
+            history = self.qualified_paper_application.history(campaign_id)
+            revision = self.catalog_store.load_study_revision(
+                history.campaign.study_revision_id
+            )
+            if revision is None:
+                raise ResearchWorkspaceOperationalError(
+                    "campaign StudyRevision disappeared"
                 )
-                for item in history.sessions
-            ],
-            runtime=runtime,
-            campaign_owns_runtime=owns_runtime,
+            durable_active = self.qualified_paper_application.active_session()
+            runtime_after = paper_trading_application.status()
+
+            if (
+                self._paper_runtime_generation(runtime_before)
+                != self._paper_runtime_generation(runtime_after)
+            ):
+                continue
+
+            runtime = runtime_after
+            runtime_snapshot = runtime.snapshot
+            latest = history.sessions[-1] if history.sessions else None
+
+            if runtime.active:
+                if (
+                    runtime_snapshot is None
+                    or durable_active is None
+                    or durable_active.session_id
+                    != runtime_snapshot.session_id
+                    or durable_active.state.value
+                    != runtime_snapshot.status
+                ):
+                    continue
+
+                owns_runtime = durable_active.campaign_id == campaign_id
+                if owns_runtime:
+                    if (
+                        latest is None
+                        or latest.session_id
+                        != runtime_snapshot.session_id
+                        or latest.state.value
+                        != runtime_snapshot.status
+                    ):
+                        continue
+                    latest_session_snapshot = runtime_snapshot
+                else:
+                    if (
+                        latest is not None
+                        and latest.state.value in {"CREATED", "RUNNING"}
+                    ):
+                        continue
+                    latest_session_snapshot = (
+                        self._paper_terminal_display_snapshot(latest)
+                    )
+            else:
+                if durable_active is not None:
+                    continue
+
+                owns_runtime = False
+                if latest is not None and latest.state.value in {
+                    "CREATED",
+                    "RUNNING",
+                }:
+                    # A terminal runtime observation for this exact session
+                    # proves the durable history read raced terminal persistence.
+                    if (
+                        runtime_snapshot is not None
+                        and runtime_snapshot.session_id == latest.session_id
+                        and runtime_snapshot.status in {"STOPPED", "FAILED"}
+                    ):
+                        continue
+                    # Without an active process owner, a settled CREATED/RUNNING
+                    # durable session is not a truthful stable projection.
+                    continue
+
+                if (
+                    runtime_snapshot is not None
+                    and latest is not None
+                    and runtime_snapshot.session_id == latest.session_id
+                    and runtime_snapshot.status in {"STOPPED", "FAILED"}
+                    and latest.state.value != runtime_snapshot.status
+                ):
+                    continue
+
+                latest_session_snapshot = (
+                    self._paper_terminal_display_snapshot(latest)
+                )
+
+            return WorkspacePaperHistoryResponse(
+                campaign=self._campaign_response(
+                    revision.study_id,
+                    history.campaign,
+                ),
+                sessions=[
+                    WorkspacePaperSessionResponse(
+                        session_id=item.session_id,
+                        state=item.state.value,
+                        created_at=item.created_at,
+                        started_at=item.started_at,
+                        terminal_at=item.terminal_at,
+                        failure_type=item.failure_type,
+                        failure_message=item.failure_message,
+                    )
+                    for item in history.sessions
+                ],
+                runtime=runtime,
+                campaign_owns_runtime=owns_runtime,
+                latest_session_snapshot=latest_session_snapshot,
+            )
+
+        raise ResearchWorkspaceConflict(
+            "Paper lifecycle changed while campaign history was assembled"
         )
 
     def start_paper(

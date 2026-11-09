@@ -81,6 +81,7 @@ describe("ResearchPaperPage", () => {
       sessions: [],
       runtime: { active: false, snapshot: null },
       campaign_owns_runtime: false,
+      latest_session_snapshot: null,
     });
   });
 
@@ -152,6 +153,7 @@ describe("ResearchPaperPage", () => {
         },
       },
       campaign_owns_runtime: true,
+      latest_session_snapshot: null,
     };
     const stoppedHistory: WorkspacePaperHistory = {
       ...runningHistory,
@@ -272,6 +274,7 @@ describe("ResearchPaperPage", () => {
         },
       },
       campaign_owns_runtime: true,
+      latest_session_snapshot: null,
     };
 
     const timeoutHandlers: Array<() => void> = [];
@@ -371,6 +374,7 @@ describe("ResearchPaperPage", () => {
         },
       },
       campaign_owns_runtime: true,
+      latest_session_snapshot: null,
     };
     const refreshedHistory: WorkspacePaperHistory = {
       ...runningHistory,
@@ -619,6 +623,7 @@ describe("ResearchPaperPage", () => {
         },
       },
       campaign_owns_runtime: true,
+      latest_session_snapshot: null,
     };
 
     vi.mocked(getWorkspacePaperHistory)

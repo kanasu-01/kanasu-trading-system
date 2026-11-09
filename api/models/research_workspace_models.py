@@ -22,7 +22,10 @@ from api.models.common_models import (
     SymbolOption,
     TimeframeOption,
 )
-from api.models.paper_trading_models import PaperTradingStatusResponse
+from api.models.paper_trading_models import (
+    PaperTradingSnapshotResponse,
+    PaperTradingStatusResponse,
+)
 
 
 class WorkspaceStudyCreateRequest(StrictApiModel):
@@ -285,3 +288,4 @@ class WorkspacePaperHistoryResponse(StrictApiModel):
     sessions: list[WorkspacePaperSessionResponse]
     runtime: PaperTradingStatusResponse | None = None
     campaign_owns_runtime: bool
+    latest_session_snapshot: PaperTradingSnapshotResponse | None

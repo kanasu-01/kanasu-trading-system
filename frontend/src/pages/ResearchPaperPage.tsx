@@ -27,7 +27,7 @@ import type {
   WorkspacePaperCampaign,
   WorkspacePaperHistory,
 } from "@/types/researchWorkspace";
-import type { PaperTradingStatusResponse } from "@/types/paperTrading";
+import type { PaperTradingSnapshot } from "@/types/paperTrading";
 
 const POLL_MS = 2000;
 
@@ -60,11 +60,10 @@ function format(value: number | null): string {
 }
 
 function RuntimeMetrics({
-  status,
+  snapshot,
 }: {
-  status: PaperTradingStatusResponse | null;
+  snapshot: PaperTradingSnapshot | null;
 }) {
-  const snapshot = status?.snapshot;
   if (!snapshot) {
     return (
       <Card>
@@ -230,6 +229,7 @@ export function ResearchPaperPage() {
   useEffect(() => {
     if (
       mutationState === "UNKNOWN"
+      || !history?.campaign_owns_runtime
       || !history?.runtime?.active
       || !selectedCampaign
     ) {
@@ -634,7 +634,14 @@ export function ResearchPaperPage() {
 
         <DashboardSection title="Current Session">
           <RuntimeMetrics
-            status={ownsRuntime ? history?.runtime ?? null : null}
+            snapshot={
+              history?.latest_session_snapshot
+              ?? (
+                ownsRuntime
+                  ? history?.runtime?.snapshot ?? null
+                  : null
+              )
+            }
           />
           {anyRuntimeActive && !ownsRuntime ? (
             <div className="mt-3 text-sm text-amber-300">

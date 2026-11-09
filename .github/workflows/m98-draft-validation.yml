@@ -1,4 +1,4 @@
-name: M9.8 CAND012 RED Reconstruction
+name: M9.8 CAND012 GREEN Reconstruction
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  backend-red:
+  backend-green:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,20 +21,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Prove Paper terminal-coherence tests are RED
+      - name: Run Paper terminal-coherence GREEN controls
         run: |
-          set +e
           pytest tests/api/test_m98_research_workspace_application.py \
-            -k cand012_red -q > /tmp/cand012-backend-red.txt 2>&1
-          EXIT=$?
-          set -e
-          cat /tmp/cand012-backend-red.txt
-          test "$EXIT" -ne 0
-          grep -q "test_cand012_red_paper_history_reconciles_terminalization_between_reads" /tmp/cand012-backend-red.txt
-          grep -q "test_cand012_red_paper_history_projects_durable_terminal_display_snapshot" /tmp/cand012-backend-red.txt
-          grep -Eq "[1-9][0-9]* failed" /tmp/cand012-backend-red.txt
+            -k "cand012_red or paper_projection_conflicts_if_authority_generation_changes" -q
+          pytest tests/api/test_paper_trading_application.py \
+            -k "stop_controls_runtime_waits_worker_and_retains_terminal_snapshot or expected_session_stop_rejects_different_active_session or worker_failure_is_retained_as_failed_terminal_snapshot or later_start_replaces_retained_terminal_session or natural_worker_completion_retains_stopped_snapshot" -q
+          pytest tests/research/test_m97_qualified_paper_campaign.py \
+            -k "sqlite_campaign_session_survives_reopen_and_restart_recovery or sqlite_terminal_evidence_is_append_only or sqlite_allows_only_one_active_session_and_freezes_start_time or terminal_callback_failure_is_never_reported_as_durable_success or history_remains_ordered_and_terminal_sessions_are_preserved" -q
 
-  frontend-red:
+  frontend-green:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,15 +43,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - name: Prove terminal-metrics tests are RED
+      - name: Run Paper terminal-metrics GREEN controls
         run: |
-          set +e
-          npm test -- --run tests/ResearchPaperPage.test.tsx \
-            -t "CAND012 RED" > /tmp/cand012-frontend-red.txt 2>&1
-          EXIT=$?
-          set -e
-          cat /tmp/cand012-frontend-red.txt
-          test "$EXIT" -ne 0
-          grep -q "keeps final qualified Paper metrics visible" /tmp/cand012-frontend-red.txt
-          grep -q "selected terminal metrics survive an unrelated active runtime" /tmp/cand012-frontend-red.txt
-          grep -Eq "[1-9][0-9]* failed" /tmp/cand012-frontend-red.txt
+          npm test -- --run tests/ResearchPaperPage.test.tsx
+          npm run build
+          npm run lint
