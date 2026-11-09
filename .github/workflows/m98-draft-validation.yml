@@ -308,18 +308,18 @@ jobs:
           </ol>
           <p><strong>Required output:</strong></p>
           <pre class='unstyled'>TECHNICAL_VERDICT: PASS | FAIL | BLOCKED
-REVIEW_COMPLETENESS: COMPLETE | PARTIAL
+          REVIEW_COMPLETENESS: COMPLETE | PARTIAL
 
-Then list:
-- all material findings;
-- exact independently verified identities and reconstruction result;
-- readiness reproduction performed;
-- defect-family coverage;
-- any external operational limitation separately from code-review completeness;
-- any remaining unreviewed material code/specification surface;
-- confirmation that the attachment, checkout and repository state were not modified.
+          Then list:
+          - all material findings;
+          - exact independently verified identities and reconstruction result;
+          - readiness reproduction performed;
+          - defect-family coverage;
+          - any external operational limitation separately from code-review completeness;
+          - any remaining unreviewed material code/specification surface;
+          - confirmation that the attachment, checkout and repository state were not modified.
 
-A PASS requires COMPLETE applicable code/specification coverage.</pre>
+          A PASS requires COMPLETE applicable code/specification coverage.</pre>
           </div>""")
 
           parts.append("</main></body></html>")
