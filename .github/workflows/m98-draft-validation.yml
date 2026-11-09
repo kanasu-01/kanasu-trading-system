@@ -1,4 +1,4 @@
-name: M9.8 CAND012 GREEN Reconstruction
+name: M9.8 CAND012 PRE-FREEZE Validation
 
 on:
   push:
@@ -10,10 +10,23 @@ permissions:
   contents: read
 
 jobs:
-  backend-green:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -21,30 +34,451 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Run Paper terminal-coherence GREEN controls
+      - name: Run complete backend regression
+        run: pytest
+
+  paper-lifecycle-invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run coherent Paper lifecycle and display-lineage controls
         run: |
           pytest tests/api/test_m98_research_workspace_application.py \
-            -k "paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot or paper_projection_conflicts_if_authority_generation_changes" -q
-          pytest tests/api/test_paper_trading_application.py \
-            -k "stop_controls_runtime_waits_worker_and_retains_terminal_snapshot or expected_session_stop_rejects_different_active_session or worker_failure_is_retained_as_failed_terminal_snapshot or later_start_replaces_retained_terminal_session or natural_worker_completion_retains_stopped_snapshot" -q
-          pytest tests/research/test_m97_qualified_paper_campaign.py \
-            -k "sqlite_campaign_session_survives_reopen_and_restart_recovery or sqlite_terminal_evidence_is_append_only or sqlite_allows_only_one_active_session_and_freezes_start_time or terminal_callback_failure_is_never_reported_as_durable_success or history_remains_ordered_and_terminal_sessions_are_preserved" -q
+            -k "paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot" -q
+          pytest tests/api/test_paper_trading_application.py -q
+          pytest tests/research/test_m97_qualified_paper_campaign.py -q
 
-  frontend-green:
+  authority-data-invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run authority, snapshot, provider-freshness and registry controls
+        run: |
+          pytest \
+            tests/api/test_m98_research_workspace_application.py \
+            tests/research/test_m96_candidate_bound_wfa.py \
+            tests/research/test_m98_workspace_store_extensions.py \
+            tests/research/test_successor_historical_retrieval.py \
+            tests/market_data/test_instrument_registry_loader.py -q
+
+  lifecycle-preservation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run Retry, duplicate, concurrency and exact-session preservation controls
+        run: |
+          pytest \
+            tests/api/test_m98_research_workspace_application.py \
+            tests/research/test_m98_workspace_store_extensions.py \
+            tests/api/test_paper_trading_application.py \
+            tests/research/test_m97_qualified_paper_campaign.py \
+            -k "start_does_not_implicitly_retry_failed_trial or send_to_paper_preserves_partial_results_when_one_candidate_fails or concurrent_send_to_paper_reuses_one_matching_campaign or session_registration_binds_exact_latest_observed_generation or expected_session_stop_rejects_different_active_session or concurrent_start_allows_only_one_composition or sqlite_campaign_session_survives_reopen_and_restart_recovery or new_session_after_interruption_rechecks_current_authority or paper_history_reconciles_terminalization_between_reads or paper_history_projects_durable_terminal_display_snapshot or paper_history_persistent_mixed_lifecycle_fails_closed or selected_terminal_snapshot_survives_unrelated_active_runtime or interrupted_session_never_fabricates_display_snapshot" -q
+
+  process-review-binding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - name: Bind mandatory third-failure and RED reconstruction records
+        run: |
+          echo "THIRD_FAILURE_ROOT_CAUSE_SHA256=a0833450bb1e72b0f384093f598318d9911cfb930c0452b4bd2bffeeb35131ae"
+          echo "CAND012_RED_RECONSTRUCTION_SHA256=297ba3b7568ecb67837438218aa819615e195d96c8f68bbb792da21f6f501dd0"
+          echo "PREPARATION_METHOD=state-transition-and-invariant-family"
+
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      - name: Verify exact M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - name: Run Paper terminal-metrics GREEN controls
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+
+  provider-master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report current M98-CAND-012 lean draft tree
         run: |
-          npm test -- --run tests/ResearchPaperPage.test.tsx
-          npm run build
-          npm run lint
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify current AngelOne instrument master
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from decimal import Decimal
+          from pathlib import Path
+          import urllib.request
+
+          url = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
+          request = urllib.request.Request(
+              url,
+              headers={"User-Agent": "Kanasu-M9.8-validation/1.0"},
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              raw = response.read()
+
+          digest = hashlib.sha256(raw).hexdigest()
+          rows = json.loads(raw)
+          if not isinstance(rows, list) or not rows:
+              raise SystemExit("AngelOne instrument master is not a non-empty JSON array")
+
+          snapshot = json.loads(
+              Path("config/provider_snapshots/angelone_nse_eq_starter_2026-11-08.json")
+              .read_text(encoding="utf-8")
+          )
+          registry = json.loads(
+              Path("config/instrument_registry.json").read_text(encoding="utf-8")
+          )
+          expected_rows = snapshot["selected_rows"]
+          selected = {}
+          for symbol, expected_row in expected_rows.items():
+              token = str(expected_row["token"])
+              matches = [
+                  row
+                  for row in rows
+                  if row.get("exch_seg") == "NSE"
+                  and row.get("symbol") == symbol
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"{symbol}: expected exactly one NSE row, found {len(matches)}"
+                  )
+              row = matches[0]
+              if str(row.get("token")) != token:
+                  raise SystemExit(
+                      f"{symbol}: expected token {token}, got {row.get('token')}"
+                  )
+              critical_fields = (
+                  "token",
+                  "symbol",
+                  "name",
+                  "exch_seg",
+                  "lotsize",
+                  "tick_size",
+              )
+              changed_critical = {
+                  field: {
+                      "retained": expected_row.get(field),
+                      "current": row.get(field),
+                  }
+                  for field in critical_fields
+                  if row.get(field) != expected_row.get(field)
+              }
+              if changed_critical:
+                  raise SystemExit(
+                      f"{symbol}: current authority fields changed: "
+                      f"{json.dumps(changed_critical, sort_keys=True)}"
+                  )
+              if row != expected_row:
+                  changed_non_authority = {
+                      field: {
+                          "retained": expected_row.get(field),
+                          "current": row.get(field),
+                      }
+                      for field in sorted(
+                          set(row) | set(expected_row)
+                      )
+                      if (
+                          field not in critical_fields
+                          and row.get(field) != expected_row.get(field)
+                      )
+                  }
+                  print(
+                      "ANGELONE_NON_AUTHORITY_ROW_DRIFT="
+                      + symbol
+                      + ":"
+                      + json.dumps(
+                          changed_non_authority,
+                          sort_keys=True,
+                          separators=(",", ":"),
+                      )
+                  )
+              selected[symbol] = row
+
+          if snapshot["full_master_sha256"] != "92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437":
+              raise SystemExit("retained bootstrap master SHA-256 changed unexpectedly")
+          if snapshot["observed_at"] != "2026-11-08T12:31:00.275890+00:00":
+              raise SystemExit("retained bootstrap observation time changed unexpectedly")
+
+          registry_by_symbol = {
+              binding["provider_symbol"]: binding
+              for binding in registry["provider_bindings"]
+              if binding["provider"] == "angelone"
+          }
+          registry_instruments = {
+              instrument["symbol"]: instrument
+              for instrument in registry["instruments"]
+          }
+          for provider_symbol, expected_row in expected_rows.items():
+              runtime_symbol = expected_row["name"]
+              binding = registry_by_symbol.get(runtime_symbol)
+              instrument = registry_instruments.get(runtime_symbol)
+              if binding is None:
+                  raise SystemExit(f"{runtime_symbol}: registry binding missing")
+              if instrument is None:
+                  raise SystemExit(f"{runtime_symbol}: registry instrument missing")
+              expected_tick = Decimal(str(expected_row["tick_size"])) / Decimal("100")
+              actual_tick = Decimal(str(instrument["tick_size"]))
+              if actual_tick != expected_tick:
+                  raise SystemExit(
+                      f"{runtime_symbol}: registry tick {actual_tick} disagrees "
+                      f"with provider-normalized tick {expected_tick}"
+                  )
+              if instrument["effective_from"] != snapshot["observed_at"]:
+                  raise SystemExit(
+                      f"{runtime_symbol}: instrument metadata is not snapshot-bound"
+                  )
+              if instrument["effective_to"] is not None:
+                  raise SystemExit(
+                      f"{runtime_symbol}: bootstrap instrument metadata must remain open until superseded"
+                  )
+              if str(binding["provider_instrument_id"]) != str(expected_row["token"]):
+                  raise SystemExit(f"{runtime_symbol}: registry token disagrees with snapshot")
+              if binding["provider_exchange"] != expected_row["exch_seg"]:
+                  raise SystemExit(f"{runtime_symbol}: registry exchange disagrees with snapshot")
+              if binding["effective_from"] != snapshot["observed_at"]:
+                  raise SystemExit(f"{runtime_symbol}: registry effective_from is not snapshot-bound")
+              if binding["effective_to"] is not None:
+                  raise SystemExit(f"{runtime_symbol}: bootstrap current binding must remain open until superseded")
+
+          evidence = Path("provider-master-evidence")
+          evidence.mkdir()
+          (evidence / "OpenAPIScripMaster.json").write_bytes(raw)
+          (evidence / "manifest.json").write_text(
+              json.dumps(
+                  {
+                      "source_url": url,
+                      "sha256": digest,
+                      "byte_count": len(raw),
+                      "record_count": len(rows),
+                      "selected_rows": selected,
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+          print(f"ANGELONE_MASTER_SHA256={digest}")
+          print(f"ANGELONE_MASTER_BYTES={len(raw)}")
+          print(f"ANGELONE_MASTER_RECORDS={len(rows)}")
+          for symbol in sorted(selected):
+              print(
+                  f"ANGELONE_BINDING={symbol}:{selected[symbol].get('token')}:"
+                  f"{selected[symbol].get('exch_seg')}"
+              )
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m98-angelone-provider-master
+          path: provider-master-evidence
+          if-no-files-found: error
+          retention-days: 90
+
+  mechanical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Report current M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - name: Verify candidate diff mechanics
+        run: |
+          git diff --check 035ad39c73e69e647dbf492c999424f78c9c87bc HEAD -- . ':(exclude).github/workflows/m98-draft-validation.yml'
+          python - <<'PY'
+          import subprocess
+
+          baseline = "035ad39c73e69e647dbf492c999424f78c9c87bc"
+          excluded = ".github/workflows/m98-draft-validation.yml"
+          expected_count = 47
+
+          output = subprocess.check_output(
+              ["git", "diff", "--name-status", baseline, "HEAD", "--", ".", f":(exclude){excluded}"],
+              text=True,
+          )
+          rows = [line for line in output.splitlines() if line.strip()]
+          if len(rows) != expected_count:
+              raise SystemExit(
+                  f"expected {expected_count} candidate paths, found {len(rows)}"
+              )
+          if any(line.startswith("D\t") for line in rows):
+              raise SystemExit("candidate contains an unexpected deletion")
+          print(f"CANDIDATE_PATHS={len(rows)}")
+          print(output)
+          PY
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report current M98-CAND-012 lean draft tree
+        run: |
+          INDEX_PATH="$(git -C "$GITHUB_WORKSPACE" rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/m98-cand012.index
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
+          GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
+          ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand012.index git -C "$GITHUB_WORKSPACE" write-tree)"
+          echo "M98_CAND012_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "5ffb349ad0a6baf980744c3018a1411f8cf2d19b"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Run assembled browser navigation smoke
+        run: |
+          command -v google-chrome
+          google-chrome --version
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/m98-vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill "$VITE_PID" || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          for route in / /backtest /wfa /paper /paper/standalone; do
+            google-chrome \
+              --headless \
+              --no-sandbox \
+              --disable-gpu \
+              --virtual-time-budget=3000 \
+              --dump-dom \
+              "http://127.0.0.1:4173$route" \
+              > /tmp/m98-dom.html
+            grep -q ">Home<" /tmp/m98-dom.html
+            grep -q ">Backtest<" /tmp/m98-dom.html
+            grep -q ">WFA<" /tmp/m98-dom.html
+            grep -q ">Paper Trading<" /tmp/m98-dom.html
+          done
+
