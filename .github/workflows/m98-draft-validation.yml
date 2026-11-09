@@ -50,6 +50,21 @@ jobs:
         run: |
           pytest             tests/api/test_m98_research_workspace_application.py             tests/research/test_m96_candidate_bound_wfa.py             tests/research/test_m98_workspace_store_extensions.py             tests/research/test_successor_historical_retrieval.py             tests/market_data/test_instrument_registry_loader.py             -k cand010
 
+  cand010-preservation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run CAND010 lifecycle and authority preservation controls
+        run: |
+          pytest             tests/api/test_m98_research_workspace_application.py             tests/research/test_m98_workspace_store_extensions.py             tests/api/test_paper_trading_application.py             tests/research/test_m97_qualified_paper_campaign.py             -k "start_does_not_implicitly_retry_failed_trial or send_to_paper_preserves_partial_results_when_one_candidate_fails or concurrent_send_to_paper_reuses_one_matching_campaign or session_registration_binds_exact_latest_observed_generation or expected_session_stop_rejects_different_active_session or concurrent_start_allows_only_one_composition or sqlite_campaign_session_survives_reopen_and_restart_recovery or new_session_after_interruption_rechecks_current_authority"
+
   preparation-diagnostic:
     runs-on: ubuntu-latest
     steps:
