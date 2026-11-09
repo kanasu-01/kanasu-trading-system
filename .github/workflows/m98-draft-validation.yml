@@ -1,4 +1,4 @@
-name: M9.8 CAND010 PRE-FREEZE DRAFT Validation
+name: M9.8 CAND010 FROZEN Candidate Validation
 
 on:
   push:
@@ -25,7 +25,8 @@ jobs:
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
           ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
+          echo "M98_CAND010_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "1741a6f2eddb030486dba53945ac2221cafd9fe3"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -121,7 +122,8 @@ jobs:
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
           ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
+          echo "M98_CAND010_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "1741a6f2eddb030486dba53945ac2221cafd9fe3"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -148,7 +150,8 @@ jobs:
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
           ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
+          echo "M98_CAND010_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "1741a6f2eddb030486dba53945ac2221cafd9fe3"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -345,7 +348,8 @@ jobs:
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
           ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
+          echo "M98_CAND010_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "1741a6f2eddb030486dba53945ac2221cafd9fe3"
       - name: Verify candidate diff mechanics
         run: |
           git diff --check 035ad39c73e69e647dbf492c999424f78c9c87bc HEAD -- . ':(exclude).github/workflows/m98-draft-validation.yml'
@@ -389,7 +393,8 @@ jobs:
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" read-tree HEAD
           GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" rm -q --cached --ignore-unmatch .github/workflows/m98-draft-validation.yml
           ACTUAL_TREE="$(GIT_INDEX_FILE=/tmp/m98-cand010.index git -C "$GITHUB_WORKSPACE" write-tree)"
-          echo "M98_CAND010_DRAFT_TREE=$ACTUAL_TREE"
+          echo "M98_CAND010_FROZEN_TREE=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "1741a6f2eddb030486dba53945ac2221cafd9fe3"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -426,11 +431,24 @@ jobs:
           done
 
   candidate-package:
+    needs:
+      - backend
+      - cand010-adversarial
+      - cand010-preservation
+      - preparation-diagnostic
+      - frontend
+      - provider-master
+      - mechanical
+      - browser-smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: m98-cand010-preparation-diagnostic
+          path: /tmp/cand010-diagnostic
       - name: Build exact M98-CAND-010 review package
         env:
           BASELINE_COMMIT: 035ad39c73e69e647dbf492c999424f78c9c87bc
@@ -440,13 +458,16 @@ jobs:
           VALIDATION_FREEZE_COMMIT: 52d0e2db297e7a572813048b2a2a6ff105378890
           VALIDATION_FREEZE_TREE: b027b46392292c09a438d3ef696964a7c1e4fa03
           VALIDATION_WORKFLOW: .github/workflows/m98-draft-validation.yml
-          DRAFT_VALIDATION_RUN_ID: "42563963073"
+          PREFREEZE_VALIDATION_RUN_ID: "42563963073"
           NORMAL_TEST_RUN_ID: "42563962973"
           PREPARATION_DIAGNOSTIC_SHA256: e0b0cf8f2daa852f4dd918f7bf22dab772aeab587108788864c13de2c49250fb
-          PROVIDER_MASTER_SHA256: 92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437
-          PROVIDER_MASTER_BYTES: "37983303"
-          PROVIDER_MASTER_RECORDS: "161793"
+          RETAINED_PROVIDER_MASTER_SHA256: 92c425bd56f4edd48fe3f8aa859be39cbf472d8a64e821cc4322029568e81437
+          RETAINED_PROVIDER_MASTER_BYTES: "37983303"
+          RETAINED_PROVIDER_MASTER_RECORDS: "161793"
           PROVIDER_OBSERVED_AT: "2026-11-08T12:31:00.275890+00:00"
+          CURRENT_PROVIDER_MASTER_SHA256: 5520e5b482de7e78780e55dc302739990e1f98f04b2b6ab180cbb1c12131da92
+          CURRENT_PROVIDER_MASTER_BYTES: "38126571"
+          CURRENT_PROVIDER_MASTER_RECORDS: "162417"
         run: |
           set -euo pipefail
           OUT=/tmp/m98-cand010
@@ -454,33 +475,12 @@ jobs:
           mkdir -p "$OUT/add_payloads" "$OUT/modified_original" "$OUT/modified_proposed"
           mkdir -p "$OUT/controlled_docs/original" "$OUT/controlled_docs/proposed"
 
-          cat > "$OUT/M98_CAND010_PREPARATION_DIAGNOSTIC.md" <<'EOF'
-          # M98-CAND-010 pre-freeze preparation diagnostic
-
-          Trigger: M98-CAND-008 and M98-CAND-009 are two accepted failed canonical candidates for the same M9.8 controlled objective. M98-CAND-010 must not freeze until this diagnostic and the changed preparation method are exercised.
-
-          Known escape pattern: pre-freeze qualification proved many direct behaviors but did not fully prove causal continuity of caller-observed authority through later re-resolution and durable writes, same-policy decision-generation coherence, fresh PROVIDER_BACKED coverage independently of warm cache, and provider metadata unit/temporal truth.
-
-          CAND009 material findings: F01 unseen WFA substitution in Send-to-Paper; F02 stale Start-WFA re-resolution/persistence risk; F03 warm cache masking incomplete fresh provider coverage; F04 mixed same-policy qualification/WFA generations; F05 starter-instrument metadata contradicted retained provider rows and lacked defensible temporal application.
-
-          Defect families:
-          - Authority substitution / TOCTOU: F01, F02.
-          - Snapshot coherence under same-policy supersession: F04.
-          - Fresh provider evidence truth independent of cache: F03.
-          - Provider metadata unit/temporal truth: F05.
-
-          Preparation-method changes before any CAND010 freeze:
-          1. Propagate exact observed authority to the durable writer; re-resolution may validate but never substitute.
-          2. Add deterministic stale-policy and same-policy supersession regressions.
-          3. Read Study qualification plus dependent WFA authority in one SQLite snapshot and test a deterministic concurrent mutation.
-          4. Require each PROVIDER_BACKED fresh binding segment to be complete before cache union and test warm-cache plus multi-binding partial responses.
-          5. Verify all five instrument tick sizes against retained AngelOne master rows with paise-to-rupee normalization and bind instrument metadata to the retained observation time rather than projecting it backward.
-          6. Run focused defect-family gates, complete backend regression, frontend tests/build/lint, provider-master validation, assembled browser smoke, diff/reconstruction checks, and exact lean-tree freeze verification.
-          7. Keep CAND010 non-canonical until every mandatory gate passes; any material unresolved failure keeps DRAFT/BLOCKED.
-          EOF
-          echo "$PREPARATION_DIAGNOSTIC_SHA256  $OUT/M98_CAND010_PREPARATION_DIAGNOSTIC.md" | sha256sum -c -
-
-          cp .git/index /tmp/candidate.index
+          INDEX_PATH="$(git rev-parse --git-path index)"
+          case "$INDEX_PATH" in
+            /*) ;;
+            *) INDEX_PATH="$GITHUB_WORKSPACE/$INDEX_PATH" ;;
+          esac
+          cp "$INDEX_PATH" /tmp/candidate.index
           GIT_INDEX_FILE=/tmp/candidate.index git read-tree HEAD
           GIT_INDEX_FILE=/tmp/candidate.index git rm -q --cached --ignore-unmatch "$VALIDATION_WORKFLOW"
           LEAN_TREE="$(GIT_INDEX_FILE=/tmp/candidate.index git write-tree)"
@@ -490,8 +490,15 @@ jobs:
           git diff --binary --full-index "$BASELINE_COMMIT" HEAD -- . ":(exclude)$VALIDATION_WORKFLOW" > "$OUT/M98_CAND010.patch"
           git diff --name-status "$BASELINE_COMMIT" HEAD -- . ":(exclude)$VALIDATION_WORKFLOW" > "$OUT/candidate_name_status.tsv"
 
+          cp /tmp/cand010-diagnostic/M98_CAND010_PREPARATION_DIAGNOSTIC.md "$OUT/"
+          echo "$PREPARATION_DIAGNOSTIC_SHA256  $OUT/M98_CAND010_PREPARATION_DIAGNOSTIC.md" | sha256sum -c -
+
           python - <<'PY'
-          import hashlib, json, os, subprocess, zipfile
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import zipfile
           from pathlib import Path
 
           root = Path.cwd()
@@ -503,117 +510,186 @@ jobs:
           freeze_commit = os.environ["VALIDATION_FREEZE_COMMIT"]
           freeze_tree = os.environ["VALIDATION_FREEZE_TREE"]
           workflow = os.environ["VALIDATION_WORKFLOW"]
+          diagnostic_sha = os.environ["PREPARATION_DIAGNOSTIC_SHA256"]
 
           def run(*args):
               return subprocess.check_output(args, text=True).strip()
 
-          lines = run("git","diff","--name-status",baseline,"HEAD","--",".",f":(exclude){workflow}").splitlines()
-          rows=[]
+          lines = run(
+              "git", "diff", "--name-status", baseline, "HEAD",
+              "--", ".", f":(exclude){workflow}",
+          ).splitlines()
+          rows = []
           for line in lines:
               if not line:
                   continue
-              status,path=line.split("\t",1)
-              if status not in ("A","M"):
-                  raise SystemExit("unsupported status: "+line)
-              content=(root/path).read_bytes()
-              mode=run("git","ls-tree","HEAD","--",path).split()[0]
-              succ=run("git","rev-parse","HEAD:"+path)
-              row={
-                  "path":path,
-                  "status":"added" if status=="A" else "modified",
-                  "mode":mode,
-                  "successor_blob_sha":succ,
-                  "successor_sha256":hashlib.sha256(content).hexdigest(),
-                  "bytes":len(content),
+              status, path = line.split("\t", 1)
+              if status not in ("A", "M"):
+                  raise SystemExit("unsupported status: " + line)
+              content = (root / path).read_bytes()
+              mode = run("git", "ls-tree", "HEAD", "--", path).split()[0]
+              succ = run("git", "rev-parse", "HEAD:" + path)
+              row = {
+                  "path": path,
+                  "status": "added" if status == "A" else "modified",
+                  "mode": mode,
+                  "successor_blob_sha": succ,
+                  "successor_sha256": hashlib.sha256(content).hexdigest(),
+                  "bytes": len(content),
               }
-              if status=="M":
-                  pred=run("git","rev-parse",baseline+":"+path)
-                  old=subprocess.check_output(["git","show",baseline+":"+path])
-                  row["predecessor_blob_sha"]=pred
-                  row["predecessor_sha256"]=hashlib.sha256(old).hexdigest()
-                  p=out/"modified_original"/path
-                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(old)
-                  p=out/"modified_proposed"/path
-                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(content)
+              if status == "M":
+                  pred = run("git", "rev-parse", baseline + ":" + path)
+                  old = subprocess.check_output(["git", "show", baseline + ":" + path])
+                  row["predecessor_blob_sha"] = pred
+                  row["predecessor_sha256"] = hashlib.sha256(old).hexdigest()
+                  po = out / "modified_original" / path
+                  po.parent.mkdir(parents=True, exist_ok=True)
+                  po.write_bytes(old)
+                  pp = out / "modified_proposed" / path
+                  pp.parent.mkdir(parents=True, exist_ok=True)
+                  pp.write_bytes(content)
               else:
                   try:
-                      subprocess.check_output(["git","cat-file","-e",baseline+":"+path],stderr=subprocess.DEVNULL)
+                      subprocess.check_output(
+                          ["git", "cat-file", "-e", baseline + ":" + path],
+                          stderr=subprocess.DEVNULL,
+                      )
                   except subprocess.CalledProcessError:
                       pass
                   else:
-                      raise SystemExit("ADD exists at baseline: "+path)
-                  p=out/"add_payloads"/path
-                  p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(content)
+                      raise SystemExit("ADD exists at baseline: " + path)
+                  p = out / "add_payloads" / path
+                  p.parent.mkdir(parents=True, exist_ok=True)
+                  p.write_bytes(content)
               rows.append(row)
 
-          if len(rows)!=47 or sum(r["status"]=="modified" for r in rows)!=28 or sum(r["status"]=="added" for r in rows)!=19:
+          if (
+              len(rows) != 47
+              or sum(row["status"] == "modified" for row in rows) != 28
+              or sum(row["status"] == "added" for row in rows) != 19
+          ):
               raise SystemExit("candidate manifest count mismatch")
 
-          manifest={
-              "schema":"kanasu.m98-candidate-manifest.v1",
-              "candidate_id":candidate_id,
-              "repository":"kanasu-01/kanasu-trading-system",
-              "target_branch":"m9-v1-research-platform",
-              "baseline_commit":baseline,
-              "baseline_tree":baseline_tree,
-              "validation_freeze_commit":freeze_commit,
-              "validation_freeze_tree":freeze_tree,
-              "lean_candidate_tree":expected_tree,
-              "candidate_path_count":47,
-              "modified_count":28,
-              "added_count":19,
-              "deleted_count":0,
-              "validation_only_excluded":workflow,
-              "paths":rows,
+          manifest = {
+              "schema": "kanasu.m98-candidate-manifest.v1",
+              "candidate_id": candidate_id,
+              "repository": "kanasu-01/kanasu-trading-system",
+              "target_branch": "m9-v1-research-platform",
+              "baseline_commit": baseline,
+              "baseline_tree": baseline_tree,
+              "validation_freeze_commit": freeze_commit,
+              "validation_freeze_tree": freeze_tree,
+              "lean_candidate_tree": expected_tree,
+              "candidate_path_count": 47,
+              "modified_count": 28,
+              "added_count": 19,
+              "deleted_count": 0,
+              "validation_only_excluded": workflow,
+              "preparation_diagnostic_sha256": diagnostic_sha,
+              "paths": rows,
           }
-          (out/"candidate_manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n")
+          (out / "candidate_manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
 
-          controlled=["docs/PROJECT_STATUS.md","docs/architecture/ARCHITECTURE.md","docs/behavior/TRACEABILITY.md","docs/roadmap/ROADMAP.md"]
+          controlled = [
+              "docs/PROJECT_STATUS.md",
+              "docs/architecture/ARCHITECTURE.md",
+              "docs/behavior/TRACEABILITY.md",
+              "docs/roadmap/ROADMAP.md",
+          ]
           for path in controlled:
-              old=subprocess.check_output(["git","show",baseline+":"+path])
-              new=(root/path).read_bytes()
-              po=out/"controlled_docs/original"/path; po.parent.mkdir(parents=True,exist_ok=True); po.write_bytes(old)
-              pp=out/"controlled_docs/proposed"/path; pp.parent.mkdir(parents=True,exist_ok=True); pp.write_bytes(new)
+              old = subprocess.check_output(["git", "show", baseline + ":" + path])
+              new = (root / path).read_bytes()
+              po = out / "controlled_docs/original" / path
+              po.parent.mkdir(parents=True, exist_ok=True)
+              po.write_bytes(old)
+              pp = out / "controlled_docs/proposed" / path
+              pp.parent.mkdir(parents=True, exist_ok=True)
+              pp.write_bytes(new)
 
-          source_zip=out/"M98_CAND010_FULL_SOURCE.zip"
-          tracked=run("git","ls-files").splitlines()
-          with zipfile.ZipFile(source_zip,"w",compression=zipfile.ZIP_DEFLATED) as z:
+          source_zip = out / "M98_CAND010_FULL_SOURCE.zip"
+          tracked = run("git", "ls-files").splitlines()
+          with zipfile.ZipFile(
+              source_zip, "w", compression=zipfile.ZIP_DEFLATED
+          ) as archive:
               for path in tracked:
-                  if path==workflow:
+                  if path == workflow:
                       continue
-                  z.write(root/path,arcname=path)
+                  archive.write(root / path, arcname=path)
 
-          validation={
-              "candidate_id":candidate_id,
-              "validated_candidate_bytes_commit":freeze_commit,
-              "lean_candidate_tree":expected_tree,
-              "exact_tree_validation_commit":"52d0e2db297e7a572813048b2a2a6ff105378890",
-              "exact_tree_materialization":"PASS in backend/frontend/provider/mechanical/browser jobs",
-              "draft_validation_run_id":int(os.environ["DRAFT_VALIDATION_RUN_ID"]),
-              "normal_test_run_id":int(os.environ["NORMAL_TEST_RUN_ID"]),
-              "normal_repository_pytest_count":1979,
-              "backend_full_pytest":"PASS",
-              "normal_repository_pytest":"PASS",
-              "frontend_npm_ci":"PASS",
-              "frontend_tests":"PASS",
-              "frontend_build":"PASS",
-              "frontend_lint":"PASS",
-              "mechanical_diff_check":"PASS",
-              "headless_chrome_navigation_smoke":"PASS",
-              "provider_master_validation":"PASS",
-              "cand010_adversarial":"11 passed",
-              "cand010_preservation":"8 passed",
-              "requirement_70_preparation_diagnostic_sha256":os.environ["PREPARATION_DIAGNOSTIC_SHA256"],
-              "provider_master":{
-                  "source_url":"https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
-                  "sha256":os.environ["PROVIDER_MASTER_SHA256"],
-                  "byte_count":int(os.environ["PROVIDER_MASTER_BYTES"]),
-                  "record_count":int(os.environ["PROVIDER_MASTER_RECORDS"]),
-                  "observed_at":os.environ["PROVIDER_OBSERVED_AT"],
-                  "bindings":{"HDFCBANK-EQ":"1333","INFY-EQ":"1594","RELIANCE-EQ":"2885","SBIN-EQ":"3045","TCS-EQ":"11536"},
+          diagnostic_path = out / "M98_CAND010_PREPARATION_DIAGNOSTIC.md"
+          if hashlib.sha256(diagnostic_path.read_bytes()).hexdigest() != diagnostic_sha:
+              raise SystemExit("preparation diagnostic identity mismatch")
+
+          validation = {
+              "candidate_id": candidate_id,
+              "state": "READY_FROZEN_FOR_REVIEW1",
+              "validated_candidate_bytes_commit": freeze_commit,
+              "validated_candidate_full_tree": freeze_tree,
+              "lean_candidate_tree": expected_tree,
+              "freeze_packaging_workflow_commit": os.environ["GITHUB_SHA"],
+              "freeze_packaging_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "prefreeze_validation_run_id": int(
+                  os.environ["PREFREEZE_VALIDATION_RUN_ID"]
+              ),
+              "normal_test_run_id": int(os.environ["NORMAL_TEST_RUN_ID"]),
+              "backend_full_pytest_count": 1979,
+              "normal_repository_pytest_count": 1979,
+              "cand010_adversarial_count": 11,
+              "cand010_preservation_count": 8,
+              "backend_full_pytest": "PASS",
+              "normal_repository_pytest": "PASS",
+              "frontend_test_files": 8,
+              "frontend_tests": 33,
+              "frontend_npm_ci": "PASS",
+              "frontend_build": "PASS",
+              "frontend_lint": "PASS",
+              "mechanical_diff_check": "PASS",
+              "headless_chrome_navigation_smoke": "PASS",
+              "provider_master_validation": "PASS",
+              "preparation_diagnostic_sha256": diagnostic_sha,
+              "retained_provider_master": {
+                  "source_url": "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
+                  "sha256": os.environ["RETAINED_PROVIDER_MASTER_SHA256"],
+                  "byte_count": int(os.environ["RETAINED_PROVIDER_MASTER_BYTES"]),
+                  "record_count": int(os.environ["RETAINED_PROVIDER_MASTER_RECORDS"]),
+                  "observed_at": os.environ["PROVIDER_OBSERVED_AT"],
+                  "bindings": {
+                      "HDFCBANK-EQ": "1333",
+                      "INFY-EQ": "1594",
+                      "RELIANCE-EQ": "2885",
+                      "SBIN-EQ": "3045",
+                      "TCS-EQ": "11536",
+                  },
+                  "rupee_tick_sizes": {
+                      "HDFCBANK": "0.05",
+                      "INFY": "0.10",
+                      "RELIANCE": "0.10",
+                      "SBIN": "0.05",
+                      "TCS": "0.10",
+                  },
+              },
+              "current_provider_observation": {
+                  "sha256": os.environ["CURRENT_PROVIDER_MASTER_SHA256"],
+                  "byte_count": int(os.environ["CURRENT_PROVIDER_MASTER_BYTES"]),
+                  "record_count": int(os.environ["CURRENT_PROVIDER_MASTER_RECORDS"]),
+                  "authority_fields_unchanged": True,
+                  "non_authority_drift": {
+                      "INFY-EQ": {
+                          "freeze_qty": {
+                              "retained": "81164",
+                              "current": "85222",
+                          }
+                      }
+                  },
               },
           }
-          (out/"validation_evidence.json").write_text(json.dumps(validation,indent=2,sort_keys=True)+"\n")
+          (out / "validation_evidence.json").write_text(
+              json.dumps(validation, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
 
           ccrf_lines = [
               "# M98-CAND-010 Candidate Change / Reconstruction File",
@@ -625,156 +701,180 @@ jobs:
               f"Expected parent: {baseline}",
               f"Expected parent tree: {baseline_tree}",
               f"Validation freeze commit: {freeze_commit}",
-              f"Validation freeze tree: {freeze_tree}",
+              f"Validation freeze full tree: {freeze_tree}",
               f"Lean candidate tree: {expected_tree}",
               "Candidate paths: 47 = 28 MODIFY + 19 ADD; 0 DELETE",
               f"Validation-only path excluded: {workflow}",
+              f"Requirement-70 diagnostic SHA-256: {diagnostic_sha}",
               "",
               "## Candidate boundary",
               "",
-              "This package defines the exact lean M9.8 successor. The temporary validation workflow is not part of the candidate.",
-              "Every modified predecessor and proposed successor is included byte-for-byte. Every ADD payload is included byte-for-byte.",
-              "M98_CAND010.patch is a full-index binary-capable reconstruction diff.",
+              "This is the one complete corrective M9.8 successor after M98-CAND-008 and M98-CAND-009 failed Independent Review 1.",
+              "The temporary preparation/validation workflow is not part of the candidate.",
+              "Every modified predecessor and proposed successor is included byte-for-byte; every ADD payload is included byte-for-byte.",
+              "M98_CAND010.patch is a full-index binary-capable reconstruction diff and candidate_manifest.json is the exact 47-path manifest.",
+              "CAND010 is immutable after this freeze. It has no implementation/publication authority before Independent Review 1 PASS is returned by the human for this unchanged candidate.",
               "",
-              "CAND009 has no implementation or publication authority. It is frozen for Independent Review 1.",
+              "## Requirement-70 preparation diagnostic",
+              "",
+              "M98-CAND-008 and M98-CAND-009 are the two failed canonical candidates that triggered the mandatory repeated-candidate diagnostic.",
+              "The exact diagnostic is included as M98_CAND010_PREPARATION_DIAGNOSTIC.md and bound by the SHA-256 above.",
+              "The changed preparation method adds explicit authority-propagation, same-policy snapshot, fresh-provider, provider-unit/temporal, preservation, full-regression and exact-reconstruction gates before this freeze.",
+              "",
+              "## Corrective behavior",
+              "",
+              "F01: Send-to-Paper propagates the exact caller-observed WFA decision ID through qualified-Paper admission. Lower layers may validate current authority but may not substitute a different WFA decision.",
+              "F02: Start-WFA propagates the exact eligible QualificationDecision set already observed after caller policy fencing into CandidateWfaService. The durable WFA writer remains the final exact-current authority fence.",
+              "F03: PROVIDER_BACKED fresh provider coverage must independently cover every requested effective binding segment before cached coverage can contribute.",
+              "F04: Study and WFA projections read active-policy qualification plus dependent matching WFA authority from one SQLite Study snapshot; same-policy supersession cannot create mixed generations.",
+              "F05: retained AngelOne paise tick sizes normalize to HDFCBANK 0.05, INFY 0.10, RELIANCE 0.10, SBIN 0.05 and TCS 0.10 rupees; all five bootstrap instrument metadata rows are effective only from the retained 2026-11-08 observation.",
               "",
               "## Readiness evidence",
               "",
-              f"M9.8 exact-tree validation run {os.environ['DRAFT_VALIDATION_RUN_ID']}: PASS.",
-              f"Kanasu Test Suite run {os.environ['NORMAL_TEST_RUN_ID']}: PASS.",
-              f"Backend/frontend/provider/mechanical/browser jobs each materialized and asserted lean tree {expected_tree} before validation.",
-              "Full normal repository suite: 1979 passed.",
+              f"Pre-freeze exact-successor validation run {os.environ['PREFREEZE_VALIDATION_RUN_ID']}: PASS.",
+              f"Independent normal repository test run {os.environ['NORMAL_TEST_RUN_ID']}: PASS.",
+              f"Freeze verification/package run {os.environ['GITHUB_RUN_ID']}: all required same-commit jobs PASS before this package job.",
+              "Complete backend: 1979 passed in each full execution.",
               "CAND010 defect-family adversarial gate: 11 passed.",
-              "CAND010 preservation gate: 8 passed.",
-              f"Requirement-70 preparation diagnostic SHA-256: {os.environ['PREPARATION_DIAGNOSTIC_SHA256']}.",
-              "Frontend npm ci, tests, strict TypeScript/Vite production build, and ESLint: PASS.",
-              "Candidate mechanical diff check, exact 47-path count, and no-delete check: PASS.",
-              "Headless Chrome assembled route/navigation smoke: PASS.",
-              "Official AngelOne provider-master verification: PASS.",
-              "",
-              "Provider master source: https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json",
-              f"Provider master SHA-256: {os.environ['PROVIDER_MASTER_SHA256']}",
-              f"Provider master bytes: {os.environ['PROVIDER_MASTER_BYTES']}",
-              f"Provider master records: {os.environ['PROVIDER_MASTER_RECORDS']}",
-              f"Provider observation time: {os.environ['PROVIDER_OBSERVED_AT']}",
-              "",
-              "The retained bootstrap snapshot binds only the five reviewed NSE cash-equity rows. Current-master truth is not projected backward.",
+              "Lifecycle/authority preservation gate: 8 passed.",
+              "Frontend: 8 test files / 33 tests, npm ci, production TypeScript+Vite build and ESLint: PASS.",
+              "Headless Chrome assembled navigation smoke: PASS.",
+              "Mechanical diff, 47-path count, no-delete and exact lean-tree checks: PASS.",
+              "Retained-provider unit/temporal validation and current-master authority-field check: PASS.",
+              "The current daily AngelOne row differs from the retained INFY row only in freeze_qty (81164 -> 85222); token/symbol/name/exchange/lot/tick authority fields used here remain unchanged.",
               "",
               "## Reconstruction",
               "",
               f"Apply M98_CAND010.patch to exact parent {baseline}, or use candidate_manifest.json plus the byte-exact payload directories.",
               f"Reconstruction must yield Git tree {expected_tree}. Any different tree is not M98-CAND-010.",
               "",
+              "## Exact implementation/publication operations after Review 1 PASS",
+              "",
+              "Review 1 PASS returned by the human for this byte-identical candidate establishes implementation authority under SOP-G-003-V014 unless the human expressly withholds it.",
+              f"1. Re-read target branch m9-v1-research-platform and require HEAD exactly {baseline} and tree exactly {baseline_tree}.",
+              "2. Verify every modified predecessor blob against candidate_manifest.json and every ADD destination is absent at the baseline.",
+              "3. Construct one Git tree from the reviewed successor blob identities on that exact baseline; require the result equals the frozen lean candidate tree.",
+              "4. Create exactly one implementation commit with the exact baseline as parent, the exact frozen candidate tree, and commit message: Implement M9.8 complete research workspace.",
+              "5. Re-verify target branch HEAD still equals the exact baseline; then move the target branch by one ordinary non-force expected-SHA remote ref update to the new commit. Force update is forbidden.",
+              "6. Read back the target branch, commit parent, tree, exact 47-path manifest, modes and contents. Require exact equality with the reviewed candidate.",
+              "7. Verify actual-state CI/read-back, then perform Independent Review 2 of the published result. Show the actual relevant before/after changes to the human before final acceptance.",
+              "",
+              "No merge, rebase, reset, clean, branch switch, force push/ref update, deletion, extra file, second implementation package or regenerated candidate is authorized.",
+              "Any source/target movement, predecessor mismatch, added-path collision, tree mismatch, unexpected path, failed guard, ambiguous mutation result or required content/scope change stops fail-closed. A content/scope change requires a new canonical candidate and Review 1.",
+              "",
               "## Independent Review 1 scope",
               "",
-              "Review independently against KTS-M009-S008-SPEC002-V001, accepted earlier-milestone semantics, and SOP-G-003-V014.",
-              "Challenge research authority, source policy, generation coherence, stale request fencing, Retry and Paper session identities,",
-              "Send-to-Paper transaction authority, partial completion, UI ordering, provider temporal truth, accepted economics/WFA math,",
-              "Trial/ResearchJob semantics, no-live-money boundary, and exact reconstruction.",
-              "",
-              "## Publication plan - descriptive only, not authorized",
-              "",
-              "Only after Review 1 PASS, human disposition, and separate implementation approval:",
-              f"re-read m9-v1-research-platform; require exact parent {baseline}; stage only the 47 manifest paths;",
-              f"prove staged tree equals {expected_tree}; create a commit with exact parent/tree; then perform the listed ordinary non-force push only if its branch/parent guards still match;",
-              "use ordinary non-force push; read back remote commit/tree/manifest; stop fail-closed on any mismatch.",
-              "Stage, commit and non-force push are distinct guarded technical boundaries. Human implementation approval of this unchanged candidate authorizes these listed ordinary operations collectively under SOP-G-003-V014; no repeated approval prompt is required while all guards match. Any deviation, mismatch, force operation, unlisted change, or ambiguous state stops fail-closed and requires fresh scoped authorization.",
+              "Review the whole resulting CAND010, not only F01-F05 patches. Independently reconstruct against the pinned baseline and require the exact lean tree.",
+              "Verify the requirement-70 diagnostic existed before this freeze and that the changed preparation method addresses the recurring defect families.",
+              "Challenge research authority, causal binding of observed authority through durable writes, same-policy snapshot coherence, provider fresh-coverage truth, provider metadata unit/temporal truth, partial completion, duplicates, Retry identity, Paper campaign/session authority, exact-session Stop, concurrency, restart/recovery, delayed UI responses, accepted economics/WFA mathematics, no-live-money scope, documentation truth, candidate manifest/reconstruction and guarded implementation mechanics.",
+              "Do not repair or mutate the frozen candidate during review.",
           ]
           ccrf = "\n".join(ccrf_lines) + "\n"
-
-          ccrf_path=out/"M98_CAND010_CCRF.md"
-          ccrf_path.write_text(ccrf,encoding="utf-8")
+          ccrf_path = out / "M98_CAND010_CCRF.md"
+          ccrf_path.write_text(ccrf, encoding="utf-8")
 
           handoff_lines = [
               "# M98-CAND-010 Independent Review 1 Handoff",
               "",
-              "Perform an independent Review 1 of M98-CAND-010. Do not implement, modify, stage, commit, push, merge, or repair the candidate.",
+              "Perform Independent Review 1 of the exact frozen M98-CAND-010. Read-only review only: do not implement, modify, stage, commit, push, merge, repair or regenerate the candidate.",
               "",
               "## Immutable identity",
               "",
-              f"- Repository: kanasu-01/kanasu-trading-system",
-              f"- Target branch: m9-v1-research-platform",
+              "- Repository: kanasu-01/kanasu-trading-system",
+              "- Target branch: m9-v1-research-platform",
               f"- Baseline commit: {baseline}",
               f"- Baseline tree: {baseline_tree}",
               f"- Candidate: {candidate_id}",
               f"- Lean candidate tree: {expected_tree}",
               "- Candidate scope: 47 paths = 28 MODIFY + 19 ADD, 0 DELETE",
               "- Behavioral authority: KTS-M009-S008-SPEC002-V001",
+              f"- Requirement-70 diagnostic SHA-256: {diagnostic_sha}",
               "",
-              "The temporary validation workflow is not part of the candidate.",
-              "Before technical review, reconstruct from M98_CAND010.patch or candidate_manifest.json plus byte-exact payloads and require the exact Git tree above. Reconstruction mismatch is a Review 1 failure.",
+              "The preparation workflow is excluded from the candidate. Reconstruct from M98_CAND010.patch or candidate_manifest.json plus byte-exact payloads and require the exact Git tree above before substantive review.",
               "",
-              "## Review posture",
+              "## Prior-candidate context",
               "",
-              "Review independently against the specification, the exact baseline, accepted M9.4-M9.7 semantics, and SOP-G-003-V014. Prior candidate decisions and preparer conclusions are evidence only, not authority.",
-              "Do not infer correctness from green tests. Perform bounded consequence/invariant traversal across callers, callees, readers, writers, persistence, authority/identity, concurrency, stale/duplicate requests, partial failure, restart/recovery, and user observation.",
+              "M98-CAND-008 and M98-CAND-009 failed Independent Review 1 for this same controlled objective. CAND009 accepted findings were F01 unseen WFA substitution, F02 stale Start-WFA authority re-resolution, F03 warm-cache masking of incomplete fresh PROVIDER_BACKED coverage, F04 mixed same-policy qualification/WFA generations, and F05 starter provider metadata unit/temporal contradiction.",
+              "Do not assume the preparer's corrections are sufficient. Search for sibling manifestations and review the whole resulting candidate.",
               "",
-              "## Mandatory challenge areas",
+              "## Mandatory independent checks",
               "",
-              "- HistoricalSourcePolicy: LOCAL_ONLY never constructs/contacts provider; LOCAL_FIRST fetches missing binding ranges only; PROVIDER_BACKED refreshes complete effective binding segments without destructive overwrite.",
-              "- Input boundary: only 5m/15m and Asia/Kolkata; symbols remain registry-controlled; invalid requests create no durable research lineage.",
-              "- Failure semantics: operational uncertainty must not mint INVALID/FAIL/ELIGIBLE authority; positively demonstrated deterministic corruption remains deterministic.",
-              "- F01/F02 authority continuity: observed WFA/qualification authority may be validated but never silently substituted before durable persistence.",
-              "- F03 provider freshness: each PROVIDER_BACKED fresh binding segment must independently prove complete coverage before cache can contribute.",
-              "- F04 aggregate generation coherence: Study/WFA reads must not combine same-policy qualification and WFA decisions from different generations.",
-              "- F05 provider metadata truth: verify paise-to-rupee tick normalization and retained-observation effective dating for all five starter instruments.",
-              "- Aggregate generation coherence for Study, WFA and Paper projections.",
-              "- Retry is bound to exact observed TrialDispositionEvent generation inside the atomic retry transaction.",
-              "- Qualified Paper Start is bound to exact latest observed campaign-session generation and Stop to exact observed active session; stale requests cannot affect replacements.",
-              "- Send-to-Paper is bound to the exact displayed PASS WFA decision set and transaction-time current M9.5/M9.6 authority.",
-              "- Ambiguous mutation responses are reconciled through authoritative reads without hidden automatic repeat; UNKNOWN fences further mutation where required.",
-              "- UI ordering, serialized polling, selection generations and owner navigation remain truthful under stale responses.",
-              "- Partial completion remains attributable; operational sibling failure does not erase completed immutable outcomes or fabricate economic rejection.",
-              "- Preserve M4 economics, M9.4 Trial/ResearchJob semantics, M9.5 sole profitable-trade-rate criterion, M9.6 WFA math/rules, M9.7 campaign/session authority, M8 standalone smoke, long-only/unlevered/no-live-money boundary.",
-              "- Provider truth: the retained 2026-11-08 AngelOne master verifies only the five observed starter bindings. Current-master truth must not be projected backward; earlier provider-backed ranges fail closed absent evidenced binding coverage.",
-              "- Candidate controls: exact manifest/modes/bytes, controlled-document ORIGINAL/PROPOSED, reconstruction and guarded publication/read-back mechanics.",
+              "1. Independently retrieve the exact baseline/specification/accepted M9.4-M9.7 authority and SOP-G-003-V014.",
+              "2. Verify the included requirement-70 diagnostic and that it predates the CAND010 freeze.",
+              "3. Reconstruct the 47-path successor and require the exact lean tree.",
+              "4. Reproduce applicable readiness gates, including 1979 full backend tests, 11 CAND010 adversarial controls, 8 preservation controls, frontend tests/build/lint, browser smoke and mechanical checks where reasonably available.",
+              "5. Challenge F01/F02 causal authority binding through later re-resolution and durable writes, including policy and same-policy supersession barriers.",
+              "6. Challenge F04 same-policy qualification/WFA generation coherence under concurrent read/write timing.",
+              "7. Challenge F03 fresh PROVIDER_BACKED coverage with warm cache and multiple effective bindings.",
+              "8. Verify all five retained AngelOne rows, paise-to-rupee tick normalization and the 2026-11-08 temporal boundary; do not project current daily metadata backward.",
+              "9. Challenge unchanged adjacent invariants: Retry identity, partial/duplicate behavior, campaign-to-session stale authority, exact-session Stop, restart/recovery, concurrency, delayed UI responses, M4 economics, M9.5 sole criterion, M9.6 WFA math, M9.7 Paper causality and no live-money authority.",
+              "10. Verify documentation, exact file modes/manifest, reconstruction, implementation operations, guards and stop conditions.",
+              "11. Continue feasible material review after any first finding so defect families are batched; identify any unreviewed material surfaces if completeness is partial.",
               "",
-              "## Evidence to verify, not trust blindly",
+              "## Evidence supplied for verification, not trust",
               "",
-              f"- Exact-tree M9.8 validation run: {os.environ['DRAFT_VALIDATION_RUN_ID']}",
-              f"- Normal Kanasu test run: {os.environ['NORMAL_TEST_RUN_ID']}",
+              f"- Pre-freeze validation run: {os.environ['PREFREEZE_VALIDATION_RUN_ID']}",
+              f"- Normal repository test run: {os.environ['NORMAL_TEST_RUN_ID']}",
+              f"- Freeze verification/package run: {os.environ['GITHUB_RUN_ID']}",
               "- Full backend: 1979 passed",
-              "- CAND010 adversarial defect-family gate: 11 passed",
-              "- CAND010 preservation gate: 8 passed",
-              f"- Requirement-70 diagnostic SHA-256: {os.environ['PREPARATION_DIAGNOSTIC_SHA256']}",
-              "- Frontend: 8 files / 33 tests passed",
-              "- npm ci / production TypeScript+Vite build / ESLint: PASS",
-              "- Mechanical diff/path/no-delete gate: PASS",
-              "- Headless Chrome assembled route smoke: PASS",
-              "- Official AngelOne master verification: PASS",
-              f"- Provider master SHA-256: {os.environ['PROVIDER_MASTER_SHA256']}",
+              "- CAND010 adversarial: 11 passed",
+              "- Preservation controls: 8 passed",
+              "- Frontend: 8 files / 33 tests + production build + lint PASS",
+              "- Browser smoke / provider check / mechanical exact-tree gate: PASS",
+              f"- Retained provider snapshot SHA-256: {os.environ['RETAINED_PROVIDER_MASTER_SHA256']}",
+              f"- Current provider observation SHA-256 at pre-freeze validation: {os.environ['CURRENT_PROVIDER_MASTER_SHA256']}",
               "",
-              "## Required reviewer output",
+              "## Required output",
               "",
-              "Start with exactly: M98_REVIEW1=PASS or M98_REVIEW1=FAIL",
-              "If FAIL, enumerate every material finding with severity, affected invariant, exact file/function or package evidence, reproducible failure sequence, why existing protection is insufficient, and minimum required correction. Search for sibling manifestations of every accepted defect family.",
-              "If PASS, state that exact reconstruction, behavioral/preservation review, adversarial concurrency/failure review, provider-temporal boundary, and candidate-control review were independently completed with no material blocking finding.",
-              "Do not implement corrections during Review 1.",
+              "TECHNICAL_VERDICT: PASS | FAIL | BLOCKED",
+              "REVIEW_COMPLETENESS: COMPLETE | PARTIAL",
               "",
+              "Then list all material findings, exact independently verified identities, reconstruction result, readiness reproduction result, defect-family coverage, remaining unreviewed surfaces if any, and confirmation that no files/repository state were modified.",
+              "A PASS requires COMPLETE applicable coverage.",
           ]
-          (out/"M98_CAND010_REVIEW1_HANDOFF.md").write_text(
-              "\n".join(handoff_lines),
+          (out / "M98_CAND010_REVIEW1_HANDOFF.md").write_text(
+              "\n".join(handoff_lines) + "\n",
               encoding="utf-8",
           )
 
-          sums=[]
-          for p in sorted(x for x in out.rglob("*") if x.is_file()):
-              if p.name=="SHA256SUMS.txt":
+          sums = []
+          for path in sorted(item for item in out.rglob("*") if item.is_file()):
+              if path.name == "SHA256SUMS.txt":
                   continue
-              sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(out).as_posix())
-          (out/"SHA256SUMS.txt").write_text("\n".join(sums)+"\n")
-          print("CANDIDATE_TREE="+expected_tree)
+              sums.append(
+                  hashlib.sha256(path.read_bytes()).hexdigest()
+                  + "  "
+                  + path.relative_to(out).as_posix()
+              )
+          (out / "SHA256SUMS.txt").write_text(
+              "\n".join(sums) + "\n",
+              encoding="utf-8",
+          )
+          print("CANDIDATE_TREE=" + expected_tree)
           print("CANDIDATE_PATHS=47")
-          print("CCRF_SHA256="+hashlib.sha256(ccrf_path.read_bytes()).hexdigest())
-          print("SOURCE_ZIP_SHA256="+hashlib.sha256(source_zip.read_bytes()).hexdigest())
+          print("CCRF_SHA256=" + hashlib.sha256(ccrf_path.read_bytes()).hexdigest())
+          print(
+              "MANIFEST_SHA256="
+              + hashlib.sha256((out / "candidate_manifest.json").read_bytes()).hexdigest()
+          )
+          print(
+              "PATCH_SHA256="
+              + hashlib.sha256((out / "M98_CAND010.patch").read_bytes()).hexdigest()
+          )
+          print("SOURCE_ZIP_SHA256=" + hashlib.sha256(source_zip.read_bytes()).hexdigest())
+          print("DIAGNOSTIC_SHA256=" + diagnostic_sha)
           PY
 
-          grep -q "1741a6f2eddb030486dba53945ac2221cafd9fe3" "$OUT/M98_CAND010_CCRF.md"
-          sha256sum "$OUT/M98_CAND010_CCRF.md" "$OUT/M98_CAND010_FULL_SOURCE.zip"
+          grep -q "$EXPECTED_CANDIDATE_TREE" "$OUT/M98_CAND010_CCRF.md"
+          sha256sum \
+            "$OUT/M98_CAND010_CCRF.md" \
+            "$OUT/candidate_manifest.json" \
+            "$OUT/M98_CAND010.patch" \
+            "$OUT/M98_CAND010_FULL_SOURCE.zip" \
+            "$OUT/M98_CAND010_PREPARATION_DIAGNOSTIC.md"
       - uses: actions/upload-artifact@v4
         with:
           name: M98-CAND-010-REVIEW-PACKAGE
           path: /tmp/m98-cand010
           if-no-files-found: error
           retention-days: 90
-
