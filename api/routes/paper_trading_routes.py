@@ -1,5 +1,6 @@
 import logging
 
+from core.staging import log_failure
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -79,7 +80,7 @@ async def start_paper_trading(
             message="Paper trading lifecycle conflict",
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API start failed"
         )
 
@@ -103,7 +104,7 @@ async def get_paper_trading_status():
             paper_trading_application.status
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API status failed"
         )
 
@@ -134,7 +135,7 @@ async def stop_paper_trading():
             message="Paper trading lifecycle conflict",
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API stop failed"
         )
 

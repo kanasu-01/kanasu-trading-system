@@ -1,4 +1,5 @@
 import type { ApiErrorResponse } from "@/types/api";
+import { getStagingToken, setStagingToken } from "@/staging";
 
 const configuredApiBase =
   import.meta.env.VITE_API_BASE_URL?.trim();
@@ -67,17 +68,40 @@ export async function apiRequest<T>(
   fallbackMessage: string,
 ): Promise<T> {
   let response: Response;
+  const headers = new Headers(init?.headers);
+  const token = getStagingToken();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  } else {
+    headers.delete("Authorization");
+  }
 
   try {
     response = await fetch(
       `${API_BASE_URL}${path}`,
-      init,
+      {
+        ...init,
+        headers,
+        credentials: "omit",
+        cache: "no-store",
+      },
     );
   } catch {
     throw new ApiRequestError(
       0,
       "network_error",
       "Unable to reach application API",
+    );
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    // A delayed response from an older request must not discard a new login.
+    if (getStagingToken() === token) setStagingToken(null);
+    throw new ApiRequestError(
+      401,
+      "session_expired",
+      "Please sign in again",
     );
   }
 

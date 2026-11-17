@@ -14,6 +14,7 @@ from core.runtime.live_paper_runtime import (
     LivePaperRuntime,
     ManagedLiveCandleFeed,
 )
+from core.staging import safe_failure
 from core.runtime.paper_candle_processor import PaperCandleProcessor
 from core.runtime.runtime_context import RuntimeContext
 from core.strategies.base_strategy import BaseStrategy
@@ -282,7 +283,7 @@ def prepare_live_paper_trading(
                 pending_recovery_range = None
                 reconciliation_active = False
 
-        except Exception:
+        except Exception as exc:
             with state_lock:
                 if (
                     not reconciliation_active
@@ -303,11 +304,19 @@ def prepare_live_paper_trading(
             if open_position is None:
                 raise
 
-            logger.exception(
-                f"LIVE PAPER RECONCILIATION HISTORY FAILED | "
-                f"Symbol={dataset_context.symbol} | "
-                f"Continuing restricted live protection"
-            )
+            reported_failure = safe_failure(exc, "Live Paper Trading recovery failed; provider details are withheld")
+            if reported_failure is not exc:
+                logger.error(
+                    "LIVE PAPER RECONCILIATION HISTORY FAILED | "
+                    "Symbol=%s | Continuing restricted live protection",
+                    dataset_context.symbol,
+                )
+            else:
+                logger.exception(
+                    f"LIVE PAPER RECONCILIATION HISTORY FAILED | "
+                    f"Symbol={dataset_context.symbol} | "
+                    f"Continuing restricted live protection"
+                )
 
     supervisor = LivePaperRuntime(
         feed=feed,
@@ -353,8 +362,14 @@ def execute_prepared_live_paper_trading(
             ),
         )
     except Exception as exc:
+        reported_failure = safe_failure(exc, "Live Paper Trading failed; provider details are withheld")
         with prepared.state_lock:
-            session.fail(exc)
+            session.fail(reported_failure)
+
+        if reported_failure is not exc:
+            # No third-party exception text or traceback in Render logs.
+            logger.error("LIVE PAPER TRADING FAILED | Symbol=%s", session.symbol)
+            raise reported_failure from None
 
         logger.exception(
             f"LIVE PAPER TRADING FAILED | "

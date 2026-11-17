@@ -11,6 +11,7 @@ from core.market_data.angelone_verified_websocket import (
 )
 from core.logging.logger import get_logger
 from core.market_data.live_market_update import LiveMarketUpdate
+from core.staging import staging_enabled
 
 
 LiveMarketUpdateHandler = Callable[[LiveMarketUpdate], None]
@@ -97,13 +98,20 @@ class AngelOneLiveMarketDataAdapter:
         self._disconnect_notified = False
         self._callback_failure = None
 
-        socket = self._websocket_factory(
-            self.auth_token,
-            self.config.api_key,
-            self.config.client_id,
-            self.feed_token,
-            max_retry_attempt=0,
-        )
+        try:
+            socket = self._websocket_factory(
+                self.auth_token,
+                self.config.api_key,
+                self.config.client_id,
+                self.feed_token,
+                max_retry_attempt=0,
+            )
+        except Exception as exc:
+            if staging_enabled():
+                if isinstance(exc, ConnectionError):
+                    raise ConnectionError("AngelOne socket initialization failed") from None
+                raise RuntimeError("AngelOne socket initialization failed") from None
+            raise
 
         # Capture the provider socket in each callback. A late callback from
         # an older connection epoch must never affect a newer socket.
@@ -116,12 +124,17 @@ class AngelOneLiveMarketDataAdapter:
 
         try:
             socket.connect()
-        except Exception:
+        except Exception as exc:
             if self._socket is socket:
                 self._socket = None
 
             self._notify_disconnect()
             self._raise_callback_failure()
+            if staging_enabled():
+                # A socket transport error must retain retry classification.
+                if isinstance(exc, ConnectionError):
+                    raise ConnectionError("AngelOne market-data connection failed") from None
+                raise RuntimeError("AngelOne market-data connection failed") from None
             raise
 
         if self._callback_failure is not None:
@@ -256,6 +269,13 @@ class AngelOneLiveMarketDataAdapter:
             update = self.normalize_message(message)
             self.on_update(update)
         except Exception as exc:
+            if staging_enabled():
+                self.logger.error(
+                    f"AngelOne live market-data callback failed | Symbol={self.symbol}"
+                )
+                safe_failure = RuntimeError("AngelOne callback processing failed")
+                self._record_callback_failure(socket, safe_failure)
+                raise safe_failure from None
             self.logger.exception(
                 f"AngelOne live market-data callback failed | "
                 f"Symbol={self.symbol}"
@@ -282,10 +302,16 @@ class AngelOneLiveMarketDataAdapter:
         try:
             socket.close_connection()
         except Exception:
-            self.logger.exception(
-                f"AngelOne live market-data socket close failed after "
-                f"fatal callback | Symbol={self.symbol}"
-            )
+            if staging_enabled():
+                self.logger.error(
+                    f"AngelOne live market-data socket close failed after "
+                    f"fatal callback | Symbol={self.symbol}"
+                )
+            else:
+                self.logger.exception(
+                    f"AngelOne live market-data socket close failed after "
+                    f"fatal callback | Symbol={self.symbol}"
+                )
 
     def _raise_callback_failure(self) -> None:
         failure = self._callback_failure
@@ -293,6 +319,11 @@ class AngelOneLiveMarketDataAdapter:
         if failure is None:
             return
 
+        if staging_enabled():
+            # Do not expose the provider exception as cause or context.
+            raise FatalLiveMarketDataCallbackError(
+                "AngelOne live market-data callback processing failed"
+            ) from None
         raise FatalLiveMarketDataCallbackError(
             "AngelOne live market-data callback processing failed"
         ) from failure
@@ -310,10 +341,15 @@ class AngelOneLiveMarketDataAdapter:
         # reach the downstream candle pipeline after an error.
         self._socket = None
 
-        self.logger.error(
-            f"AngelOne live market-data socket error | "
-            f"Symbol={self.symbol} | Error={error}"
-        )
+        if staging_enabled():
+            self.logger.error(
+                f"AngelOne live market-data socket error | Symbol={self.symbol}"
+            )
+        else:
+            self.logger.error(
+                f"AngelOne live market-data socket error | "
+                f"Symbol={self.symbol} | Error={error}"
+            )
 
         self._notify_disconnect()
 
