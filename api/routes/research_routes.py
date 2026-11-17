@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import logging
 
+from core.staging import log_failure
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -93,7 +94,7 @@ async def create_research_study(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research Study creation failed"
         )
 
@@ -216,7 +217,7 @@ async def register_research_revision(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research revision registration failed"
         )
 
@@ -262,7 +263,7 @@ async def reopen_research_study(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research Study reopen failed"
         )
 
@@ -306,7 +307,7 @@ async def get_research_progress(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research progress load failed"
         )
 
@@ -352,7 +353,7 @@ async def list_research_trials(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research Trial list load failed"
         )
 
@@ -398,7 +399,7 @@ async def get_research_trial_detail(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research Trial detail load failed"
         )
 
@@ -444,7 +445,7 @@ async def get_research_aggregation(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research aggregation load failed"
         )
 
@@ -504,7 +505,7 @@ async def start_research_revision(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research revision start failed"
         )
 
@@ -562,7 +563,7 @@ async def cancel_research_revision(
         )
 
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Research revision cancellation failed"
         )
 

@@ -1,3 +1,4 @@
+import logging
 import pytest
 from datetime import datetime, timedelta, timezone
 
@@ -1301,7 +1302,11 @@ def test_live_paper_reconciliation_keeps_protecting_position_on_later_live_ticks
 
 def test_live_paper_history_failure_does_not_disable_open_position_protection(
     monkeypatch,
+    caplog,
 ) -> None:
+    monkeypatch.setenv("KANASU_STAGING_PASSWORD_VERIFIER", "synthetic")
+    secret = "SYNTHETIC_RECONCILIATION_SECRET_DO_NOT_LOG"
+
     class FailingHistoricalSource:
         def __init__(self) -> None:
             self.calls = 0
@@ -1309,7 +1314,7 @@ def test_live_paper_history_failure_does_not_disable_open_position_protection(
         def retrieve(self, context, request):
             self.calls += 1
             raise RuntimeError(
-                "historical recovery unavailable"
+                f"historical recovery unavailable {secret}"
             )
 
     source = FailingHistoricalSource()
@@ -1407,6 +1412,7 @@ def test_live_paper_history_failure_does_not_disable_open_position_protection(
         SpyLivePaperRuntime,
     )
 
+    caplog.set_level(logging.ERROR)
     session = run_live_paper_trading(
         feed=object(),
         strategy=BuyFirstCandleStrategy(),
@@ -1429,6 +1435,8 @@ def test_live_paper_history_failure_does_not_disable_open_position_protection(
         clock_interval_seconds=0.0,
         initial_capital=100_000.0,
     )
+
+    assert secret not in caplog.text
 
     assert source.calls == 1
     assert session.execution_engine.get_runtime_position(

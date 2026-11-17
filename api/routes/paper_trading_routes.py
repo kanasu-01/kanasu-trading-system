@@ -1,6 +1,7 @@
 import logging
 
-from fastapi import APIRouter
+from core.staging import log_failure
+from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
@@ -21,6 +22,7 @@ from api.paper_trading_application import (
     PaperLifecycleConflict,
     paper_trading_application,
 )
+from api.staging import require_session, require_session_status
 
 
 router = APIRouter()
@@ -47,6 +49,7 @@ def _error_response(
 @router.get(
     "/config",
     response_model=PaperTradingConfigResponse,
+    dependencies=[Depends(require_session)],
 )
 async def get_paper_trading_config(
 ) -> PaperTradingConfigResponse:
@@ -63,6 +66,7 @@ async def get_paper_trading_config(
         422: {"model": ApiErrorResponse},
         500: {"model": ApiErrorResponse},
     },
+    dependencies=[Depends(require_session)],
 )
 async def start_paper_trading(
     request: PaperTradingStartRequest,
@@ -79,7 +83,7 @@ async def start_paper_trading(
             message="Paper trading lifecycle conflict",
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API start failed"
         )
 
@@ -96,6 +100,7 @@ async def start_paper_trading(
     responses={
         500: {"model": ApiErrorResponse},
     },
+    dependencies=[Depends(require_session_status)],
 )
 async def get_paper_trading_status():
     try:
@@ -103,7 +108,7 @@ async def get_paper_trading_status():
             paper_trading_application.status
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API status failed"
         )
 
@@ -121,6 +126,7 @@ async def get_paper_trading_status():
         409: {"model": ApiErrorResponse},
         500: {"model": ApiErrorResponse},
     },
+    dependencies=[Depends(require_session)],
 )
 async def stop_paper_trading():
     try:
@@ -134,7 +140,7 @@ async def stop_paper_trading():
             message="Paper trading lifecycle conflict",
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Paper trading API stop failed"
         )
 

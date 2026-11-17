@@ -1,5 +1,6 @@
 import logging
 
+from core.staging import log_failure
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -45,7 +46,7 @@ async def run_backtest(
             request,
         )
     except Exception:
-        logger.exception(
+        log_failure(logger,
             "Backtest API execution failed"
         )
 

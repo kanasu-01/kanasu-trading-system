@@ -11,6 +11,7 @@ from core.execution.order_response import OrderResponse, OrderStatus
 from core.broker.angelone_config import AngelOneConfig
 from core.entities.candle import Candle
 from core.logging.logger import get_logger
+from core.staging import staging_enabled
 from core.utils.retry import RetryPolicy
 from core.market_data.historical_coverage import TimeRange
 from core.market_data.provider_instrument_binding import (
@@ -63,12 +64,22 @@ class AngelOneBroker(BaseBroker):
             - paper_mode affects ONLY order execution
         """
 
-        self._api = SmartConnect(api_key=self.config.api_key)
+        try:
+            self._api = SmartConnect(api_key=self.config.api_key)
+        except Exception:
+            if staging_enabled():
+                raise RuntimeError("AngelOne client initialization failed") from None
+            raise
 
         if not self.config.totp_secret:
             raise RuntimeError("TOTP secret not configured for AngelOne login")
 
-        totp = pyotp.TOTP(self.config.totp_secret).now()
+        try:
+            totp = pyotp.TOTP(self.config.totp_secret).now()
+        except Exception:
+            if staging_enabled():
+                raise RuntimeError("AngelOne TOTP generation failed") from None
+            raise
 
         retry_policy = RetryPolicy(
             max_retries=self.login_retry_attempts,
@@ -83,6 +94,9 @@ class AngelOneBroker(BaseBroker):
                 totp,
             )
         except Exception as e:
+            if staging_enabled():
+                self.logger.error("AngelOne login request failed")
+                raise RuntimeError("AngelOne login request failed") from None
             self.logger.exception(
                 "AngelOne login request failed"
             )
@@ -108,6 +122,8 @@ class AngelOneBroker(BaseBroker):
         try:
             feed_token = self._api.getfeedToken()
         except Exception as e:
+            if staging_enabled():
+                raise RuntimeError("AngelOne login failed: feed token unavailable") from None
             raise RuntimeError(
                 "AngelOne login failed: feed token unavailable"
             ) from e
@@ -327,6 +343,12 @@ class AngelOneBroker(BaseBroker):
             )
 
         except Exception as e:
+            if staging_enabled():
+                self.logger.error(
+                    f"AngelOne historical fetch failed | "
+                    f"Symbol={symbol} | Timeframe={timeframe}"
+                )
+                raise RuntimeError("AngelOne historical data request failed") from None
 
             self.logger.exception(
                 f"AngelOne historical fetch failed | "
