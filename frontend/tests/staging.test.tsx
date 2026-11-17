@@ -95,7 +95,7 @@ describe("staging UI boundary", () => {
 
   it("preserves the ordinary non-staging runtime status sidebar", () => {
     vi.stubEnv("VITE_KANASU_STAGING_AUTH", "false");
-    render(<AppLayout><div>Page</div></AppLayout>);
+    render(<MemoryRouter><AppLayout><div>Page</div></AppLayout></MemoryRouter>);
     expect(screen.getByText("Runtime Status")).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
   });
