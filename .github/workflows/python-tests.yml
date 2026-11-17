@@ -87,7 +87,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: python -m pip install -r requirements.txt pytest==9.2.0 httpx==0.28.1
-      - run: cd frontend && npm ci && npm install --no-save --package-lock=false @playwright/test@1.56.1
+      - run: cd frontend && npm ci
       - run: cd frontend && npx playwright install --with-deps chromium
       - name: Start synthetic protected backend and Vite
         shell: bash

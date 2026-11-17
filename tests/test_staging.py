@@ -8,7 +8,8 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 import api.staging as staging
 import core.staging as safety
@@ -130,6 +131,88 @@ def test_staging_boundary_and_sdk_logger_guard(monkeypatch):
     assert "SECRET_PROVIDER_TEXT" not in capture.getvalue()
 
 
+def test_websocket_client_and_smartapi_logging_destinations_are_suppressed(monkeypatch):
+    import websocket._logging as websocket_logging
+
+    monkeypatch.setenv("KANASU_STAGING_MODE", "true")
+    transport_logger = websocket_logging._logger
+    transport_capture = io.StringIO()
+    transport_handler = logging.StreamHandler(transport_capture)
+    old_disabled = transport_logger.disabled
+    old_propagate = transport_logger.propagate
+    transport_logger.disabled = False
+    transport_logger.propagate = False
+    transport_logger.addHandler(transport_handler)
+
+    smartapi_logger = logging.getLogger("synthetic-smartapi-family")
+    smartapi_capture = io.StringIO()
+    smartapi_handler = logging.StreamHandler(smartapi_capture)
+    smartapi_logger.disabled = False
+    smartapi_logger.propagate = False
+    smartapi_logger.addHandler(smartapi_handler)
+
+    fake_sdk = types.ModuleType("SmartApi")
+    fake_http = types.ModuleType("SmartApi.smartConnect")
+    fake_ws = types.ModuleType("SmartApi.smartWebSocketV2")
+    fake_http.logger = smartapi_logger
+    fake_http.log = smartapi_logger
+    fake_ws.logger = smartapi_logger
+    FakeConnect = type("SmartConnect", (), {})
+    FakeConnect.__module__ = "SmartApi.smartConnect"
+    fake_sdk.SmartConnect = FakeConnect
+    monkeypatch.setitem(sys.modules, "SmartApi", fake_sdk)
+    monkeypatch.setitem(sys.modules, "SmartApi.smartConnect", fake_http)
+    monkeypatch.setitem(sys.modules, "SmartApi.smartWebSocketV2", fake_ws)
+
+    try:
+        safety.disable_smartapi_logging()
+        secret = "SYNTHETIC_PROVIDER_SECRET_FAMILY"
+        websocket_logging.error(f"transport handshake failed {secret}")
+        smartapi_logger.error(f"subscription failed {secret}")
+        smartapi_logger.warning(f"callback failed {secret}")
+        assert secret not in transport_capture.getvalue()
+        assert secret not in smartapi_capture.getvalue()
+    finally:
+        transport_logger.removeHandler(transport_handler)
+        transport_logger.disabled = old_disabled
+        transport_logger.propagate = old_propagate
+        smartapi_logger.removeHandler(smartapi_handler)
+
+
+def test_paper_status_http_polling_does_not_refresh_idle_session(monkeypatch):
+    import api.routes.paper_trading_routes as paper_routes
+
+    monkeypatch.setenv("KANASU_STAGING_MODE", "true")
+    monkeypatch.setenv(
+        staging.VERIFIER_ENV,
+        staging.create_password_verifier(PASSWORD, b"0123456789abcdef"),
+    )
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(staging.time, "monotonic", lambda: clock["now"])
+    auth = staging._Auth()
+    monkeypatch.setattr(staging, "auth", auth)
+    monkeypatch.setattr(
+        paper_routes.paper_trading_application,
+        "status",
+        lambda: {"active": False, "snapshot": None},
+    )
+
+    app = FastAPI()
+    app.include_router(staging.router, prefix="/api/auth")
+    app.include_router(paper_routes.router, prefix="/api/paper-trading")
+    client = TestClient(app)
+
+    signed = client.post("/api/auth/login", json={"password": PASSWORD})
+    assert signed.status_code == 200
+    token = signed.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    clock["now"] += staging.SESSION_IDLE_SECONDS - 1
+    assert client.get("/api/paper-trading/status", headers=headers).status_code == 200
+    clock["now"] += 2
+    assert client.get("/api/paper-trading/status", headers=headers).status_code == 401
+
+
 def _deploy_module():
     path = Path(__file__).parents[1] / "scripts" / "render_deploy.py"
     spec = importlib.util.spec_from_file_location("render_deploy", path)
@@ -160,6 +243,43 @@ def test_render_deploy_pins_sha_and_rejects_wrong_url(monkeypatch):
     monkeypatch.setattr(deploy, "request", wrong_url)
     with pytest.raises(deploy.DeployError):
         deploy.service("token", deploy.FRONTEND_NAME, "static_site", deploy.FRONTEND_URL)
+
+
+def test_render_wait_stops_when_authoritative_branch_advances(monkeypatch):
+    deploy = _deploy_module()
+    checks = {"count": 0}
+
+    def check(_sha):
+        checks["count"] += 1
+        if checks["count"] >= 2:
+            raise deploy.DeployError("Authoritative branch advanced; refusing stale deployment")
+
+    monkeypatch.setattr(deploy, "assert_authoritative_head", check)
+    monkeypatch.setattr(
+        deploy,
+        "request",
+        lambda *_args, **_kwargs: (
+            200,
+            {"commit": {"id": "a" * 40}, "status": "build_in_progress"},
+        ),
+    )
+    monkeypatch.setattr(deploy.time, "sleep", lambda _seconds: None)
+    tick = {"value": 0.0}
+
+    def monotonic():
+        tick["value"] += 1.0
+        return tick["value"]
+
+    monkeypatch.setattr(deploy.time, "monotonic", monotonic)
+    with pytest.raises(deploy.DeployError, match="Authoritative branch advanced"):
+        deploy.wait_live(
+            "token",
+            "srv",
+            "dep",
+            "a" * 40,
+            timeout=100,
+            stale_check_interval=0,
+        )
 
 
 def test_render_commands_force_staging_safety():

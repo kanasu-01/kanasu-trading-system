@@ -147,7 +147,6 @@ app.include_router(
     paper_trading_router,
     prefix="/api/paper-trading",
     tags=["Paper Trading"],
-    dependencies=[Depends(require_session)],
 )
 
 app.include_router(

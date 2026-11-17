@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../src/App";
 import { apiRequest } from "../src/api/apiClient";
 import { LoginGate, SessionControls } from "../src/staging";
+import { AppLayout } from "../src/app/AppLayout";
 import { getStagingToken, setStagingToken, stagingFrontend } from "../src/stagingSession";
 
 vi.mock("../src/pages/HomePage", () => ({ HomePage: () => <p>Home fixture</p> }));
@@ -56,7 +57,51 @@ describe("staging UI boundary", () => {
     expect(getStagingToken()).not.toBeNull();
   });
 
+  it("keeps login usable when continuity storage is unavailable", async () => {
+    vi.stubEnv("VITE_KANASU_STAGING_AUTH", "true");
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: "storage-failure-token-with-minimum-length-123456789",
+      runtime_instance_id: "runtime-instance-storage-test",
+      runtime_started_at: "2026-11-16T01:00:00+00:00",
+      storage_persistence: "ephemeral",
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    render(<LoginGate><div>Protected after storage failure</div></LoginGate>);
+    fireEvent.change(screen.getByLabelText("Staging password"), { target: { value: "sixteen-plus-chars-for-staging" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(screen.getByText("Protected after storage failure")).toBeInTheDocument());
+    expect(getStagingToken()).toContain("storage-failure-token");
+    storageSpy.mockRestore();
+  });
+
+  it("preserves supplied authorization and credentials outside staging", async () => {
+    vi.stubEnv("VITE_KANASU_STAGING_AUTH", "false");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiRequest("/backtest/config", {
+      headers: { Authorization: "Bearer ordinary-local-token" },
+      credentials: "include",
+    }, "Unavailable");
+    expect(fetchMock).toHaveBeenCalledWith("/api/backtest/config", expect.objectContaining({
+      headers: { Authorization: "Bearer ordinary-local-token" },
+      credentials: "include",
+    }));
+  });
+
+  it("preserves the ordinary non-staging runtime status sidebar", () => {
+    vi.stubEnv("VITE_KANASU_STAGING_AUTH", "false");
+    render(<AppLayout><div>Page</div></AppLayout>);
+    expect(screen.getByText("Runtime Status")).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+  });
+
   it("does not let a delayed old 401 erase a newer login", async () => {
+    vi.stubEnv("VITE_KANASU_STAGING_AUTH", "true");
     let resolveOld: ((response: Response) => void) | undefined;
     const old = new Promise<Response>((resolve) => { resolveOld = resolve; });
     vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(old));

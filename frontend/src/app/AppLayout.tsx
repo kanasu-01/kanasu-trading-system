@@ -35,7 +35,29 @@ export function AppLayout({ children }: Props) {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* SIDEBAR */}
         <div className="w-full flex-shrink-0 border-b border-slate-800 p-3 md:w-[220px] md:border-b-0 md:border-r">
-          {stagingFrontend() && <SessionControls />}
+          {stagingFrontend() ? (
+            <SessionControls />
+          ) : (
+            <>
+              <div
+                style={{
+                  fontSize: 13,
+                  opacity: 0.7,
+                  marginBottom: 12,
+                }}
+              >
+                Runtime Status
+              </div>
+
+              <div
+                style={{
+                  fontSize: 14,
+                }}
+              >
+                Connected
+              </div>
+            </>
+          )}
         </div>
 
         {/* PAGE CONTENT */}

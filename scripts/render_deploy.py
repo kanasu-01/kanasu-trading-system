@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -39,6 +40,36 @@ FAILED = {"deactivated", "build_failed", "pre_deploy_failed", "update_failed", "
 
 class DeployError(RuntimeError):
     pass
+
+
+def authoritative_head() -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "ls-remote", "origin", f"refs/heads/{BRANCH}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise DeployError("Cannot verify authoritative branch state") from None
+    if completed.returncode != 0:
+        raise DeployError("Cannot verify authoritative branch state")
+    lines = [line.split() for line in completed.stdout.splitlines() if line.strip()]
+    if (
+        len(lines) != 1
+        or len(lines[0]) != 2
+        or lines[0][1] != f"refs/heads/{BRANCH}"
+        or len(lines[0][0]) != 40
+        or any(c not in "0123456789abcdef" for c in lines[0][0].lower())
+    ):
+        raise DeployError("Authoritative branch state is ambiguous")
+    return lines[0][0].lower()
+
+
+def assert_authoritative_head(expected_sha: str) -> None:
+    if authoritative_head() != expected_sha.lower():
+        raise DeployError("Authoritative branch advanced; refusing stale deployment")
 
 
 def request(method: str, path: str, token: str, body: dict | None = None):
@@ -116,9 +147,21 @@ def deploy(token: str, service_id: str, sha: str) -> str:
     return payload["id"]
 
 
-def wait_live(token: str, service_id: str, deploy_id: str, sha: str, timeout: int = 1500) -> None:
+def wait_live(
+    token: str,
+    service_id: str,
+    deploy_id: str,
+    sha: str,
+    timeout: int = 1500,
+    stale_check_interval: float = 30.0,
+) -> None:
     deadline = time.monotonic() + timeout
+    next_stale_check = 0.0
     while time.monotonic() < deadline:
+        now = time.monotonic()
+        if now >= next_stale_check:
+            assert_authoritative_head(sha)
+            next_stale_check = now + stale_check_interval
         status, payload = request("GET", f"/services/{service_id}/deploys/{deploy_id}", token)
         if status != 200 or not isinstance(payload, dict) or commit_id(payload) != sha:
             raise DeployError("Render deploy identity changed")
@@ -158,17 +201,22 @@ def main() -> int:
     if not token:
         raise DeployError("RENDER_API_KEY is required")
 
+    assert_authoritative_head(args.sha)
     backend = service(token, BACKEND_NAME, "web_service", BACKEND_URL)
     frontend = service(token, FRONTEND_NAME, "static_site", FRONTEND_URL)
+    assert_authoritative_head(args.sha)
     configure(token, backend, frontend)
+    assert_authoritative_head(args.sha)
 
     backend_deploy = deploy(token, backend["id"], args.sha)
     wait_live(token, backend["id"], backend_deploy, args.sha)
     health(f"{BACKEND_URL}/health", True)
+    assert_authoritative_head(args.sha)
 
     frontend_deploy = deploy(token, frontend["id"], args.sha)
     wait_live(token, frontend["id"], frontend_deploy, args.sha)
     health(FRONTEND_URL, False)
+    assert_authoritative_head(args.sha)
     print(f"Render staging live at tested commit {args.sha}")
     return 0
 

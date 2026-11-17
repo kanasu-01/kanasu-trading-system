@@ -31,7 +31,19 @@ def disable_smartapi_logging() -> None:
 
     http = importlib.import_module(SmartConnect.__module__)
     ws = importlib.import_module("SmartApi.smartWebSocketV2")
-    targets = [getattr(http, "logger", None), getattr(http, "log", None), getattr(ws, "logger", None)]
+    websocket_logging = importlib.import_module("websocket._logging")
+    websocket_logger = getattr(websocket_logging, "_logger", None)
+    if (
+        not isinstance(websocket_logger, logging.Logger)
+        or websocket_logger.name != "websocket"
+    ):
+        raise RuntimeError("websocket-client logging structure changed; staging blocked")
+    targets = [
+        getattr(http, "logger", None),
+        getattr(http, "log", None),
+        getattr(ws, "logger", None),
+        websocket_logger,
+    ]
     for target in targets:
         if target is not None and not isinstance(target, logging.Logger):
             raise RuntimeError("SmartAPI logging structure changed; staging blocked")
