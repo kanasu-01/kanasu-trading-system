@@ -1,9 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const password = 'Kanasu-CI-Only-Synthetic-2026';
 const api = 'http://127.0.0.1:8000/api';
+const ui = 'http://127.0.0.1:4173';
 
 async function login(page) {
-  await page.goto('/');
+  await page.goto(ui);
   await expect(page.getByRole('heading', { name: 'Kanasu staging login' })).toBeVisible();
   await page.getByLabel('Staging password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -16,7 +17,7 @@ test('protects API, CORS, and login', async ({ page, request }) => {
   expect(preflight.headers()['access-control-allow-origin']).toBe('http://127.0.0.1:4173');
   const denied = await request.fetch(`${api}/backtest/config`, { method: 'OPTIONS', headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'GET' } });
   expect(denied.headers()['access-control-allow-origin']).toBeUndefined();
-  await page.goto('/');
+  await page.goto(ui);
   await page.getByLabel('Staging password').fill('incorrect-synthetic-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('alert')).toContainText('Incorrect password');
