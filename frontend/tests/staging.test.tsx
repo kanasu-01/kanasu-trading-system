@@ -61,9 +61,10 @@ describe("staging UI boundary", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(old));
     setStagingToken("old-session-token-of-sufficient-length");
     const request = apiRequest("/backtest/config", undefined, "Unavailable");
+    const rejection = expect(request).rejects.toMatchObject({ code: "session_expired" });
     setStagingToken("new-session-token-of-sufficient-length");
     await act(async () => { resolveOld!(new Response(null, { status: 401 })); await old; });
-    await expect(request).rejects.toMatchObject({ code: "session_expired" });
+    await rejection;
     expect(getStagingToken()).toBe("new-session-token-of-sufficient-length");
   });
 });
