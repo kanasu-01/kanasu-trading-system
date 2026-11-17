@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 import { AppNavbar } from "./AppNavbar";
-import { SessionControls, stagingContinuityNotice, stagingFrontend } from "@/staging";
+import { SessionControls } from "@/staging";
+import { stagingContinuityNotice, stagingFrontend } from "@/stagingSession";
 
 type Props = {
   children: ReactNode;

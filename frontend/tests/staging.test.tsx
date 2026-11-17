@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/App";
 import { apiRequest } from "../src/api/apiClient";
-import { LoginGate, SessionControls, getStagingToken, setStagingToken, stagingFrontend } from "../src/staging";
+import { LoginGate, SessionControls } from "../src/staging";
+import { getStagingToken, setStagingToken, stagingFrontend } from "../src/stagingSession";
 
 vi.mock("../src/pages/HomePage", () => ({ HomePage: () => <p>Home fixture</p> }));
 vi.mock("../src/pages/BacktestPage", () => ({ BacktestPage: () => <p>Backtest fixture</p> }));

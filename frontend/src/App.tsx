@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 
-import { LoginGate, stagingFrontend } from "./staging";
+import { LoginGate } from "./staging";
+import { stagingFrontend } from "./stagingSession";
 import { BacktestPage } from "./pages/BacktestPage";
 import { ReplayPage } from "./pages/ReplayPage";
 import { PaperTradingPage } from "./pages/PaperTradingPage";

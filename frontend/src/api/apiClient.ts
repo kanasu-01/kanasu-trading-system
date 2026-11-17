@@ -1,5 +1,5 @@
 import type { ApiErrorResponse } from "@/types/api";
-import { getStagingToken, setStagingToken } from "@/staging";
+import { getStagingToken, setStagingToken } from "@/stagingSession";
 
 const configuredApiBase =
   import.meta.env.VITE_API_BASE_URL?.trim();

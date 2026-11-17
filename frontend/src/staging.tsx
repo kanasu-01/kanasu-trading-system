@@ -1,48 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { API_BASE_URL } from "@/api/apiClient";
-
-let token: string | null = null;
-const listeners = new Set<() => void>();
-const RUNTIME_KEY = "kanasu.staging.runtime_instance_id";
-const NOTICE_KEY = "kanasu.staging.continuity_notice";
-
-export function stagingFrontend(): boolean {
-  return import.meta.env.VITE_KANASU_STAGING_AUTH === "true";
-}
-
-export function getStagingToken(): string | null { return token; }
-export function setStagingToken(value: string | null): void {
-  if (token === value) return;
-  token = value;
-  listeners.forEach((listener) => listener());
-}
-export function subscribeStagingSession(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+import { getStagingToken, recordStagingRuntime, setStagingToken, subscribeStagingSession } from "@/stagingSession";
 
 function metadata(value: unknown): value is Record<string, string> {
   if (typeof value !== "object" || value === null) return false;
   const x = value as Record<string, unknown>;
   return typeof x.runtime_instance_id === "string" && x.runtime_instance_id.length >= 16
     && typeof x.runtime_started_at === "string" && x.storage_persistence === "ephemeral";
-}
-
-function recordRuntime(value: Record<string, string>): void {
-  const prior = window.localStorage.getItem(RUNTIME_KEY);
-  let notice: string | null = null;
-  if (prior === null) {
-    notice = "Backend continuity cannot be established from this browser. Temporary staging storage is disposable, so earlier Paper Trading runtime or local staging data may be unavailable.";
-  } else if (prior !== value.runtime_instance_id) {
-    notice = "The staging backend restarted or was replaced. In-memory Paper Trading state from the previous backend instance cannot continue, and disposable local staging data may have been lost.";
-  }
-  window.localStorage.setItem(RUNTIME_KEY, value.runtime_instance_id);
-  if (notice) window.localStorage.setItem(NOTICE_KEY, notice);
-  else window.localStorage.removeItem(NOTICE_KEY);
-}
-
-export function stagingContinuityNotice(): string | null {
-  return window.localStorage.getItem(NOTICE_KEY);
 }
 
 export function LoginGate({ children }: { children: ReactNode }) {
@@ -66,14 +30,14 @@ export function LoginGate({ children }: { children: ReactNode }) {
         || typeof payload.access_token !== "string" || payload.access_token.length < 32 || !metadata(payload)) {
         throw new Error("The backend returned an invalid login response.");
       }
-      recordRuntime(payload as Record<string, string>);
+      recordStagingRuntime(payload as Record<string, string>);
       setPassword(""); setStagingToken(payload.access_token);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to connect to Kanasu.");
     } finally { setPending(false); }
   }
 
-  if (token) return <>{children}</>;
+  if (getStagingToken()) return <>{children}</>;
   return <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-200">
     <form className="w-full max-w-md space-y-5 rounded-xl border border-slate-700 bg-slate-900 p-8" onSubmit={(event) => { void submit(event); }}>
       <h1 className="text-2xl font-semibold">Kanasu staging login</h1>
@@ -91,30 +55,30 @@ export function SessionControls() {
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      const current = token;
+      const current = getStagingToken();
       if (!current) { if (!cancelled) setStatus("Disconnected"); return; }
       try {
         const response = await fetch(`${API_BASE_URL}/auth/session`, { headers: { Authorization: `Bearer ${current}` }, credentials: "omit", cache: "no-store" });
-        if (cancelled || token !== current) return;
+        if (cancelled || getStagingToken() !== current) return;
         if (response.status === 401 || response.status === 403) { setStagingToken(null); return; }
         const type = response.headers.get("content-type")?.toLowerCase() ?? "";
         const payload: unknown = type.includes("application/json") ? await response.json() : null;
         setStatus(response.ok && typeof payload === "object" && payload !== null && "authenticated" in payload && payload.authenticated === true ? "Connected" : "Disconnected");
-      } catch { if (!cancelled && token === current) setStatus("Disconnected"); }
+      } catch { if (!cancelled && getStagingToken() === current) setStatus("Disconnected"); }
     }
     void check(); const timer = window.setInterval(() => { void check(); }, 60_000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
 
   async function logout() {
-    const current = token; if (!current) return; setError(null);
+    const current = getStagingToken(); if (!current) return; setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${current}` }, credentials: "omit", cache: "no-store" });
       const type = response.headers.get("content-type")?.toLowerCase() ?? "";
       const payload: unknown = type.includes("application/json") ? await response.json() : null;
       const confirmed = response.status === 401 || (response.ok && typeof payload === "object" && payload !== null && "signed_out" in payload && payload.signed_out === true);
       if (!confirmed) throw new Error();
-      if (token === current) setStagingToken(null);
+      if (getStagingToken() === current) setStagingToken(null);
     } catch { setError("Unable to confirm logout. Please retry."); }
   }
 
